@@ -1,10 +1,12 @@
+#pragma once
 #include "mpt/mpt.h"
 
-template <typename KeyT, typename ValueT>
-class GpuMPT : public MPT<KeyT, ValueT> {
+template <typename K, typename V>
+class GpuMPT : public MPT<K, V> {
 public:
-  void puts(const KeyT *keys, const ValueT *values, int n,
+  void puts(const K *keys, const V *values, int n,
             DeviceT device) final;
-  void gets(const KeyT *keys, ValueT *values, int n, DeviceT device) final;
-  void hash(char *bytes /* char[32] */, DeviceT device) final;
+  void gets(const K *keys, V *values, int n,
+            DeviceT device) const final;
+  void hash(char *bytes /* char[32] */, DeviceT device) const final;
 };
