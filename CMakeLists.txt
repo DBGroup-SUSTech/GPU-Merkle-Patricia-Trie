@@ -6,8 +6,10 @@ find_package(fmt)
 
 set(SRC_PATH ${PROJECT_SOURCE_DIR}/src)
 set(INC_PATH ${PROJECT_SOURCE_DIR}/include)
+set(TEST_PATH ${PROJECT_SOURCE_DIR}/test)
 
-add_executable(PerfTest ${SRC_PATH}/perf_test.cpp ${INC_PATH})
+file(GLOB SRC_FILES "src/*.cu" "src/*.cpp")
+add_executable(PerfTest ${TEST_PATH}/perf_test.cpp ${SRC_FILES})
 
 include_directories(
         PUBLIC ${INC_PATH}
