@@ -7,7 +7,7 @@ find_package(fmt)
 set(SRC_PATH ${PROJECT_SOURCE_DIR}/src)
 set(INC_PATH ${PROJECT_SOURCE_DIR}/include)
 
-add_executable(PerfTest ${SRC_PATH}/PerfTest.cpp ${INC_PATH})
+add_executable(PerfTest ${SRC_PATH}/perf_test.cpp ${INC_PATH})
 
 include_directories(
         PUBLIC ${INC_PATH}
