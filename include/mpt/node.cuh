@@ -27,7 +27,9 @@ template <typename K, typename V> struct Node {
       }
     }
     if (has_value) {
-
+      calculate_hash(reinterpret_cast<char *>(&value), sizeof(V), p);
+      p += 32;
     }
+    calculate_hash(tmp_buffer, p - tmp_buffer, hash);
   }
 };
