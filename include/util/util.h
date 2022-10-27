@@ -1,7 +1,8 @@
 #pragma once
 
-//#include <cuda_runtime.h>
+#include <cuda_runtime.h>
 #include "cpu_hash.h"
+#include "gpu_hash.cuh"
 
 enum DeviceT {
   CPU,
@@ -26,13 +27,15 @@ nibble_t nibble_from_bytes(const char *bytes, int i) {
 
 //cpu hash
 void calculate_hash(const void * input, int input_size, char * hash){
-    uint8_t hash_state[200];
-    keccak1600((const uint8_t*)input, (size_t)input_size, hash_state);
-    memcpy(hash, hash_state, HASH_SIZE);
+  uint8_t hash_state[200];
+  keccak1600((const uint8_t*)input, (size_t)input_size, hash_state);
+  memcpy(hash, hash_state, HASH_SIZE);
 }
 
 //gpu hash
-
+void calculate_hash_gpu(const void * input, int input_size, char * hash){
+  call_keccak_basic_kernel((const char *)input, int input_size, char * hash);
+}
 
 
 // __host__ __device__ void calculate_hash(const char *input, int input_size, char *hash) {

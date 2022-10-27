@@ -1,4 +1,6 @@
 #pragma once
+
+#include<cstdint>
 #define CUDA_SAFE_CALL(call)                          \
 do                                                    \
 {                                                     \
@@ -15,8 +17,9 @@ do                                                    \
     }                                                 \
 } while (0)
 
+#define HASH_SIZE 32
 #define ROUNDS 24 //b = 1600
-#define BITRATE 1088 //r=1088
+#define BITRATE 1024 //r=1024
 #define R64(a,b,c) (((a) << b) ^ ((a) >> c))
 
 static const uint64_t round_const[5][ROUNDS] = {
