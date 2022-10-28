@@ -12,7 +12,7 @@ using addr_t = void(*);
 using nibble_t = char;
 
 // return how many nibbles can represent this value
-template <typename T> constexpr int sizeof_nibble() { return sizeof(T) * 2; }
+int sizeof_nibble(int element_size) { return 2 * element_size; }
 
 nibble_t nibble_from_bytes(const char *bytes, int i) {
   // from higher bit to lower bit (left to right)
@@ -27,4 +27,20 @@ nibble_t nibble_from_bytes(const char *bytes, int i) {
 __host__ __device__ void calculate_hash(const char *input, int input_size,
                                         char *hash) {
   // TODO
+}
+/**
+ * keys_bytes:
+ * helloworld
+ * 0123456789
+ *
+ * 04 59
+ * len(indexs) = 2 * n
+ * each element is represented by 2 index in indexs
+ */
+__host__ __device__ int element_size(const int *indexs, int i) {
+  return indexs[2 * i + 1] - indexs[2 * i];
+}
+__host__ __device__ const char *element_start(const int *indexs, int i,
+                                              const char *all_bytes) {
+  return &all_bytes[indexs[2 * i]];
 }

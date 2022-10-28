@@ -4,12 +4,13 @@
 
 #include <cuda_runtime.h>
 
-template <typename K, typename V> struct Node {
-  addr_t childs[16];
-  K key;
-  V value;
+struct Node {
+  Node *childs[16];
+  const char *key;
+  const char *value;
+  int key_size;
+  int value_size;
   char hash[32];
-
   bool has_value;
 
   /**
@@ -20,14 +21,14 @@ template <typename K, typename V> struct Node {
     // TODO
     char *p = tmp_buffer;
     for (int i = 0; i < 16; ++i) {
-      Node<K, V> *child = static_cast<Node<K, V> *>(childs[i]);
+      Node *child = childs[i];
       if (child != nullptr) {
         memcpy(p, child->hash, 32);
         p += 32;
       }
     }
     if (has_value) {
-      calculate_hash(reinterpret_cast<char *>(&value), sizeof(V), p);
+      calculate_hash(value, value_size, p);
       p += 32;
     }
     calculate_hash(tmp_buffer, p - tmp_buffer, hash);
