@@ -1,17 +1,17 @@
 #pragma once
 // only have one type of node
-#include "util/util.h"
+#include "util/util.cuh"
 
 #include <cuda_runtime.h>
 
-struct Node {
-  Node *childs[16];
-  const char *key;
-  const char *value;
-  int key_size;
-  int value_size;
-  char hash[32];
-  bool has_value;
+struct Node {        // 192 bytes
+  Node *childs[16];  // 8 * 16
+  const char *key;   // 8
+  const char *value; // 8
+  int key_size;      // 4
+  int value_size;    // 4
+  char hash[32];     // 32
+  bool has_value;    // 1 -- padding to 8
 
   /**
    * @param tmp_buffer the buffer is used to store intermediate results maximum
@@ -33,4 +33,5 @@ struct Node {
     }
     calculate_hash(tmp_buffer, p - tmp_buffer, hash);
   }
+
 };
