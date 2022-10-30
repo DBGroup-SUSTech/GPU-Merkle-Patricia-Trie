@@ -6,14 +6,23 @@
 #include <algorithm>
 #include <cassert>
 
-template <typename K, typename V> class CpuMPT : public MPT<K, V> {
+class CpuMPT : public MPT {
 public:
   // @note replicated k is not considered
-  void puts(const K *keys, const V *values, int n, DeviceT device) final;
+  void puts(const char *keys_bytes, const int *keys_indexs,
+            const char *values_bytes, const int *values_indexs, int n,
+            DeviceT device) final;
 
-  // @note key not found will return value = 0
-  void gets(const K *keys, V *values, int n, DeviceT device) const final;
-  void hash(char *bytes /* char[32] */, DeviceT device) const final;
+  //
+  /**
+   * @note key not found will return value = 0
+   * @param values_bytes an allocated array, len = n
+   * @param values_sizes an allocated array, len = n
+   */
+  void gets(const char *keys_bytes, const int *keys_indexs,
+            const char **values_ptrs, int *values_sizes, int n,
+            DeviceT device) const final;
+  void hash(const char *&bytes /* char[32] */, DeviceT device) const final;
 
 public:
   CpuMPT() = default;
@@ -22,39 +31,47 @@ public:
   }
 
 private:
-  Node<K, V> root_{};
+  Node root_{};
 
 private:
-  void put(const K *key, const V *value);
-  void get(const K *key, V *value) const;
+  void put(const char *key, int key_size, const char *value, int value_size);
+  void get(const char *key, int key_size, const char *&value,
+           int &value_size) const;
 
   /**
    * @param nibble_i the next nibble to match
    */
-  void dfs_insert(Node<K, V> *node, const K *key, const V *value, int nibble_i);
-  void dfs_lookup(const Node<K, V> *node, const K *key, V *value,
-                  int nibble_i) const;
+  void dfs_insert(Node *node, const char *key, int key_size, const char *value,
+                  int value_size, int nibble_i);
+  void dfs_lookup(const Node *node, const char *key, int key_size,
+                  const char *&value, int &value_size, int nibble_i) const;
 };
 
-template <typename K, typename V>
-void CpuMPT<K, V>::puts(const K *keys, const V *values, int n, DeviceT device) {
+void CpuMPT::puts(const char *keys_bytes, const int *keys_indexs,
+                  const char *values_bytes, const int *values_indexs, int n,
+                  DeviceT device) {
   assert(device == DeviceT::CPU);
   for (int i = 0; i < n; ++i) {
-    put(&keys[i], &values[i]);
+    int key_size = element_size(keys_indexs, i);
+    const char *key = element_start(keys_indexs, i, keys_bytes);
+    int value_size = element_size(values_indexs, i);
+    const char *value = element_start(values_indexs, i, values_bytes);
+    put(key, key_size, value, value_size);
   }
 }
 
-template <typename K, typename V>
-void CpuMPT<K, V>::put(const K *key, const V *value) {
-  dfs_insert(&root_, key, value, 0);
+void CpuMPT::put(const char *key, int key_size, const char *value,
+                 int value_size) {
+  dfs_insert(&root_, key, key_size, value, value_size, 0);
 }
 
-template <typename K, typename V>
-void CpuMPT<K, V>::dfs_insert(Node<K, V> *node, const K *key, const V *value,
-                              int nibble_i) {
-  if (nibble_i == sizeof_nibble<K>()) {
-    memcpy(&node->value, value, sizeof(V));
-    memcpy(&node->key, key, sizeof(K));
+void CpuMPT::dfs_insert(Node *node, const char *key, int key_size,
+                        const char *value, int value_size, int nibble_i) {
+  if (nibble_i == sizeof_nibble(key_size)) {
+    node->key = key;
+    node->key_size = key_size;
+    node->value = value;
+    node->value_size = value_size;
     node->has_value = true;
 
     // update hash
@@ -62,12 +79,11 @@ void CpuMPT<K, V>::dfs_insert(Node<K, V> *node, const K *key, const V *value,
     node->update_hash(buffer);
     return;
   }
-  const char *key_bytes = reinterpret_cast<const char *>(key);
-  nibble_t nibble = nibble_from_bytes(key_bytes, nibble_i);
+  nibble_t nibble = nibble_from_bytes(key, nibble_i);
   if (node->childs[nibble] == nullptr) {
-    node->childs[nibble] = new Node<K, V>{};
+    node->childs[nibble] = new Node{};
   }
-  dfs_insert(reinterpret_cast<Node<K, V> *>(node->childs[nibble]), key, value,
+  dfs_insert(node->childs[nibble], key, key_size, value, value_size,
              nibble_i + 1);
 
   // update hash
@@ -75,37 +91,48 @@ void CpuMPT<K, V>::dfs_insert(Node<K, V> *node, const K *key, const V *value,
   node->update_hash(buffer);
 }
 
-template <typename K, typename V>
-void CpuMPT<K, V>::gets(const K *keys, V *values, int n, DeviceT device) const {
+void CpuMPT::gets(const char *keys_bytes, const int *keys_indexs,
+                  const char **values_ptrs, int *values_sizes, int n,
+                  DeviceT device) const {
   assert(device == DeviceT::CPU);
   for (int i = 0; i < n; ++i) {
-    get(&keys[i], &values[i]);
+    const char *key = element_start(keys_indexs, i, keys_bytes);
+    int key_size = element_size(keys_indexs, i);
+    const char *&value = values_ptrs[i];
+    int &value_size = values_sizes[i];
+    get(key, key_size, value, value_size);
   }
 }
 
-template <typename K, typename V>
-void CpuMPT<K, V>::get(const K *key, V *value) const {
-  dfs_lookup(&root_, key, value, 0);
+void CpuMPT::get(const char *key, int key_size, const char *&value,
+                 int &value_size) const {
+  dfs_lookup(&root_, key, key_size, value, value_size, 0);
 }
 
-template <typename K, typename V>
-void CpuMPT<K, V>::dfs_lookup(const Node<K, V> *node, const K *key, V *value,
-                              int nibble_i) const {
-  if (nibble_i == sizeof_nibble<K>()) {
-    memcpy(value, &node->value, sizeof(V));
+void CpuMPT::dfs_lookup(const Node *node, const char *key, int key_size,
+                        const char *&value, int &value_size,
+                        int nibble_i) const {
+  if (nibble_i == sizeof_nibble(key_size)) {
+    if (!node->has_value) {
+      value = nullptr;
+      value_size = 0;
+    } else {
+      value = node->value;
+      value_size = node->value_size;
+    }
     return;
   }
-  const char *key_bytes = reinterpret_cast<const char *>(key);
-  nibble_t nibble = nibble_from_bytes(key_bytes, nibble_i);
+  nibble_t nibble = nibble_from_bytes(key, nibble_i);
   if (node->childs[nibble] == nullptr) {
-    memset(value, 0, sizeof(V));
+    value = nullptr;
+    value_size = 0;
     return;
   }
-  dfs_lookup(node, key, value, nibble_i + 1);
+  dfs_lookup(node->childs[nibble], key, key_size, value, value_size,
+             nibble_i + 1);
 }
 
-template <typename K, typename V>
-void CpuMPT<K, V>::hash(char *bytes /* char[32] */, DeviceT device) const {
+void CpuMPT::hash(const char *&bytes /* char[32] */, DeviceT device) const {
   assert(device == DeviceT::CPU);
-  memcpy(bytes, root_.hash, 32);
+  bytes = root_.hash;
 }

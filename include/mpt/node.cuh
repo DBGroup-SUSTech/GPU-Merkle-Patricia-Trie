@@ -1,16 +1,17 @@
 #pragma once
 // only have one type of node
-#include "util/util.h"
+#include "util/util.cuh"
 
 #include <cuda_runtime.h>
 
-template <typename K, typename V> struct Node {
-  addr_t childs[16];
-  K key;
-  V value;
-  char hash[32];
-
-  bool has_value;
+struct Node {        // 192 bytes
+  Node *childs[16];  // 8 * 16
+  const char *key;   // 8
+  const char *value; // 8
+  int key_size;      // 4
+  int value_size;    // 4
+  char hash[32];     // 32
+  bool has_value;    // 1 -- padding to 8
 
   /**
    * @param tmp_buffer the buffer is used to store intermediate results maximum
@@ -20,16 +21,17 @@ template <typename K, typename V> struct Node {
     // TODO
     char *p = tmp_buffer;
     for (int i = 0; i < 16; ++i) {
-      Node<K, V> *child = static_cast<Node<K, V> *>(childs[i]);
+      Node *child = childs[i];
       if (child != nullptr) {
         memcpy(p, child->hash, 32);
         p += 32;
       }
     }
     if (has_value) {
-      calculate_hash(reinterpret_cast<char *>(&value), sizeof(V), p);
+      calculate_hash(value, value_size, p);
       p += 32;
     }
     calculate_hash(tmp_buffer, p - tmp_buffer, hash);
   }
+
 };

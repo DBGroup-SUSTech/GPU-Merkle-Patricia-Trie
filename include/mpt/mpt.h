@@ -1,14 +1,15 @@
 #pragma once
 
-#include "util/util.h"
+#include "util/util.cuh"
 
-template <typename K, typename V> class MPT {
+class MPT {
 public:
-  virtual void puts(const K *keys, const V *values, int n,
+  virtual void puts(const char *keys_bytes, const int *keys_indexs,
+                    const char *values_bytes, const int *values_indexs, int n,
                     DeviceT device) = 0;
-  virtual void gets(const K *keys, V *values, int n,
+  virtual void gets(const char *keys_bytes, const int *keys_indexs,
+                    const char **values_ptrs, int *values_sizes, int n,
                     DeviceT device) const = 0;
-  virtual void hash(char *bytes /* char[32] */, DeviceT device) const = 0;
+  virtual void hash(const char *&bytes /* char[32] */,
+                    DeviceT device) const = 0;
 };
-
-template <typename K, typename V> struct kv {};
