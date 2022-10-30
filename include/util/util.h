@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cuda_runtime.h>
+//#include <cuda_runtime.h>
 #include "cpu_hash.h"
 #include "gpu_hash.cuh"
 
