@@ -1,8 +1,9 @@
 #pragma once
 // only have one type of node
 #include "util/util.cuh"
-
 #include <cuda_runtime.h>
+#include "hash/cpu_hash.h"
+#include "hash/gpu_hash.cuh"
 
 struct Node {        // 192 bytes
   Node *childs[16];  // 8 * 16
@@ -33,5 +34,4 @@ struct Node {        // 192 bytes
     }
     calculate_hash(tmp_buffer, p - tmp_buffer, hash);
   }
-
 };

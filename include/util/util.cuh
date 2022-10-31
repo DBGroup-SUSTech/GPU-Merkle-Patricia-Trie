@@ -2,6 +2,7 @@
 
 #include <cuda_runtime.h>
 #include <string.h>
+#include "hash/cpu_hash.h"
 
 #define MAX_NODES 1 << 25
 #define MAX_REQUEST 1 << 25
@@ -31,10 +32,6 @@ __host__ __device__ nibble_t nibble_from_bytes(const char *bytes, int i) {
   }
 }
 
-__host__ __device__ void calculate_hash(const char *input, int input_size,
-                                        char *hash) {
-  // TODO
-}
 /**
  * keys_bytes:
  * helloworld
@@ -93,3 +90,4 @@ template <typename T> cudaError_t DeviceFree(T *data) { return cudaFree(data); }
       exit(EXIT_FAILURE);                                                      \
     }                                                                          \
   } while (0)
+

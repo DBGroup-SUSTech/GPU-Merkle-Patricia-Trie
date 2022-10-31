@@ -1,22 +1,22 @@
 #pragma once
 
-// basically from https://github.com/monero-project/monero
-
+//basically from http://www.cayrel.net/?Keccak-implementation-on-GPU
 #include<cstdint>
 #include<string.h>
 #include<assert.h>
 #include<stdio.h>
-#include <cstdlib>
+#include<cstdlib>
+#include"util/hash_util.cuh"
+#define ROUNDS 24
 
 #define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
-#define KECCAK_ROUNDS 24
 
 enum {
   HASH_SIZE = 32,
   HASH_DATA_AREA = 136
 };
 
-const uint64_t keccakf_rndc[24] = 
+const uint64_t keccakf_rndc_host[24] = 
 {
     0x0000000000000001, 0x0000000000008082, 0x800000000000808a,
     0x8000000080008000, 0x000000000000808b, 0x0000000080000001,
@@ -28,21 +28,28 @@ const uint64_t keccakf_rndc[24] =
     0x8000000000008080, 0x0000000080000001, 0x8000000080008008
 };
 
-const int keccakf_rotc[24] = 
+const int keccakf_rotc_host[24] = 
 {
     1,  3,  6,  10, 15, 21, 28, 36, 45, 55, 2,  14, 
     27, 41, 56, 8,  25, 43, 62, 18, 39, 61, 20, 44
 };
 
-const int keccakf_piln[24] = 
+const int keccakf_piln_host[24] = 
 {
     10, 7,  11, 17, 18, 3, 5,  16, 8,  21, 24, 4, 
     15, 23, 19, 13, 12, 2, 20, 14, 22, 9,  6,  1 
 };
 
+__device__ __constant__ uint64_t  keccakf_rndc[24];
+__device__ __constant__ int keccakf_rotc[24];
+__device__ __constant__ int keccakf_piln[24];
+
+// compute a keccak hash (md) of given byte length from "in"
+typedef uint64_t state_t[25];
+
 // update the state with given number of rounds
 
-void keccakf(uint64_t st[25], int rounds)
+__device__ __forceinline__ void keccakf(uint64_t st[25], int rounds)
 {
     int i, j, round;
     uint64_t t, bc[5];
@@ -81,10 +88,7 @@ void keccakf(uint64_t st[25], int rounds)
     }
 }
 
-// compute a keccak hash (md) of given byte length from "in"
-typedef uint64_t state_t[25];
-
-void keccak(const uint8_t *in, size_t inlen, uint8_t *md, int mdlen)
+__device__ __forceinline__ void keccak(const uint8_t *in, size_t inlen, uint8_t *md, int mdlen)
 {
     state_t st;
     uint8_t temp[144];
@@ -104,7 +108,7 @@ void keccak(const uint8_t *in, size_t inlen, uint8_t *md, int mdlen)
     for ( ; inlen >= rsiz; inlen -= rsiz, in += rsiz) {
         for (i = 0; i < rsizw; i++)
             st[i] ^= ((uint64_t *) in)[i];
-        keccakf(st, KECCAK_ROUNDS);
+        keccakf(st, ROUNDS);
     }
     
     // last block and padding
@@ -122,12 +126,26 @@ void keccak(const uint8_t *in, size_t inlen, uint8_t *md, int mdlen)
     for (i = 0; i < rsizw; i++)
         st[i] ^= ((uint64_t *) temp)[i];
 
-    keccakf(st, KECCAK_ROUNDS);
+    keccakf(st, ROUNDS);
 
     memcpy(md, st, mdlen);
 }
 
-void keccak1600(const uint8_t *in, size_t inlen, uint8_t *md)
+__device__ __forceinline__ void keccak1600(const uint8_t *in, size_t inlen, uint8_t *md)
 {
     keccak(in, inlen, md, sizeof(state_t));
+}
+
+namespace GPUHashSingleThread{
+    __forceinline__ void load_constants(){
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(keccakf_rndc, keccakf_rndc_host, sizeof(keccakf_rndc_host)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(keccakf_rotc, keccakf_rotc_host, sizeof(keccakf_rotc_host)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(keccakf_piln, keccakf_piln_host, sizeof(keccakf_piln_host)));
+    }
+
+    __device__ void calculate_hash(const char *input, int input_size, char *hash) {
+        uint8_t hash_state[200];
+        keccak1600((const uint8_t*)input, (size_t)input_size, hash_state);
+        memcpy(hash, hash_state, HASH_SIZE);
+    }
 }
