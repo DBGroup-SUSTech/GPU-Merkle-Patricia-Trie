@@ -76,7 +76,7 @@ void CpuMPT::dfs_insert(Node *node, const char *key, int key_size,
 
     // update hash
     char buffer[17 * 32]{};
-    node->update_hash(buffer);
+    node->update_hash_cpu(buffer);
     return;
   }
   nibble_t nibble = nibble_from_bytes(key, nibble_i);
@@ -88,7 +88,7 @@ void CpuMPT::dfs_insert(Node *node, const char *key, int key_size,
 
   // update hash
   char buffer[17 * 32]{};
-  node->update_hash(buffer);
+  node->update_hash_cpu(buffer);
 }
 
 void CpuMPT::gets(const char *keys_bytes, const int *keys_indexs,
