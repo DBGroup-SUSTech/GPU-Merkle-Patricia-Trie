@@ -33,7 +33,7 @@ int main() {
                DeviceT::CPU);
 
   for (int i = 0; i < 2; ++i) {
-    std::cout << std::string(values_ptrs[i], values_sizes[i] + 1) << std::endl;
+    std::cout << std::string(values_ptrs[i], values_sizes[i]) << std::endl;
   }
 
   // gpu test
@@ -47,6 +47,6 @@ int main() {
                DeviceT::CPU);
 
   for (int i = 0; i < 2; ++i) {
-    std::cout << std::string(values_ptrs[i], values_sizes[i] + 1) << std::endl;
+    std::cout << std::string(values_ptrs[i], values_sizes[i]) << std::endl;
   }
 }
