@@ -7,7 +7,7 @@
 #define MAX_REQUEST 1 << 25
 #define MAX_KEY_SIZE 128
 #define MAX_DEPTH (MAX_KEY_SIZE * 2) // TODO: compression would eliminate it
-
+#define MAX_RESULT_BUF 1 << 30
 enum DeviceT {
   CPU,
   GPU,
@@ -63,7 +63,7 @@ namespace gutil {
 
 template <typename T>
 cudaError_t CpyDeviceToHost(T *dst, const T *src, size_t count) {
-  return cudaMemcpy(dst, src, sizeof(T) * count, cudaMemcpyHostToDevice);
+  return cudaMemcpy(dst, src, sizeof(T) * count, cudaMemcpyDeviceToHost);
 }
 
 template <typename T>
