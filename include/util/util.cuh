@@ -60,7 +60,7 @@ namespace gutil {
 
 template <typename T>
 cudaError_t CpyDeviceToHost(T *dst, const T *src, size_t count) {
-  return cudaMemcpy(dst, src, sizeof(T) * count, cudaMemcpyHostToDevice);
+  return cudaMemcpy(dst, src, sizeof(T) * count, cudaMemcpyDeviceToHost);
 }
 
 template <typename T>

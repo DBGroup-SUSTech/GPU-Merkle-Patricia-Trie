@@ -1,6 +1,5 @@
 #include "mpt/cpu_mpt.h"
 #include "mpt/gpu_mpt.cuh"
-#include "util/gpuHash.cuh"
 
 #include <iostream>
 #include <stdio.h>
