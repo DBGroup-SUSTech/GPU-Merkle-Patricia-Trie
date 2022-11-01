@@ -2,9 +2,8 @@
 
 //basically from http://www.cayrel.net/?Keccak-implementation-on-GPU
 #include"util/hash_util.cuh"
+#include"util/util.cuh"
 
-#define HASH_SIZE 32
-#define ROUNDS 24 //b = 1600
 #define BITRATE 1024 //r=1024
 #define R64(a,b,c) (((a) << b) ^ ((a) >> c))
 
@@ -197,7 +196,7 @@ namespace GPUHashMultiThread{
         CUDA_SAFE_CALL(cudaMemcpyToSymbol(rc, round_const, sizeof(round_const)));
     }
 
-    void call_keccak_basic_kernel(char * in, uint32_t data_byte_len, char * out){
+    void call_keccak_basic_kernel(const uint8_t * in, uint32_t data_byte_len, uint8_t * out){
         uint64_t * d_data;
         uint64_t * out_hash;
 

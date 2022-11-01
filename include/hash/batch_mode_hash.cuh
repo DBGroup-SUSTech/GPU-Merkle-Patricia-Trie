@@ -12,13 +12,15 @@ extern __shared__ uint64_t long_shared[];
 /*
     @param d_data input data array
     @param out output array
-    @param offset 64byte for each data
+    @param offset 64byte for each data [0 ... data_num]
     @param data_num num of data
-    @param total byte size of data
+    @param size total size of data 64bit
 */
 __global__
-void keccac_kernel_batch(uint64_t *d_data, uint64_t *out, int *offsets, int data_num, int size=WARP_NUM) {
+void keccak_kernel_batch(uint64_t *d_data, uint64_t *out, int *offsets, int size, int data_num=WARP_NUM) {
 
+
+    //TODO cpy data
     int const tid = threadIdx.x; 
     int const tw  = tid/32;         /* warp of the thread local to the block */
     int const t   = tid%32;         /* thread number local to the warp       */
@@ -26,13 +28,14 @@ void keccac_kernel_batch(uint64_t *d_data, uint64_t *out, int *offsets, int data
     int const gw  = (tid + blockIdx.x*blockDim.x)/32; /* global warp number  */
 
     uint64_t * router = long_shared;
-    int data_index_size = size/64+1;
+    int data_index_size = size;
+    int out_size = data_num*4;
 
     //auxiliary computing arrays
     uint64_t * A_ = router + data_index_size; /* 32 warps per block are executing Keccak in parallel*/ 
-    uint64_t * B_ = A_ + size*25;
-    uint64_t * C_ = B_ + size*25;
-    uint64_t * D_ = C_ + size*25;
+    uint64_t * B_ = A_ + data_num*25;
+    uint64_t * C_ = B_ + data_num*25;
+    uint64_t * D_ = C_ + data_num*25;
 
     if(t < 25) {/* only the lower 25 threads per warp are active. each thread*/
                 /* sets a pointer to its corresponding warp memory. This way,*/
@@ -141,23 +144,8 @@ void keccac_squeeze_kernel_batch(uint64_t **data) {/* In case a digest of length
 }
 
 namespace GPUHashMultiThread{
-    void call_keccak_kernel_batch(uint8_t * in, int data_byte_len, char * out){
-        uint64_t * d_data;
-        uint64_t * out_hash;
-
-        uint32_t input_size64 = data_byte_len/8+(data_byte_len%8==0?0:1);
-
-        load_constants();
-        CUDA_SAFE_CALL(cudaMalloc(&d_data, input_size64*sizeof(uint64_t)));
-        CUDA_SAFE_CALL(cudaMalloc(&out_hash, 25*sizeof(uint64_t)));
-        CUDA_SAFE_CALL(cudaMemset(d_data, 0, input_size64));
-        CUDA_SAFE_CALL(cudaMemcpy((uint8_t *)d_data, in, data_byte_len, cudaMemcpyHostToDevice));
-        keccak_kernel<<<1, 1024>>>(d_data, out_hash, data_byte_len*8);
-
-        CUDA_SAFE_CALL(cudaMemcpy(out, out_hash, HASH_SIZE, cudaMemcpyDeviceToHost));
-        CUDA_SAFE_CALL(cudaFree(d_data));
-        CUDA_SAFE_CALL(cudaFree(out_hash));
+    void test_keccak_kernel_batch(uint64_t * in, int * offsets, uint64_t * out){
+        keccak_kernel_batch<<<1, 1024>>>(in, out, offsets, offsets[WARP_NUM]);
     }
-    
 }
 

@@ -7,16 +7,11 @@
 #include<stdio.h>
 #include<cstdlib>
 #include"util/hash_util.cuh"
-#define ROUNDS 24
+#include"util/util.cuh"
 
 #define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
 
 namespace GPUHashSingleThread{
-
-    enum {
-        HASH_SIZE = 32,
-        HASH_DATA_AREA = 136
-    };
 
     const uint64_t keccakf_rndc_host[24] = 
     {

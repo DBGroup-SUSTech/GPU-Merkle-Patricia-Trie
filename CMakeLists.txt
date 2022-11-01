@@ -17,6 +17,7 @@ file(GLOB SRC_FILES "src/*.cu" "src/*.cpp")
 # add_link_options(-fsanitize=address)
 add_executable(PerfTest ${TEST_PATH}/perf_test.cu ${SRC_FILES})
 add_executable(HashTest ${TEST_PATH}/hash_test.cu ${SRC_FILES})
+add_executable(HashPerf ${TEST_PATH}/hash_perf.cu ${SRC_FILES})
 
 # add_compile_options(-fsanitize=address)
 # add_link_options(-fsanitize=address)
