@@ -186,31 +186,32 @@ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen) {
     }
 }
 
+namespace GPUHashMultiThread{
 
+    __forceinline__ void load_constants(){
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(a, a_host, sizeof(a_host)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(b, b_host, sizeof(b_host)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(c, c_host, sizeof(c_host)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(d, d_host, sizeof(d_host)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(ro, rho_offsets, sizeof(rho_offsets)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(rc, round_const, sizeof(round_const)));
+    }
 
-__forceinline__ void load_constants(){
-    CUDA_SAFE_CALL(cudaMemcpyToSymbol(a, a_host, sizeof(a_host)));
-    CUDA_SAFE_CALL(cudaMemcpyToSymbol(b, b_host, sizeof(b_host)));
-    CUDA_SAFE_CALL(cudaMemcpyToSymbol(c, c_host, sizeof(c_host)));
-    CUDA_SAFE_CALL(cudaMemcpyToSymbol(d, d_host, sizeof(d_host)));
-    CUDA_SAFE_CALL(cudaMemcpyToSymbol(ro, rho_offsets, sizeof(rho_offsets)));
-    CUDA_SAFE_CALL(cudaMemcpyToSymbol(rc, round_const, sizeof(round_const)));
-}
+    void call_keccak_basic_kernel(char * in, uint32_t data_byte_len, char * out){
+        uint64_t * d_data;
+        uint64_t * out_hash;
 
-void call_keccak_basic_kernel(char * in, uint32_t data_byte_len, char * out){
-    uint64_t * d_data;
-    uint64_t * out_hash;
+        uint32_t input_size64 = data_byte_len/8+(data_byte_len%8==0?0:1);
 
-    uint32_t input_size64 = data_byte_len/8+(data_byte_len%8==0?0:1);
+        load_constants();
+        CUDA_SAFE_CALL(cudaMalloc(&d_data, input_size64*sizeof(uint64_t)));
+        CUDA_SAFE_CALL(cudaMalloc(&out_hash, 25*sizeof(uint64_t)));
+        CUDA_SAFE_CALL(cudaMemset(d_data, 0, input_size64));
+        CUDA_SAFE_CALL(cudaMemcpy((uint8_t *)d_data, in, data_byte_len, cudaMemcpyHostToDevice));
+        keccak_kernel<<<1, 32>>>(d_data, out_hash, data_byte_len*8);
 
-    load_constants();
-    CUDA_SAFE_CALL(cudaMalloc(&d_data, input_size64*sizeof(uint64_t)));
-    CUDA_SAFE_CALL(cudaMalloc(&out_hash, 25*sizeof(uint64_t)));
-    CUDA_SAFE_CALL(cudaMemset(d_data, 0, input_size64));
-    CUDA_SAFE_CALL(cudaMemcpy((uint8_t *)d_data, in, data_byte_len, cudaMemcpyHostToDevice));
-    keccak_kernel<<<1, 32>>>(d_data, out_hash, data_byte_len*8);
-
-    CUDA_SAFE_CALL(cudaMemcpy(out, out_hash, HASH_SIZE, cudaMemcpyDeviceToHost));
-    CUDA_SAFE_CALL(cudaFree(d_data));
-    CUDA_SAFE_CALL(cudaFree(out_hash));
+        CUDA_SAFE_CALL(cudaMemcpy(out, out_hash, HASH_SIZE, cudaMemcpyDeviceToHost));
+        CUDA_SAFE_CALL(cudaFree(d_data));
+        CUDA_SAFE_CALL(cudaFree(out_hash));
+    }
 }
