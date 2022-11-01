@@ -7,7 +7,7 @@ int main(){
     char* hash;
     hash = (char*)malloc(32*sizeof(char));
     memset(hash,0,32);
-    char* input = "helloworld";
+    const char* input = "helloworld";
     CPUHash::calculate_hash(input,10,hash);
     for (size_t i = 0; i < 32; i++)
     {

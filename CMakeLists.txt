@@ -14,7 +14,6 @@ set(TEST_PATH ${PROJECT_SOURCE_DIR}/test)
 
 file(GLOB SRC_FILES "src/*.cu" "src/*.cpp")
 add_executable(PerfTest ${TEST_PATH}/perf_test.cu ${SRC_FILES})
-add_executable(HashPerf ${TEST_PATH}/perf_test_with_hash.cu ${SRC_FILES})
 add_executable(HashTest ${TEST_PATH}/hash_test.cu ${SRC_FILES})
 
 add_compile_options(-fsanitize=address)
