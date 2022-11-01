@@ -69,7 +69,6 @@ cudaError_t CpyHostToDevice(T *dst, const T *src, size_t count) {
 }
 
 template <typename T> cudaError_t DeviceAlloc(T *&data, size_t count) {
-  printf("GPU allocate %ld bytes\n", sizeof(T) * count);
   return cudaMalloc((void **)&data, sizeof(T) * count);
 }
 

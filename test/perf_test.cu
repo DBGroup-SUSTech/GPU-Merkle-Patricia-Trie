@@ -27,8 +27,6 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
   std::shuffle(keys, keys + n, g);
   keys_bytes = reinterpret_cast<uint8_t *>(keys);
 
-  printf("finish generating keys\n");
-
   // generate random values
   const int value_size = 800;
   uint8_t *values = new uint8_t[value_size * n]{};
@@ -36,8 +34,6 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
     values[i] = dist(g);
   }
   values_bytes = values;
-
-  printf("finish generating values\n");
 
   // indexs
   keys_indexs = new int[n * 2]{};
@@ -50,12 +46,12 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
     value_indexs[2 * i] = value_size * i;
     value_indexs[2 * i + 1] = value_size * (i + 1) - 1;
   }
+
+  printf("finish generating data. %d key-value pairs(%d byte, %d byte)\n", n, 2,
+         value_size);
 }
 
 int main() {
-  gpu_addr<<<1, 1>>>();
-  cudaDeviceSynchronize();
-
   // prepare data
   // const uint8_t *keys_bytes = reinterpret_cast<const uint8_t
   // *>("helloworld"); int keys_indexs[] = {0, 4, 5, 9}; const uint8_t
@@ -74,8 +70,6 @@ int main() {
   // result
   const uint8_t **values_ptrs = new const uint8_t *[n] {};
   int *values_sizes = new int[n]{};
-
-  std::cout << "finish data gen\n" << std::endl;
 
   // cpu test puts and gets
   CpuMPT cpu_mpt;
@@ -104,6 +98,9 @@ int main() {
   //   printf("\n");
   // }
 
+  printf("CPU get execution time: %d ms, throughput %d qps\n",
+         timer_cpu_get.get(), n * 1000 / timer_cpu_get.get());
+
   // gpu test
   GpuMPT gpu_mpt;
   gpu_mpt.puts(keys_bytes, keys_indexs, values_bytes, values_indexs, n,
@@ -131,6 +128,6 @@ int main() {
   //   printf("\n");
   // }
 
-  printf("CPU get: %d ms\nGPU get: %d ms\n", timer_cpu_get.get(),
-         timer_gpu_get.get());
+  printf("GPU get execution time: %d ms, throughput %d qps\n",
+         timer_gpu_get.get(), n * 1000 / timer_gpu_get.get());
 }

@@ -135,12 +135,19 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
     CHECK_ERROR(gutil::DeviceAlloc(d_buffer_i, 1));
     CHECK_ERROR(gutil::DeviceSet(d_buffer_i, 0x00, 1));
 
+    perf::CpuTimer<perf::ms> kernel_timer; // timer start --------------------
+    kernel_timer.start();
+
     const int block_size = 128;
     const int num_blocks = (n + block_size - 1) / block_size;
     gkernel::gets_shuffle<<<num_blocks, block_size>>>(
         d_keys_bytes, d_keys_indexs, d_values_ptrs, d_values_sizes, n, d_root_,
         d_buffer_result, d_buffer_i);
     CHECK_ERROR(cudaDeviceSynchronize());
+
+    kernel_timer.stop(); // timer stop ----------------------------------------
+    printf("GPU get_shuffle kernel execution time: %d ms, throughput %d qps\n",
+           kernel_timer.get(), n * 1000 / kernel_timer.get());
 
     // count result
     CHECK_ERROR(gutil::CpyDeviceToHost(&buffer_i, d_buffer_i, 1));
