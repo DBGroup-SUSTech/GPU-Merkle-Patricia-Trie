@@ -1,18 +1,18 @@
 #pragma once
 // only have one type of node
-#include "util/util.cuh"
-#include <cuda_runtime.h>
 #include "hash/cpu_hash.h"
 #include "hash/gpu_hash.cuh"
+#include "util/util.cuh"
+#include <cuda_runtime.h>
 
-struct Node {        // 192 bytes
-  Node *childs[16];  // 8 * 16
+struct Node {           // 192 bytes
+  Node *childs[16];     // 8 * 16
   const uint8_t *key;   // 8
   const uint8_t *value; // 8
-  int key_size;      // 4
-  int value_size;    // 4
+  int key_size;         // 4
+  int value_size;       // 4
   uint8_t hash[32];     // 32
-  bool has_value;    // 1 -- padding to 8
+  bool has_value;       // 1 -- padding to 8
 
   /**
    * @param tmp_buffer the buffer is used to store intermediate results maximum
