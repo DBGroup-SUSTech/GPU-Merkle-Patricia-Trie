@@ -9,8 +9,8 @@
 class CpuMPT : public MPT {
 public:
   // @note replicated k is not considered
-  void puts(const char *keys_bytes, const int *keys_indexs,
-            const char *values_bytes, const int *values_indexs, int n,
+  void puts(const uint8_t *keys_bytes, const int *keys_indexs,
+            const uint8_t *values_bytes, const int *values_indexs, int n,
             DeviceT device) final;
 
   //
@@ -19,10 +19,11 @@ public:
    * @param values_bytes an allocated array, len = n
    * @param values_sizes an allocated array, len = n
    */
-  void gets(const char *keys_bytes, const int *keys_indexs,
-            const char **values_ptrs, int *values_sizes, int n,
+  void gets(const uint8_t *keys_bytes, const int *keys_indexs,
+            const uint8_t **values_ptrs, int *values_sizes, int n,
             DeviceT device) const final;
-  void hash(const char *&bytes /* char[32] */, DeviceT device) const final;
+  void hash(const uint8_t *&bytes /* uint8_t[32] */,
+            DeviceT device) const final;
 
 public:
   CpuMPT() = default;
@@ -34,39 +35,40 @@ private:
   Node root_{};
 
 private:
-  void put(const char *key, int key_size, const char *value, int value_size);
-  void get(const char *key, int key_size, const char *&value,
+  void put(const uint8_t *key, int key_size, const uint8_t *value,
+           int value_size);
+  void get(const uint8_t *key, int key_size, const uint8_t *&value,
            int &value_size) const;
 
   /**
    * @param nibble_i the next nibble to match
    */
-  void dfs_insert(Node *node, const char *key, int key_size, const char *value,
-                  int value_size, int nibble_i);
-  void dfs_lookup(const Node *node, const char *key, int key_size,
-                  const char *&value, int &value_size, int nibble_i) const;
+  void dfs_insert(Node *node, const uint8_t *key, int key_size,
+                  const uint8_t *value, int value_size, int nibble_i);
+  void dfs_lookup(const Node *node, const uint8_t *key, int key_size,
+                  const uint8_t *&value, int &value_size, int nibble_i) const;
 };
 
-void CpuMPT::puts(const char *keys_bytes, const int *keys_indexs,
-                  const char *values_bytes, const int *values_indexs, int n,
+void CpuMPT::puts(const uint8_t *keys_bytes, const int *keys_indexs,
+                  const uint8_t *values_bytes, const int *values_indexs, int n,
                   DeviceT device) {
   assert(device == DeviceT::CPU);
   for (int i = 0; i < n; ++i) {
     int key_size = element_size(keys_indexs, i);
-    const char *key = element_start(keys_indexs, i, keys_bytes);
+    const uint8_t *key = element_start(keys_indexs, i, keys_bytes);
     int value_size = element_size(values_indexs, i);
-    const char *value = element_start(values_indexs, i, values_bytes);
+    const uint8_t *value = element_start(values_indexs, i, values_bytes);
     put(key, key_size, value, value_size);
   }
 }
 
-void CpuMPT::put(const char *key, int key_size, const char *value,
+void CpuMPT::put(const uint8_t *key, int key_size, const uint8_t *value,
                  int value_size) {
   dfs_insert(&root_, key, key_size, value, value_size, 0);
 }
 
-void CpuMPT::dfs_insert(Node *node, const char *key, int key_size,
-                        const char *value, int value_size, int nibble_i) {
+void CpuMPT::dfs_insert(Node *node, const uint8_t *key, int key_size,
+                        const uint8_t *value, int value_size, int nibble_i) {
   if (nibble_i == sizeof_nibble(key_size)) {
     node->key = key;
     node->key_size = key_size;
@@ -75,8 +77,8 @@ void CpuMPT::dfs_insert(Node *node, const char *key, int key_size,
     node->has_value = true;
 
     // update hash
-    char buffer[17 * 32]{};
-    node->update_hash_cpu(buffer);
+    // uint8_t buffer[17 * 32]{};
+    // node->update_hash_cpu(buffer);
     return;
   }
   nibble_t nibble = nibble_from_bytes(key, nibble_i);
@@ -87,30 +89,30 @@ void CpuMPT::dfs_insert(Node *node, const char *key, int key_size,
              nibble_i + 1);
 
   // update hash
-  char buffer[17 * 32]{};
-  node->update_hash_cpu(buffer);
+  // uint8_t buffer[17 * 32]{};
+  // node->update_hash_cpu(buffer);
 }
 
-void CpuMPT::gets(const char *keys_bytes, const int *keys_indexs,
-                  const char **values_ptrs, int *values_sizes, int n,
+void CpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
+                  const uint8_t **values_ptrs, int *values_sizes, int n,
                   DeviceT device) const {
   assert(device == DeviceT::CPU);
   for (int i = 0; i < n; ++i) {
-    const char *key = element_start(keys_indexs, i, keys_bytes);
+    const uint8_t *key = element_start(keys_indexs, i, keys_bytes);
     int key_size = element_size(keys_indexs, i);
-    const char *&value = values_ptrs[i];
+    const uint8_t *&value = values_ptrs[i];
     int &value_size = values_sizes[i];
     get(key, key_size, value, value_size);
   }
 }
 
-void CpuMPT::get(const char *key, int key_size, const char *&value,
+void CpuMPT::get(const uint8_t *key, int key_size, const uint8_t *&value,
                  int &value_size) const {
   dfs_lookup(&root_, key, key_size, value, value_size, 0);
 }
 
-void CpuMPT::dfs_lookup(const Node *node, const char *key, int key_size,
-                        const char *&value, int &value_size,
+void CpuMPT::dfs_lookup(const Node *node, const uint8_t *key, int key_size,
+                        const uint8_t *&value, int &value_size,
                         int nibble_i) const {
   if (nibble_i == sizeof_nibble(key_size)) {
     if (!node->has_value) {
@@ -132,7 +134,8 @@ void CpuMPT::dfs_lookup(const Node *node, const char *key, int key_size,
              nibble_i + 1);
 }
 
-void CpuMPT::hash(const char *&bytes /* char[32] */, DeviceT device) const {
+void CpuMPT::hash(const uint8_t *&bytes /* uint8_t[32] */,
+                  DeviceT device) const {
   assert(device == DeviceT::CPU);
   bytes = root_.hash;
 }

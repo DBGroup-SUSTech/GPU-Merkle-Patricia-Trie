@@ -144,13 +144,13 @@ namespace GPUHashSingleThread{
         CUDA_SAFE_CALL(cudaMemcpyToSymbol(keccakf_piln, keccakf_piln_host, sizeof(keccakf_piln_host)));
     }
 
-    __device__ void calculate_hash(const char *input, int input_size, char *hash) {
+    __device__ void calculate_hash(const uint8_t *input, int input_size, uint8_t *hash) {
         uint8_t hash_state[200];
         keccak1600((const uint8_t*)input, (size_t)input_size, hash_state);
         memcpy(hash, hash_state, HASH_SIZE);
     }
 
-    __global__ void test_calculate_hash(const char *input, int input_size, char *hash){
+    __global__ void test_calculate_hash(const uint8_t *input, int input_size, uint8_t *hash){
         calculate_hash(input, input_size, hash);
     }
 }
