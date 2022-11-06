@@ -73,8 +73,16 @@ int main() {
 
   // cpu test puts and gets
   CpuMPT cpu_mpt;
+
+  perf::CpuTimer<perf::ms> timer_cpu_put; // timer start ------------
+  timer_cpu_put.start();
   cpu_mpt.puts(keys_bytes, keys_indexs, values_bytes, values_indexs, n,
                DeviceT::CPU);
+  timer_cpu_put.stop(); // timer end --------------------------------
+
+  printf("CPU put execution time: %d ms, throughput %d qps\n",
+         timer_cpu_put.get(), n * 1000 / timer_cpu_put.get());
+
   std::fill(values_ptrs, values_ptrs + n, nullptr);
   std::fill(values_sizes, values_sizes + n, 0);
 
@@ -84,6 +92,9 @@ int main() {
                DeviceT::CPU);
   timer_cpu_get.stop(); // timer end --------------------------------
 
+  printf("CPU get execution time: %d us, throughput %d qpms\n",
+         timer_cpu_get.get(), n * 1000 / timer_cpu_get.get());
+
   // verify
   // for (int i = 0; i < 2; ++i) {
   //   printf("\nPUT: ");
@@ -98,22 +109,30 @@ int main() {
   //   printf("\n");
   // }
 
-  printf("CPU get execution time: %d ms, throughput %d qps\n",
-         timer_cpu_get.get(), n * 1000 / timer_cpu_get.get());
-
   // gpu test
   GpuMPT gpu_mpt;
+  
+  perf::CpuTimer<perf::us> timer_gpu_put;
+  timer_gpu_put.start();
   gpu_mpt.puts(keys_bytes, keys_indexs, values_bytes, values_indexs, n,
                DeviceT::CPU);
+  timer_gpu_put.stop();
+
+  printf("GPU put execution time: %d us, throughput %d qpms\n",
+         timer_gpu_put.get(), n * 1000 / timer_gpu_put.get());
+
   std::fill(values_ptrs, values_ptrs + n, nullptr);
   std::fill(values_sizes, values_sizes + n, 0);
 
-  perf::CpuTimer<perf::ms> timer_gpu_get; // timer start ------------
+  perf::CpuTimer<perf::us> timer_gpu_get; // timer start ------------
   timer_gpu_get.start();
   gpu_mpt.gets(keys_bytes, keys_indexs, values_ptrs, values_sizes, n,
                DeviceT::CPU);
   timer_gpu_get.stop(); // timer end --------------------------------
 
+  printf("GPU get execution time: %d us, throughput %d qpms\n",
+         timer_gpu_get.get(), n * 1000 / timer_gpu_get.get());
+
   // verify
   // for (int i = 0; i < 2; ++i) {
   //   printf("\nPUT: ");
@@ -127,7 +146,4 @@ int main() {
   //   }
   //   printf("\n");
   // }
-
-  printf("GPU get execution time: %d ms, throughput %d qps\n",
-         timer_gpu_get.get(), n * 1000 / timer_gpu_get.get());
 }
