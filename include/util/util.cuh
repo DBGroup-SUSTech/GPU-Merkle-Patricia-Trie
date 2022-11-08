@@ -1,14 +1,22 @@
 #pragma once
-
+#include<cstdint>
 #include <cuda_runtime.h>
 #include <string.h>
-#include "hash/cpu_hash.h"
+#include<string.h>
+#include<assert.h>
+#include<stdio.h>
+#include <cstdlib>
+
+#define ROUNDS 24
+#define HASH_SIZE 32
+#define HASH_DATA_AREA 136
 
 #define MAX_NODES 1 << 18
 #define MAX_REQUEST 1 << 20
 #define MAX_KEY_SIZE 128
 #define MAX_DEPTH (MAX_KEY_SIZE * 2) // TODO: compression would eliminate it
 #define MAX_RESULT_BUF 1 << 30
+
 enum DeviceT {
   CPU,
   GPU,
