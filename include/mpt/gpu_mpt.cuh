@@ -135,7 +135,8 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
     uint8_t *d_buffer_result;
     int *d_buffer_i;
 
-    buffer_result = new uint8_t[(1 << 18)]{}; // memory leak
+    // (1 << 16) * 800 byte. TODO: preallocate
+    buffer_result = new uint8_t[(1 << 26)]{}; // memory leak
     CHECK_ERROR(gutil::DeviceAlloc(d_buffer_result, MAX_RESULT_BUF));
     CHECK_ERROR(gutil::DeviceAlloc(d_buffer_i, 1));
     CHECK_ERROR(gutil::DeviceSet(d_buffer_i, 0x00, 1));

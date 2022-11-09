@@ -33,6 +33,7 @@ public:
 
 private:
   Node root_{};
+  uint8_t buffer_[17 * 32]{};
 
 private:
   void put(const uint8_t *key, int key_size, const uint8_t *value,
@@ -77,8 +78,7 @@ void CpuMPT::dfs_insert(Node *node, const uint8_t *key, int key_size,
     node->has_value = true;
 
     // update hash
-    // uint8_t buffer[17 * 32]{};
-    // node->update_hash_cpu(buffer);
+    node->update_hash_cpu(buffer_);
     return;
   }
   nibble_t nibble = nibble_from_bytes(key, nibble_i);
@@ -89,8 +89,7 @@ void CpuMPT::dfs_insert(Node *node, const uint8_t *key, int key_size,
              nibble_i + 1);
 
   // update hash
-  // uint8_t buffer[17 * 32]{};
-  // node->update_hash_cpu(buffer);
+  node->update_hash_cpu(buffer_);
 }
 
 void CpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
