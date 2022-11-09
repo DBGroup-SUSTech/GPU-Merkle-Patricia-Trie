@@ -2,6 +2,7 @@
 #include "mpt/node.cuh"
 #include "util/pool_allocator.cuh"
 
+// @note output params are transferred as "&" or noted as "@param[out]"
 namespace gkernel {
 
 __device__ __forceinline__ void
@@ -52,8 +53,8 @@ put(const uint8_t *key, int key_size, const uint8_t *value, int value_size,
 }
 
 __global__ void puts(const uint8_t *keys_bytes, const int *keys_indexs,
-                     const uint8_t *values_bytes, const int *values_indexs, int n,
-                     Node *root,
+                     const uint8_t *values_bytes, const int *values_indexs,
+                     int n, Node *root,
                      PoolAllocator<Node, MAX_NODES> node_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
@@ -98,9 +99,11 @@ __global__ void gets(const uint8_t *keys_bytes, const int *keys_indexs,
   get(key, key_size, value_ptr, value_size, root);
 }
 
-__device__ __forceinline__ void
-get_shuffle(const uint8_t *key, int key_size, const uint8_t *&value_ptr,
-            int &value_size, Node *root, uint8_t *buffer_result, int &buffer_i) {
+__device__ __forceinline__ void get_shuffle(const uint8_t *key, int key_size,
+                                            const uint8_t *&value_ptr,
+                                            int &value_size, Node *root,
+                                            uint8_t *buffer_result,
+                                            int &buffer_i) {
   int nibble_i = 0;
   int nibble_max = sizeof_nibble(key_size);
   while (nibble_i < nibble_max && nullptr != root) {
@@ -122,8 +125,9 @@ get_shuffle(const uint8_t *key, int key_size, const uint8_t *&value_ptr,
 }
 
 __global__ void gets_shuffle(const uint8_t *keys_bytes, const int *keys_indexs,
-                             const uint8_t **values_ptrs, int *values_sizes, int n,
-                             Node *root, uint8_t *buffer_result, int *buffer_i) {
+                             const uint8_t **values_ptrs, int *values_sizes,
+                             int n, Node *root, uint8_t *buffer_result,
+                             int *buffer_i) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
     return;
@@ -138,4 +142,47 @@ __global__ void gets_shuffle(const uint8_t *keys_bytes, const int *keys_indexs,
               *buffer_i);
 }
 
+__device__ __forceinline__ void count_depth_and_set_to_visit(const uint8_t *key,
+                                                             int key_size,
+                                                             Node *root,
+                                                             int &depth) {
+  // TODO
+}
+
+/**
+ * @param[out] depth level count of the deepest node in keys.
+ * @note assert that all keys can be found
+ */
+__global__ void counts_depth_and_sets_to_visit(const uint8_t *keys_bytes,
+                                               const int *keys_indexs, int n,
+                                               Node *root, int *depth) {
+  // TODO
+}
+
+__device__ __forceinline__ void get_level_node_to_visit(const uint8_t *key,
+                                                        int key_size,
+                                                        Node *root, int level,
+                                                        Node *&node) {
+  // TODO
+}
+
+/**
+ * @param[in] level the level to get, start from 0(root)
+ * @param[out] level_nodes_to_visit each request has/not-has a node to compute
+ * deduplicate by atomicCAS() on to_visit
+ */
+__global__ void gets_level_nodes_to_visit(const uint8_t *key_bytes,
+                                          const int *keys_indexs, int n,
+                                          int level, Node *root,
+                                          Node **level_nodes_to_visit) {
+  // TODO
+}
+
+/**
+ * Each node uses a warp to calculate hash
+ * @param[in,out] nodes nullptr means nothing to do
+ */
+__global__ void updates_hashs(Node **nodes, int n) {
+  // TODO, batch hash update
+}
 } // namespace gkernel

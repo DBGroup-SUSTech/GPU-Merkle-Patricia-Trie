@@ -38,6 +38,11 @@ public:
 private:
   Node *d_root_;
   PoolAllocator<Node, MAX_NODES> allocator_;
+
+private:
+  /* device is GPU */
+  void hash_update_hierarchy(const uint8_t *d_keys_bytes,
+                             const int *d_keys_indexs, int n);
 };
 
 void GpuMPT::puts(const uint8_t *keys_bytes, const int *keys_indexs,
@@ -149,7 +154,7 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
     gkernel::gets_shuffle<<<num_blocks, block_size>>>(
         d_keys_bytes, d_keys_indexs, d_values_ptrs, d_values_sizes, n, d_root_,
         d_buffer_result, d_buffer_i);
-    CHECK_ERROR(cudaDeviceSynchronize());
+    CHECK_ERROR(cudaDeviceSynchronize()); //  TODO: no need to synchronize
 
     kernel_timer.stop(); // timer stop ----------------------------------------
     printf("GPU get_shuffle kernel execution time: %d us, throughput %d qpms\n",
@@ -161,7 +166,8 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
         gutil::CpyDeviceToHost(buffer_result, d_buffer_result, buffer_i));
     CHECK_ERROR(gutil::CpyDeviceToHost(values_ptrs, d_values_ptrs, n));
     CHECK_ERROR(gutil::CpyDeviceToHost(values_sizes, d_values_sizes, n));
-    // convert values_ptrs into host ptr
+
+    // convert values_ptrs into host ptr, TODO: optimize for parallel
     for (int i = 0; i < n; ++i) {
       values_ptrs[i] = (values_ptrs[i] - d_buffer_result) + buffer_result;
     }
@@ -184,4 +190,63 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
 void GpuMPT::hash(const uint8_t *&bytes /* uint8_t[32] */,
                   DeviceT device) const {
   printf("GpuMPT::hash() not implemented\n");
+}
+
+/**
+ * Hierarchy update have 2 pair of decide choice to implement
+ * > stack or multi-get
+ * > shuffle or sparse
+ *
+ * [ ] stack     + sparse
+ * [ ] stack     + shuffle
+ * [x] multi-get + sparse
+ * [ ] multi-get + shuffle
+ */
+void GpuMPT::hash_update_hierarchy(const uint8_t *d_keys_bytes,
+                                   const int *d_keys_indexs, int n) {
+
+  // count depth and label all paths as to_visit = true
+  // TODO: Depth can be hard coded or fetched from input
+  int depth = 0;
+  int *d_depth = nullptr;
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_depth, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_depth, 0x00, 1));
+  // TODO: eliminate redundant deviceSet
+
+  // configuration: request per thread(rpthread) / request per warp(rpwarp)
+  const int rpthread_block_size = 128;
+  const int rpthread_num_blocks =
+      (n + rpthread_block_size - 1) / rpthread_block_size;
+  gkernel::counts_depth_and_sets_to_visit<<<rpthread_num_blocks,
+                                            rpthread_block_size>>>(
+      d_keys_bytes, d_keys_indexs, n, d_root_, d_depth);
+
+  CHECK_ERROR(gutil::CpyDeviceToHost(&depth, d_depth, 1));
+  printf("Maximun depth of this batch is %d\n", depth);
+
+  // launch a kernel for each level and get the hash computing tasks
+  Node **d_level_nodes_to_visit; // nodes with to_visit=true in a level
+  CHECK_ERROR(gutil::DeviceAlloc(d_level_nodes_to_visit, n));
+  CHECK_ERROR(gutil::DeviceSet(d_level_nodes_to_visit, 0x00, n));
+
+  // bottom up
+  for (int level = depth - 1; level >= 0; --level) {
+    printf("Getting level %d's to-visit nodes\n", level);
+    gkernel::
+        gets_level_nodes_to_visit<<<rpthread_num_blocks, rpthread_block_size>>>(
+            d_keys_bytes, d_keys_indexs, n, level, d_root_,
+            d_level_nodes_to_visit);
+
+    /// @attention TODO[critical]: shuffle or not
+
+    printf("Updating level %d's to-visit nodes in parallel\n", level);
+    const int rpwarp_block_size = 128;
+    const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
+                                  rpwarp_block_size; // one warp per request
+    gkernel::updates_hashs<<<rpwarp_num_blocks, rpwarp_block_size>>>(
+        d_level_nodes_to_visit, n);
+  }
+
+  CHECK_ERROR(cudaDeviceSynchronize());
 }
