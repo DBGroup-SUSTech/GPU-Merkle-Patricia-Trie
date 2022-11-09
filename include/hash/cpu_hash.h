@@ -2,24 +2,13 @@
 
 // basically from https://github.com/monero-project/monero
 
-#include<cstdint>
-#include<string.h>
-#include<assert.h>
-#include<stdio.h>
-#include <cstdlib>
-
-#define ROUNDS 24
+#include"util/util.cuh"
 
 #define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
 
-namespace CPUHash{
-    enum {
-        HASH_SIZE = 32,
-        HASH_DATA_AREA = 136
-    };
+namespace CPUHash{ 
 
-    const uint64_t keccakf_rndc[24] = 
-    {
+    const uint64_t keccakf_rndc[24] = {
         0x0000000000000001, 0x0000000000008082, 0x800000000000808a,
         0x8000000080008000, 0x000000000000808b, 0x0000000080000001,
         0x8000000080008081, 0x8000000000008009, 0x000000000000008a,
@@ -136,6 +125,6 @@ namespace CPUHash{
     void calculate_hash(const uint8_t *input, int input_size, uint8_t *hash) {
         uint8_t hash_state[200];
         keccak1600((const uint8_t*)input, (size_t)input_size, hash_state);
-        memcpy(hash, hash_state, HASH_SIZE);
+        memcpy(hash,hash_state, HASH_SIZE); 
     }
 }

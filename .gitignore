@@ -3,4 +3,6 @@ build
 scripts
 rapidjson
 dataset
-test/perf_test_with_hash.cu
+prototype
+
+
