@@ -1,13 +1,13 @@
 #pragma once
 
-#include "mpt/gpu_mpt_kernel.cuh"
+#include "angela/angela_mpt_kernel.cuh"
 #include "mpt/mpt.h"
-#include "mpt/node.cuh"
+#include "angela/angela_node.cuh"
 #include "util/pool_allocator.cuh"
 #include "util/timer.h"
 #include "util/util.cuh"
 
-class GpuMPT : public MPT {
+class AngelaMPT : public MPT {
 public:
   // @note replicated k is not considered
   void puts(const uint8_t *keys_bytes, const int *keys_indexs,
@@ -26,21 +26,21 @@ public:
             DeviceT device) const final;
 
 public:
-  GpuMPT() {
+  AngelaMPT() {
     // init root
     CHECK_ERROR(gutil::DeviceAlloc(d_root_, 1));
     CHECK_ERROR(gutil::DeviceSet(d_root_, 0x00, 1));
   }
-  ~GpuMPT() {
-    // TODO: release all nodes
+  ~AngelaMPT() {
+    // TODO: release all AngelaNodes
   }
 
 private:
-  Node *d_root_;
-  PoolAllocator<Node, MAX_NODES> allocator_;
+  AngelaNode *d_root_;
+  PoolAllocator<AngelaNode, MAX_NODES> allocator_;
 };
 
-void GpuMPT::puts(const uint8_t *keys_bytes, const int *keys_indexs,
+void AngelaMPT::puts(const uint8_t *keys_bytes, const int *keys_indexs,
                   const uint8_t *values_bytes, const int *values_indexs, int n,
                   DeviceT device) {
   if (device != GPU) {
@@ -81,7 +81,7 @@ void GpuMPT::puts(const uint8_t *keys_bytes, const int *keys_indexs,
 
   const int block_size = 128;
   const int num_blocks = (n + block_size - 1) / block_size;
-  gkernel::puts<<<num_blocks, block_size>>>(keys_bytes, keys_indexs,
+  angela_kernel::puts<<<num_blocks, block_size>>>(keys_bytes, keys_indexs,
                                             values_bytes, values_indexs, n,
                                             d_root_, allocator_);
   CHECK_ERROR(cudaDeviceSynchronize());
@@ -93,7 +93,7 @@ void GpuMPT::puts(const uint8_t *keys_bytes, const int *keys_indexs,
   // TODO: batch update
 }
 
-void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
+void AngelaMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
                   const uint8_t **values_ptrs, int *values_sizes, int n,
                   DeviceT device) const {
   const uint8_t *d_keys_bytes = nullptr;
@@ -146,7 +146,7 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
 
     const int block_size = 128;
     const int num_blocks = (n + block_size - 1) / block_size;
-    gkernel::gets_shuffle<<<num_blocks, block_size>>>(
+    angela_kernel::gets_shuffle<<<num_blocks, block_size>>>(
         d_keys_bytes, d_keys_indexs, d_values_ptrs, d_values_sizes, n, d_root_,
         d_buffer_result, d_buffer_i);
     CHECK_ERROR(cudaDeviceSynchronize());
@@ -174,14 +174,14 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
 
     const int block_size = 128;
     const int num_blocks = (n + block_size - 1) / block_size;
-    gkernel::gets<<<num_blocks, block_size>>>(
+    angela_kernel::gets<<<num_blocks, block_size>>>(
         d_keys_bytes, d_keys_indexs, d_values_ptrs, d_values_sizes, n, d_root_);
     // TODO: test, print result
     CHECK_ERROR(cudaDeviceSynchronize());
   }
 }
 
-void GpuMPT::hash(const uint8_t *&bytes /* uint8_t[32] */,
+void AngelaMPT::hash(const uint8_t *&bytes /* uint8_t[32] */,
                   DeviceT device) const {
-  printf("GpuMPT::hash() not implemented\n");
+  printf("AngelaMPT::hash() not implemented\n");
 }

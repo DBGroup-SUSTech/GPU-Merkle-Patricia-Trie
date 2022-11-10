@@ -53,7 +53,7 @@ __host__ __device__ int element_size(const int *indexs, int i) {
   return indexs[2 * i + 1] - indexs[2 * i] + 1;
 }
 __host__ __device__ const uint8_t *element_start(const int *indexs, int i,
-                                              const uint8_t *all_bytes) {
+                                                 const uint8_t *all_bytes) {
   return &all_bytes[indexs[2 * i]];
 }
 __host__ __device__ int elements_size_sum(const int *indexs, int n) {
@@ -80,7 +80,8 @@ template <typename T> cudaError_t DeviceAlloc(T *&data, size_t count) {
   return cudaMalloc((void **)&data, sizeof(T) * count);
 }
 
-template <typename T> cudaError_t DeviceSet(T *data, uint8_t value, size_t count) {
+template <typename T>
+cudaError_t DeviceSet(T *data, uint8_t value, size_t count) {
   return cudaMemset(data, value, sizeof(T) * count);
 }
 
@@ -99,3 +100,12 @@ template <typename T> cudaError_t DeviceFree(T *data) { return cudaFree(data); }
     }                                                                          \
   } while (0)
 
+// common utils
+namespace util {
+inline void println_hex(const uint8_t *str, size_t size) {
+  for (size_t i = 0; i < size; ++i) {
+    printf("%02x ", str[i]);
+  }
+  printf("\n");
+}
+} // namespace util

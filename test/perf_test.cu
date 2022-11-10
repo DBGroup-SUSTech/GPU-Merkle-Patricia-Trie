@@ -111,7 +111,7 @@ int main() {
 
   // gpu test
   GpuMPT gpu_mpt;
-  
+
   perf::CpuTimer<perf::us> timer_gpu_put;
   timer_gpu_put.start();
   gpu_mpt.puts(keys_bytes, keys_indexs, values_bytes, values_indexs, n,
