@@ -1,11 +1,10 @@
 #pragma once
-#include<cstdint>
-#include <cuda_runtime.h>
-#include <string.h>
-#include<string.h>
-#include<assert.h>
-#include<stdio.h>
+#include <assert.h>
+#include <cstdint>
 #include <cstdlib>
+#include <cuda_runtime.h>
+#include <stdio.h>
+#include <string.h>
 
 #define ROUNDS 24
 #define HASH_SIZE 32
@@ -16,6 +15,8 @@
 #define MAX_KEY_SIZE 128
 #define MAX_DEPTH (MAX_KEY_SIZE * 2) // TODO: compression would eliminate it
 #define MAX_RESULT_BUF 1 << 30
+
+#define WARP_FULL_MASK 0xFFFFFFFF
 
 enum DeviceT {
   CPU,

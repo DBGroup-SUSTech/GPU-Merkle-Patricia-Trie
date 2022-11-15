@@ -52,8 +52,8 @@ put(const uint8_t *key, int key_size, const uint8_t *value, int value_size,
 }
 
 __global__ void puts(const uint8_t *keys_bytes, const int *keys_indexs,
-                     const uint8_t *values_bytes, const int *values_indexs, int n,
-                     Node *root,
+                     const uint8_t *values_bytes, const int *values_indexs,
+                     int n, Node *root,
                      PoolAllocator<Node, MAX_NODES> node_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
@@ -98,9 +98,11 @@ __global__ void gets(const uint8_t *keys_bytes, const int *keys_indexs,
   get(key, key_size, value_ptr, value_size, root);
 }
 
-__device__ __forceinline__ void
-get_shuffle(const uint8_t *key, int key_size, const uint8_t *&value_ptr,
-            int &value_size, Node *root, uint8_t *buffer_result, int &buffer_i) {
+__device__ __forceinline__ void get_shuffle(const uint8_t *key, int key_size,
+                                            const uint8_t *&value_ptr,
+                                            int &value_size, Node *root,
+                                            uint8_t *buffer_result,
+                                            int &buffer_i) {
   int nibble_i = 0;
   int nibble_max = sizeof_nibble(key_size);
   while (nibble_i < nibble_max && nullptr != root) {
@@ -122,8 +124,9 @@ get_shuffle(const uint8_t *key, int key_size, const uint8_t *&value_ptr,
 }
 
 __global__ void gets_shuffle(const uint8_t *keys_bytes, const int *keys_indexs,
-                             const uint8_t **values_ptrs, int *values_sizes, int n,
-                             Node *root, uint8_t *buffer_result, int *buffer_i) {
+                             const uint8_t **values_ptrs, int *values_sizes,
+                             int n, Node *root, uint8_t *buffer_result,
+                             int *buffer_i) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
     return;
@@ -136,6 +139,97 @@ __global__ void gets_shuffle(const uint8_t *keys_bytes, const int *keys_indexs,
 
   get_shuffle(key, key_size, value_ptr, value_size, root, buffer_result,
               *buffer_i);
+}
+
+/**
+ * @brief get leaf nodes and set visit count, also set parent
+ *
+ * @param key
+ * @param key_size
+ * @param leaf
+ * @param root
+ */
+__device__ __forceinline__ void do_onepass_mark_phase(const uint8_t *key,
+                                                      int key_size, Node *&leaf,
+                                                      Node *root) {
+  int nibble_i = 0;
+  int nibble_max = sizeof_nibble(key_size);
+  Node *parent = nullptr;
+  while (nibble_i < nibble_max) {
+    // parent.next()
+    parent = root;
+    // root.next()
+    nibble_t nibble = nibble_from_bytes(key, nibble_i);
+    root = root->childs[nibble];
+    nibble_i++;
+    // parent-root
+    root->parent = parent;
+
+    // update parent visit count
+    assert(root != nullptr);
+    if (nullptr != parent) {
+      int old = atomicCAS(&root->parent_visit_count_added, 0, 1);
+      if (0 == old) {
+        atomicAdd(&parent->visit_count, 1);
+      }
+    }
+  }
+
+  // update leaf
+  assert(root != nullptr);
+  atomicAdd(&root->visit_count, 1);
+}
+
+/**
+ * @brief set visit_count and return leaf nodes
+ * @param[out] leafs nodes, length = n
+ */
+__global__ void onepass_mark_phase(const uint8_t *keys_bytes,
+                                   const int *keys_indexs, Node **leafs, int n,
+                                   Node *root) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+  const uint8_t *key = element_start(keys_indexs, tid, keys_bytes);
+  int key_size = element_size(keys_indexs, tid);
+  Node *&leaf = leafs[tid];
+
+  do_onepass_mark_phase(key, key_size, leaf, root);
+}
+
+__device__ __forceinline__ void do_onepass_update_phase(Node *leaf,
+                                                        int lane_id) {
+  if (lane_id <= 25) {
+    return;
+  }
+
+  while (leaf) {
+    int should_visit_0 = 0;
+    if (lane_id == 0) {
+      should_visit_0 = (1 == atomicSub(&leaf->visit_count, 1));
+    }
+    // broadcast from 0 to warp
+    int should_visit = __shfl_sync(WARP_FULL_MASK, should_visit_0, 0);
+    if (!should_visit) {
+      break;
+    }
+    // should visit
+    // TODO: call device function
+    leaf = leaf->parent;
+  }
+}
+
+__global__ void onepass_update_phase(Node **leafs, int n, Node *root) {
+  int tid_global = blockIdx.x * blockDim.x + threadIdx.x; // global thread id
+  int wid_global = tid_global / 32;                       // global warp id
+  int tid_warp = tid_global % 32;                         // lane id
+  if (wid_global >= n) {
+    return;
+  }
+
+  Node *leaf = leafs[wid_global];
+  do_onepass_update_phase(leaf, tid_warp);
 }
 
 } // namespace gkernel

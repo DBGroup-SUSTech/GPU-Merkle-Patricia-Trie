@@ -38,6 +38,11 @@ public:
 private:
   Node *d_root_;
   PoolAllocator<Node, MAX_NODES> allocator_;
+
+private:
+  /* device is GPU */
+  void hash_update_onepass(const uint8_t *d_keys_bytes,
+                           const int *d_keys_indexs, int n);
 };
 
 void GpuMPT::puts(const uint8_t *keys_bytes, const int *keys_indexs,
@@ -90,7 +95,8 @@ void GpuMPT::puts(const uint8_t *keys_bytes, const int *keys_indexs,
   printf("GPU put kernel execution time: %d us, throughput %d qpms\n",
          kernel_timer.get(), n * 1000 / kernel_timer.get());
 
-  // TODO: batch update
+  /// @note node.parent is set by following code
+  hash_update_onepass(keys_bytes, keys_indexs, n);
 }
 
 void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
@@ -184,4 +190,26 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
 void GpuMPT::hash(const uint8_t *&bytes /* uint8_t[32] */,
                   DeviceT device) const {
   printf("GpuMPT::hash() not implemented\n");
+}
+
+void GpuMPT::hash_update_onepass(const uint8_t *d_keys_bytes,
+                                 const int *d_keys_indexs, int n) {
+  // allocate and set leafs
+  Node **leafs;
+  CHECK_ERROR(gutil::DeviceAlloc(leafs, n));
+  CHECK_ERROR(gutil::DeviceSet(leafs, 0, n));
+  // mark phase
+  const int rpthread_block_size = 128;
+  const int rpthread_num_blocks =
+      (n + rpthread_block_size - 1) / rpthread_block_size;
+  gkernel::onepass_mark_phase<<<rpthread_num_blocks, rpthread_block_size>>>(
+      d_keys_bytes, d_keys_indexs, leafs, n, d_root_);
+
+  const int rpwarp_block_size = 128;
+  const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
+                                rpwarp_block_size; // one warp per request
+  gkernel::onepass_update_phase<<<rpwarp_num_blocks, rpwarp_block_size>>>(
+      leafs, n, d_root_);
+
+  CHECK_ERROR(cudaDeviceSynchronize());
 }

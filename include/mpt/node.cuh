@@ -5,14 +5,17 @@
 #include "util/util.cuh"
 #include <cuda_runtime.h>
 
-struct Node {           // 192 bytes
-  Node *childs[16];     // 8 * 16
-  const uint8_t *key;   // 8
-  const uint8_t *value; // 8
-  int key_size;         // 4
-  int value_size;       // 4
-  uint8_t hash[32];     // 32
-  bool has_value;       // 1 -- padding to 8
+struct Node {                   // 200 bytes
+  Node *childs[16];             // 8 * 16
+  const uint8_t *key;           // 8
+  const uint8_t *value;         // 8
+  int key_size;                 // 4
+  int value_size;               // 4
+  uint8_t hash[32];             // 32
+  Node *parent;                 // 8
+  int visit_count;              // 4 onepass
+  int parent_visit_count_added; // 4
+  bool has_value;               // 1 -- padding to 8
 
   /**
    * @param tmp_buffer the buffer is used to store intermediate results maximum
