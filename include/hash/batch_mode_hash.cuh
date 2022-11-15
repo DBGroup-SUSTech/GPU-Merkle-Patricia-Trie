@@ -1,6 +1,6 @@
 #include "gpu_hash_kernel.cuh"
 
-#define BLOCK_SIZE 1024
+#define BLOCK_SIZE 1088
 #define WARP_NUM 32
 
 extern __shared__ uint64_t long_shared[];
@@ -22,7 +22,7 @@ __device__ __forceinline__ void batch_keccak_device(uint64_t *data, uint64_t *ou
 
         A[t] = 0ULL;
         B[t] = 0ULL;
-        if (t < 16)
+        if (t < 17)
             B[t] = data[t];
 
         int const blocks = databitlen / BITRATE;
@@ -33,7 +33,7 @@ __device__ __forceinline__ void batch_keccak_device(uint64_t *data, uint64_t *ou
             A[t] ^= B[t];
 
             data += BITRATE / 64;
-            if (t < 16)
+            if (t < 17)
                 B[t] = data[t]; /* prefetch data */
 #pragma unroll 24
             for (int i = 0; i < ROUNDS; ++i)
@@ -47,47 +47,32 @@ __device__ __forceinline__ void batch_keccak_device(uint64_t *data, uint64_t *ou
 
             databitlen -= BITRATE;
         }
-        int const databytelen = databitlen / 8;
 
-        if (t == 0)
-        { /* pad the end of the data */
-            uint8_t *p = (uint8_t *)B + databytelen;
-            uint8_t const q = *p;
-            *p++ = (q >> (8 - (databitlen & 7)) | (1 << (databitlen & 7)));
-            *p++ = 0x00;
-            *p++ = BITRATE / 8;
-            *p++ = 0x01;
-            while (p < (uint8_t *)&B[25])
-                *p++ = 0;
+        B[t] = 0;
+        if (t<databitlen/64)
+        {
+            B[t] = data[t];
         }
-        if (t < 16)
-            A[t] ^= B[t]; /* load 128 byte of data */
-#pragma unroll 24
-        for (int i = 0; i < ROUNDS; ++i)
-        { /* Keccak-f */
-            C[t] = A[s] ^ A[s + 5] ^ A[s + 10] ^ A[s + 15] ^ A[s + 20];
-            D[t] = C[b[20 + s]] ^ R64(C[b[5 + s]], 1, 63);
-            C[t] = R64(A[a[t]] ^ D[b[t]], ro[t][0], ro[t][1]);
-            A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]);
-            A[t] ^= rc[(t == 0) ? 0 : 1][i];
+        
+        int const bytes = databitlen/8;
+        int byte_index = bytes;
+        uint8_t *p = (uint8_t *)B;
+        if(t == 0) {
+            p[byte_index++] = 1;
+            p[BITRATE/8-1] = 0x80;
         }
-        if ((databytelen + 4) > BITRATE / 8)
-        { /*then thread t=0 has crossed the 128 byte*/
-            if (t < 16)
-                B[t] = 0ULL; /* boundary and touched some higher parts */
-            if (t < 9)
-                B[t] = B[t + 16]; /* of B.                              */
-            if (t < 16)
-                A[t] ^= B[t];
-#pragma unroll 24
-            for (int i = 0; i < ROUNDS; ++i)
-            { /* Keccak-f */
-                C[t] = A[s] ^ A[s + 5] ^ A[s + 10] ^ A[s + 15] ^ A[s + 20];
-                D[t] = C[b[20 + s]] ^ R64(C[b[5 + s]], 1, 63);
-                C[t] = R64(A[a[t]] ^ D[b[t]], ro[t][0], ro[t][1]);
-                A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]);
-                A[t] ^= rc[(t == 0) ? 0 : 1][i];
-            }
+
+        if(t<17){
+            A[t]^=B[t];
+        }
+        
+        #pragma unroll 24
+        for(int i=0;i<ROUNDS;++i) {
+            C[t] = A[s]^A[s+5]^A[s+10]^A[s+15]^A[s+20];
+            D[t] = C[b[20+s]] ^ R64(C[b[5+s]],1,63);
+            C[t] = R64(A[a[t]]^D[b[t]], ro[t][0], ro[t][1]);
+            A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]); 
+            A[t] ^= rc[(t==0) ? 0 : 1][i]; 
         }
         if (t < 4)
         {

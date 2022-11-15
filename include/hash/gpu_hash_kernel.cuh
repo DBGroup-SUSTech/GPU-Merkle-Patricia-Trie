@@ -4,7 +4,7 @@
 #include"util/hash_util.cuh"
 #include"util/util.cuh"
 
-#define BITRATE 1024 //r=1024
+#define BITRATE 1088 //r=1024
 #define R64(a,b,c) (((a) << b) ^ ((a) >> c))
 
 static const uint64_t round_const[5][ROUNDS] = {
@@ -118,7 +118,7 @@ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen) {
     if(t < 25) {
         A[t] = 0ULL;
         B[t] = 0ULL;
-        if(t < 16) //r = 1024
+        if(t < 17) //r = 1088
             B[t] = data[t]; 
 
         int const blocks = databitlen/BITRATE;
@@ -127,7 +127,7 @@ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen) {
             A[t] ^= B[t];
 
             data += BITRATE/64; 
-            if(t < 16) B[t] = data[t];       /* prefetch data */
+            if(t < 17) B[t] = data[t];       /* prefetch data */
 
             #pragma unroll 24
             for(int i=0;i<ROUNDS;++i) { 
@@ -140,46 +140,32 @@ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen) {
 
             databitlen -= BITRATE;
         }
-
-        int const bytes = databitlen/8;/*bytes will be smaller than BITRATE/8*/
-
+        B[t] = 0;
+        if (t<databitlen/64)
+        {
+            B[t] = data[t];
+        }
+        
+        int const bytes = databitlen/8;
+        int byte_index = bytes;
+        uint8_t *p = (uint8_t *)B;
         if(t == 0) {
-            uint8_t *p = (uint8_t *)B+bytes;
-            uint8_t const q = *p;
-            *p++ = (q >> (8-(databitlen&7)) | (1 << (databitlen&7)));
-            *p++ = 0x00; 
-            *p++ = BITRATE/8; 
-            *p++ = 0x01; 
-            while(p < (uint8_t *)&B[25])
-                *p++ = 0;
+            p[byte_index++] = 1;
+            p[BITRATE/8-1] = 0x80;
         }
 
-        if(t < 16) A[t] ^= B[t];
+        if(t<17){
+            A[t]^=B[t];
+        }
         
         #pragma unroll 24
         for(int i=0;i<ROUNDS;++i) {
-             
             C[t] = A[s]^A[s+5]^A[s+10]^A[s+15]^A[s+20];
             D[t] = C[b[20+s]] ^ R64(C[b[5+s]],1,63);
             C[t] = R64(A[a[t]]^D[b[t]], ro[t][0], ro[t][1]);
             A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]); 
             A[t] ^= rc[(t==0) ? 0 : 1][i]; 
         }
-
-        if((bytes+4) > BITRATE/8) {/* then thread 0 has crossed the 128 byte */
-            if(t < 16) B[t] = 0ULL;/* boundary and touched some higher parts */
-            if(t <  9) B[t] = B[t+16]; /* of B.                              */
-            if(t < 16) A[t] ^= B[t];
-            
-            #pragma unroll 24
-            for(int i=0;i<ROUNDS;++i) { 
-                C[t] = A[s]^A[s+5]^A[s+10]^A[s+15]^A[s+20];
-                D[t] = C[b[20+s]] ^ R64(C[b[5+s]],1,63);
-                C[t] = R64(A[a[t]]^D[b[t]], ro[t][0], ro[t][1]);
-                A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]); 
-                A[t] ^= rc[(t==0) ? 0 : 1][i]; 
-            }
-        } 
 
         out[t] = A[t];
     }

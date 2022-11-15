@@ -58,9 +58,17 @@ void data_gen(const uint8_t *&values_bytes, int *&value_indexs, int n, int turn)
   // generate random values
   const int value_size = DATA_INPUT_LENGTH*turn;
   uint8_t *values = new uint8_t[value_size * n]{};
-  for (int i = 0; i < value_size * n; ++i) {
+  // for (int i = 0; i < value_size * n; ++i) {
+  //   values[i] = dist(g);
+  // }
+  for (int i = 0; i < value_size; ++i) {
     values[i] = dist(g);
   }
+  for (int i = value_size; i < value_size*n; i++)
+  {
+    values[i] = values[i%value_size];
+  }
+  
   values_bytes = values;
   value_indexs = new int[n]{};
   printf("finish generating values\n");
