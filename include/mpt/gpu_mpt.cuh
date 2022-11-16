@@ -208,8 +208,8 @@ void GpuMPT::hash_update_onepass(const uint8_t *d_keys_bytes,
   const int rpwarp_block_size = 128;
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size; // one warp per request
-  gkernel::onepass_update_phase<<<rpwarp_num_blocks, rpwarp_block_size>>>(
-      leafs, n, d_root_);
+  gkernel::onepass_update_phase<<<rpwarp_num_blocks, rpwarp_block_size>>>(leafs,
+                                                                          n);
 
   CHECK_ERROR(cudaDeviceSynchronize());
 }

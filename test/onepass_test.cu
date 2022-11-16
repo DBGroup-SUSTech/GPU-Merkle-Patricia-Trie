@@ -1,7 +1,6 @@
 #include "mpt/gpu_mpt.cuh"
+#include "util/util.cuh"
 
-void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
-              const uint8_t *&values_bytes, int *&value_indexs, int &n) {}
 int main() {
   uint32_t keys[]{0x0000b0a0, 0x0000c0a0, 0x00d0c0a0, 0xf0d0c0a0, 0x00e0c0a0};
   uint8_t values[]{0x00, 0x01, 0x02, 0x03, 0x04};
@@ -40,7 +39,45 @@ int main() {
     assert(*values_ptrs[i] == values[i] && values_sizes[i] == 1);
   }
 
-  // TODO: allocate device memory for keys
+  CHECK_ERROR(cudaDeviceSynchronize());
 
-  // TODO: test onepass mark phase
+  // TODO: allocate device memory for keys
+  uint8_t *d_keys_bytes = nullptr;
+  int *d_keys_indexs = nullptr;
+  int keys_bytes_size = elements_size_sum(keys_indexs, n);
+  int keys_indexs_size = indexs_size_sum(n);
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_bytes, keys_bytes_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_keys_bytes, keys_bytes, keys_bytes_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+
+  // TODO: test onepass mark and updatephase
+  // Node **d_leafs;
+  // CHECK_ERROR(gutil::DeviceAlloc(d_leafs, n));
+  // CHECK_ERROR(gutil::DeviceSet(d_leafs, 0, n));
+  const int rpthread_block_size = 2;
+  const int rpthread_num_blocks =
+      (n + rpthread_block_size - 1) / rpthread_block_size;
+
+  // TODO: should set d_root_ to public
+  // gkernel::debug::print_visit_counts_from_keys<<<rpthread_num_blocks,
+  //                                                rpthread_block_size>>>(
+  //     d_keys_bytes, d_keys_indexs, n, gpu_mpt.d_root_);
+
+  CHECK_ERROR(cudaDeviceSynchronize());
+  printf("print_visit_counts_from_keys finish\n");
+
+  // gkernel::onepass_mark_phase<<<rpthread_num_blocks, rpthread_block_size>>>(
+  //     d_keys_bytes, d_keys_indexs, d_leafs, n,
+  //     gpu_mpt.d_root_); // TODO: should modify d_root_to public
+
+  // gkernel::debug::print_visit_counts_from_leafs<<<rpthread_num_blocks,
+  //                                                 rpthread_block_size>>>(
+  //     d_leafs, n);
+  // CHECK_ERROR(cudaDeviceSynchronize());
+  // printf("print_visit_counts_from_leafs finish\n");
+
+  // TODO: test onepass update phase
 }

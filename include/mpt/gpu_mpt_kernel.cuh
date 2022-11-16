@@ -171,6 +171,10 @@ __device__ __forceinline__ void do_onepass_mark_phase(const uint8_t *key,
       int old = atomicCAS(&root->parent_visit_count_added, 0, 1);
       if (0 == old) {
         atomicAdd(&parent->visit_count, 1);
+        // printf("[DEBUG tid=%d] parent %p visit count added, current node "
+        //        "has value? %d, nibble_i = %d\n",
+        //        threadIdx.x + blockIdx.x * blockDim.x, parent, nibble,
+        //        root->has_value, nibble_i);
       }
     }
   }
@@ -178,6 +182,9 @@ __device__ __forceinline__ void do_onepass_mark_phase(const uint8_t *key,
   // update leaf
   assert(root != nullptr);
   atomicAdd(&root->visit_count, 1);
+  // printf("[DEBUG tid=%d] leaf node %p visit count added\n",
+  //        threadIdx.x + blockIdx.x * blockDim.x, root);
+  leaf = root;
 }
 
 /**
@@ -200,7 +207,7 @@ __global__ void onepass_mark_phase(const uint8_t *keys_bytes,
 
 __device__ __forceinline__ void do_onepass_update_phase(Node *leaf,
                                                         int lane_id) {
-  if (lane_id <= 25) {
+  if (lane_id > 25) {
     return;
   }
 
@@ -216,20 +223,59 @@ __device__ __forceinline__ void do_onepass_update_phase(Node *leaf,
     }
     // should visit
     // TODO: call device function
+    
     leaf = leaf->parent;
   }
 }
 
-__global__ void onepass_update_phase(Node **leafs, int n, Node *root) {
+__global__ void onepass_update_phase(Node **leafs, int n) {
   int tid_global = blockIdx.x * blockDim.x + threadIdx.x; // global thread id
   int wid_global = tid_global / 32;                       // global warp id
   int tid_warp = tid_global % 32;                         // lane id
   if (wid_global >= n) {
     return;
   }
-
   Node *leaf = leafs[wid_global];
   do_onepass_update_phase(leaf, tid_warp);
 }
 
+namespace debug {
+
+__global__ void print_visit_counts_from_leafs(Node **leafs, int n) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+  Node *leaf = leafs[tid];
+  while (leaf) {
+    printf("tid = %d: visit count = %d, parent visit count added = %d\n", tid,
+           leaf->visit_count, leaf->parent_visit_count_added);
+    leaf = leaf->parent;
+  }
+}
+
+__global__ void print_visit_counts_from_keys(const uint8_t *keys_bytes,
+                                             const int *keys_indexs, int n,
+                                             Node *root) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+  const uint8_t *key = element_start(keys_indexs, tid, keys_bytes);
+  int key_size = element_size(keys_indexs, tid);
+
+  // per thread
+  int nibble_i = 0;
+  int nibble_max = sizeof_nibble(key_size);
+  while (nibble_i < nibble_max && nullptr != root) {
+    printf("tid = %d: visit count = %d, parent visit count added = %d\n", tid,
+           root->visit_count, root->parent_visit_count_added);
+    nibble_t nibble = nibble_from_bytes(key, nibble_i);
+    root = root->childs[nibble];
+    nibble_i++;
+  }
+  printf("tid = %d: visit count = %d, parent visit count added = %d\n", tid,
+         root->visit_count, root->parent_visit_count_added);
+}
+} // namespace debug
 } // namespace gkernel
