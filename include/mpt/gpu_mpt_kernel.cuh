@@ -358,7 +358,7 @@ __global__ void print_visit_counts_from_keys(const uint8_t *keys_bytes,
 __global__ void calculate_one_hash(uint8_t *value, int value_size,
                                    uint8_t *hash) {
   assert(blockDim.x == 32 && gridDim.x == 1);
-  assert(value_size == 64);
+  assert(value_size == 800);
 
   int tid_warp = threadIdx.x;
 
@@ -368,7 +368,7 @@ __global__ void calculate_one_hash(uint8_t *value, int value_size,
   __shared__ uint64_t D[25];
 
   batch_keccak_device(reinterpret_cast<const uint64_t *>(value),
-                      reinterpret_cast<uint64_t *>(hash), 64 * 8, tid_warp, A,
+                      reinterpret_cast<uint64_t *>(hash), 800 * 8, tid_warp, A,
                       B, C, D);
 }
 } // namespace debug
