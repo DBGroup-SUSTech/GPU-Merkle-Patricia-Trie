@@ -14,7 +14,7 @@ __global__ void gpu_addr() {
 
 void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
               const uint8_t *&values_bytes, int *&value_indexs, int &n) {
-  n = 1 << 16;
+  n = 1 << 4;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution dist(0, 1 << 8);
@@ -35,7 +35,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
   }
   values_bytes = values;
 
-  // indexs
+  // indexs, key_size = 1
   keys_indexs = new int[n * 2]{};
   value_indexs = new int[n * 2]{};
   for (int i = 0; i < n; ++i) {
@@ -95,19 +95,19 @@ int main() {
   printf("CPU get execution time: %d us, throughput %d qpms\n",
          timer_cpu_get.get(), n * 1000 / timer_cpu_get.get());
 
-  // verify
-  // for (int i = 0; i < 2; ++i) {
-  //   printf("\nPUT: ");
-  //   for (int j = 0; j < element_size(values_indexs, i); ++j) {
-  //     printf("%02x", element_start(values_indexs, i, values_bytes)[j]);
-  //   }
+  // verify cpu kv
+  for (int i = 0; i < 2; ++i) {
+    printf("\nPUT: ");
+    for (int j = 0; j < element_size(values_indexs, i); ++j) {
+      printf("%02x", element_start(values_indexs, i, values_bytes)[j]);
+    }
 
-  //   printf("\nGET: ");
-  //   for (int j = 0; j < values_sizes[i]; ++j) {
-  //     printf("%02x", values_ptrs[i][j]);
-  //   }
-  //   printf("\n");
-  // }
+    printf("\nGET: ");
+    for (int j = 0; j < values_sizes[i]; ++j) {
+      printf("%02x", values_ptrs[i][j]);
+    }
+    printf("\n");
+  }
 
   // gpu test
   GpuMPT gpu_mpt;
@@ -133,17 +133,34 @@ int main() {
   printf("GPU get execution time: %d us, throughput %d qpms\n",
          timer_gpu_get.get(), n * 1000 / timer_gpu_get.get());
 
-  // verify
-  // for (int i = 0; i < 2; ++i) {
-  //   printf("\nPUT: ");
-  //   for (int j = 0; j < element_size(values_indexs, i); ++j) {
-  //     printf("%02x", element_start(values_indexs, i, values_bytes)[j]);
-  //   }
+  // verify gpu kv
+  for (int i = 0; i < 2; ++i) {
+    printf("\nPUT: ");
+    for (int j = 0; j < element_size(values_indexs, i); ++j) {
+      printf("%02x", element_start(values_indexs, i, values_bytes)[j]);
+    }
 
-  //   printf("\nGET: ");
-  //   for (int j = 0; j < values_sizes[i]; ++j) {
-  //     printf("%02x", values_ptrs[i][j]);
-  //   }
-  //   printf("\n");
-  // }
+    printf("\nGET: ");
+    for (int j = 0; j < values_sizes[i]; ++j) {
+      printf("%02x", values_ptrs[i][j]);
+    }
+    printf("\n");
+  }
+
+  // verify cpu & gpu hash
+  const uint8_t *cpu_hash = nullptr;
+  const uint8_t *gpu_hash = nullptr;
+  cpu_mpt.hash(cpu_hash, DeviceT::CPU);
+  gpu_mpt.hash(gpu_hash, DeviceT::CPU);
+
+  printf("CPU root hash: 0x");
+  for (int i = 0; i < 32; ++i) {
+    printf("%02x", cpu_hash[i]);
+  }
+  printf("\n");
+  printf("GPU root hash: 0x");
+  for (int i = 0; i < 32; ++i) {
+    printf("%02x", gpu_hash[i]);
+  }
+  printf("\n");
 }

@@ -221,6 +221,7 @@ do_concat_childs_and_my_value_hashs(const Node *node, uint8_t *buffer,
   }
   if (node->has_value) {
     memcpy(next, node->hash_of_value, 32);
+    next += 32;
   }
   size = next - buffer;
 }
@@ -229,16 +230,30 @@ __device__ __forceinline__ void
 do_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
                         uint64_t *C, uint64_t *D,
                         uint8_t *buffer /*17 * 32 bytes*/) {
-  if (lane_id > 25) {
-    return;
-  }
-
+  // printf("thread tid=%d calculating hash\n",
+  //        threadIdx.x + blockDim.x * blockIdx.x);
   // prepare node's value's hash
   batch_keccak_device(reinterpret_cast<const uint64_t *>(leaf->value),
                       reinterpret_cast<uint64_t *>(leaf->hash_of_value),
                       leaf->value_size * 8, lane_id, A, B, C, D);
-  __threadfence(); // make sure the new hash can be seen by other threads
 
+  // __syncthreads();
+  __threadfence(); // make sure the new hash can be seen by other threads
+  // __syncwarp();    // !debug
+  // // ! debug
+  // if (lane_id == 0) {
+  //   printf("hash of value: 0x\n");
+  //   printf("value: ");
+  //   for (int i = 0; i < leaf->value_size; ++i) {
+  //     printf("%02x", leaf->value[i]);
+  //   }
+  //   printf("\n");
+  //   printf("hash: ");
+  //   for (int i = 0; i < 32; ++i) {
+  //     printf("%02x", leaf->hash_of_value[i]);
+  //   }
+  //   printf("\n");
+  // }
   while (leaf) {
     // should_visit means all child's hash and my value's hash are ready
     int should_visit_0 = 0;
@@ -261,7 +276,7 @@ do_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
     // broadcast buffer size to warp
     int buffer_size = __shfl_sync(WARP_FULL_MASK, buffer_size_0, 0);
 
-    // TODO: hash
+    // calculate hash
     batch_keccak_device(reinterpret_cast<const uint64_t *>(buffer),
                         reinterpret_cast<uint64_t *>(leaf->hash),
                         buffer_size * 8, lane_id, A, B, C, D);
@@ -281,7 +296,6 @@ __global__ void onepass_update_phase(Node **leafs, int n) {
     return;
   }
 
-  // TODO: share memory
   assert(blockDim.x == 128);
   __shared__ uint64_t A[128 / 32 * 25];
   __shared__ uint64_t B[128 / 32 * 25];
@@ -291,11 +305,17 @@ __global__ void onepass_update_phase(Node **leafs, int n) {
   __shared__ uint8_t buffer[(128 / 32) * (17 * 32)]; // 17 * 32 per node
 
   Node *leaf = leafs[wid_global];
-  do_onepass_update_phase(leaf, tid_warp, A + 25 * wid_block,
+  do_onepass_update_phase(leaf, tid_warp, A + wid_block * 25,
                           B + wid_block * 25, C + wid_block * 25,
-                          D + wid_block * 25, buffer);
+                          D + wid_block * 25, buffer + wid_block * (17 * 32));
 }
 
+// should call by <<<1, 32>>>
+__global__ void get_root_hash(const Node *root, uint8_t *hash) {
+  assert(blockDim.x == 32 && gridDim.x == 1);
+  int tid = threadIdx.x;
+  hash[tid] = root->hash[tid];
+}
 namespace debug {
 
 __global__ void print_visit_counts_from_leafs(Node **leafs, int n) {
@@ -333,6 +353,23 @@ __global__ void print_visit_counts_from_keys(const uint8_t *keys_bytes,
   }
   printf("tid = %d: visit count = %d, parent visit count added = %d\n", tid,
          root->visit_count, root->parent_visit_count_added);
+}
+
+__global__ void calculate_one_hash(uint8_t *value, int value_size,
+                                   uint8_t *hash) {
+  assert(blockDim.x == 32 && gridDim.x == 1);
+  assert(value_size == 64);
+
+  int tid_warp = threadIdx.x;
+
+  __shared__ uint64_t A[25];
+  __shared__ uint64_t B[25];
+  __shared__ uint64_t C[25];
+  __shared__ uint64_t D[25];
+
+  batch_keccak_device(reinterpret_cast<const uint64_t *>(value),
+                      reinterpret_cast<uint64_t *>(hash), 64 * 8, tid_warp, A,
+                      B, C, D);
 }
 } // namespace debug
 } // namespace gkernel

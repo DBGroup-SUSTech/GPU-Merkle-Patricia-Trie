@@ -189,7 +189,21 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
 
 void GpuMPT::hash(const uint8_t *&bytes /* uint8_t[32] */,
                   DeviceT device) const {
-  printf("GpuMPT::hash() not implemented\n");
+  if (device == DeviceT::CPU) {
+    uint8_t *h_hash = new uint8_t[32]{};
+    uint8_t *d_hash = nullptr;
+    CHECK_ERROR(gutil::DeviceAlloc(d_hash, 32));
+    CHECK_ERROR(gutil::DeviceSet(d_hash, 0x00, 32));
+    gkernel::get_root_hash<<<1, 32>>>(d_root_, d_hash);
+    CHECK_ERROR(gutil::CpyDeviceToHost(h_hash, d_hash, 32));
+    bytes = h_hash;
+  } else {
+    uint8_t *d_hash = nullptr;
+    CHECK_ERROR(gutil::DeviceAlloc(d_hash, 32));
+    CHECK_ERROR(gutil::DeviceSet(d_hash, 0x00, 32));
+    gkernel::get_root_hash<<<1, 32>>>(d_root_, d_hash);
+    bytes = d_hash;
+  }
 }
 
 void GpuMPT::hash_update_onepass(const uint8_t *d_keys_bytes,
@@ -204,7 +218,7 @@ void GpuMPT::hash_update_onepass(const uint8_t *d_keys_bytes,
       (n + rpthread_block_size - 1) / rpthread_block_size;
   gkernel::onepass_mark_phase<<<rpthread_num_blocks, rpthread_block_size>>>(
       d_keys_bytes, d_keys_indexs, leafs, n, d_root_);
-
+  // update phase
   const int rpwarp_block_size = 128;
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size; // one warp per request

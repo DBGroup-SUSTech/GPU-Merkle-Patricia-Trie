@@ -1,3 +1,4 @@
+#include "mpt/cpu_mpt.h"
 #include "mpt/gpu_mpt.cuh"
 #include "util/util.cuh"
 
@@ -79,5 +80,4 @@ int main() {
   // CHECK_ERROR(cudaDeviceSynchronize());
   // printf("print_visit_counts_from_leafs finish\n");
 
-  // TODO: test onepass update phase
 }

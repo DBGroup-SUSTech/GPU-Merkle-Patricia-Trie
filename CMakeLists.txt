@@ -21,7 +21,7 @@ add_executable(HashTest ${TEST_PATH}/hash_test.cu ${SRC_FILES})
 add_executable(HashPerf ${TEST_PATH}/hash_perf.cu ${SRC_FILES})
 add_executable(HashSIMD ${TEST_PATH}/hash_SIMD.cu ${SRC_FILES})
 add_executable(OnePassTest ${TEST_PATH}/onepass_test.cu ${SRC_FILES})
-
+add_executable(SingleNodeTest ${TEST_PATH}/single_node_test.cu ${SRC_FILES})
 # target_compile_options(HashSIMD PUBLIC -maxrregcount 64)
 
 # add_compile_options(-fsanitize=address)
