@@ -1,4 +1,5 @@
 #pragma once
+#include "hash/batch_mode_hash.cuh"
 #include "mpt/node.cuh"
 #include "util/pool_allocator.cuh"
 
@@ -7,8 +8,9 @@ namespace gkernel {
 __device__ __forceinline__ void
 put(const uint8_t *key, int key_size, const uint8_t *value, int value_size,
     Node *root, PoolAllocator<Node, MAX_NODES> &node_allocator) {
-  Node *path[MAX_DEPTH]{};
-  path[0] = root;
+  // TODO: avoid local memory
+  // Node *path[MAX_DEPTH]{};
+  // path[0] = root;
   int nibble_i = 0;
   int nibble_max = sizeof_nibble(key_size); // path length = 1 + nibble_max
 
@@ -24,19 +26,19 @@ put(const uint8_t *key, int key_size, const uint8_t *value, int value_size,
 
     // insert into path
     nibble_i++;
-    path[nibble_i] = root->childs[nibble];
+    // path[nibble_i] = root->childs[nibble];
 
     // dfs into child
     root = root->childs[nibble];
 
     // create new empty node if current one is successfully inserted
     if (old == 0) {
-      assert(path[nibble_i] == node);
+      // assert(path[nibble_i] == node);
       node = node_allocator.malloc();
     }
   }
 
-  assert(root == path[nibble_i]);
+  // assert(root == path[nibble_i]);
 
   // to the end of key, insert kv
   root->key = key;
@@ -44,11 +46,6 @@ put(const uint8_t *key, int key_size, const uint8_t *value, int value_size,
   root->value = value;
   root->value_size = value_size;
   root->has_value = true;
-
-  // TODO update hash:
-  // while (nibble_i >= 0) {
-  //    nibble_i--;
-  // }
 }
 
 __global__ void puts(const uint8_t *keys_bytes, const int *keys_indexs,
@@ -205,25 +202,71 @@ __global__ void onepass_mark_phase(const uint8_t *keys_bytes,
   do_onepass_mark_phase(key, key_size, leaf, root);
 }
 
-__device__ __forceinline__ void do_onepass_update_phase(Node *leaf,
-                                                        int lane_id) {
+/**
+ * @brief concat 16 child's hash(of my value)
+ * @param buffer need nost at most 16 * 32 bytes
+ * @param size number of bytes filled in the buffer
+ */
+__device__ __forceinline__ void
+do_concat_childs_and_my_value_hashs(const Node *node, uint8_t *buffer,
+                                    int &size) {
+  uint8_t *next = buffer;
+#pragma unroll
+  for (int i = 0; i < 16; ++i) {
+    Node *child = node->childs[i];
+    if (nullptr != child) {
+      memcpy(next, child->hash, 32);
+      next += 32;
+    }
+  }
+  if (node->has_value) {
+    memcpy(next, node->hash_of_value, 32);
+  }
+  size = next - buffer;
+}
+
+__device__ __forceinline__ void
+do_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
+                        uint64_t *C, uint64_t *D,
+                        uint8_t *buffer /*17 * 32 bytes*/) {
   if (lane_id > 25) {
     return;
   }
 
+  // prepare node's value's hash
+  batch_keccak_device(reinterpret_cast<const uint64_t *>(leaf->value),
+                      reinterpret_cast<uint64_t *>(leaf->hash_of_value),
+                      leaf->value_size * 8, lane_id, A, B, C, D);
+  __threadfence(); // make sure the new hash can be seen by other threads
+
   while (leaf) {
+    // should_visit means all child's hash and my value's hash are ready
     int should_visit_0 = 0;
     if (lane_id == 0) {
       should_visit_0 = (1 == atomicSub(&leaf->visit_count, 1));
     }
+
     // broadcast from 0 to warp
     int should_visit = __shfl_sync(WARP_FULL_MASK, should_visit_0, 0);
     if (!should_visit) {
       break;
     }
-    // should visit
-    // TODO: call device function
-    
+
+    // concat the data to hash
+    int buffer_size_0 = 0;
+    if (lane_id == 0) {
+      do_concat_childs_and_my_value_hashs(leaf, buffer, buffer_size_0);
+    }
+
+    // broadcast buffer size to warp
+    int buffer_size = __shfl_sync(WARP_FULL_MASK, buffer_size_0, 0);
+
+    // TODO: hash
+    batch_keccak_device(reinterpret_cast<const uint64_t *>(buffer),
+                        reinterpret_cast<uint64_t *>(leaf->hash),
+                        buffer_size * 8, lane_id, A, B, C, D);
+    __threadfence(); // make sure the new hash can be seen by other threads
+
     leaf = leaf->parent;
   }
 }
@@ -232,11 +275,25 @@ __global__ void onepass_update_phase(Node **leafs, int n) {
   int tid_global = blockIdx.x * blockDim.x + threadIdx.x; // global thread id
   int wid_global = tid_global / 32;                       // global warp id
   int tid_warp = tid_global % 32;                         // lane id
+  int tid_block = threadIdx.x;
+  int wid_block = tid_block / 32;
   if (wid_global >= n) {
     return;
   }
+
+  // TODO: share memory
+  assert(blockDim.x == 128);
+  __shared__ uint64_t A[128 / 32 * 25];
+  __shared__ uint64_t B[128 / 32 * 25];
+  __shared__ uint64_t C[128 / 32 * 25];
+  __shared__ uint64_t D[128 / 32 * 25];
+
+  __shared__ uint8_t buffer[(128 / 32) * (17 * 32)]; // 17 * 32 per node
+
   Node *leaf = leafs[wid_global];
-  do_onepass_update_phase(leaf, tid_warp);
+  do_onepass_update_phase(leaf, tid_warp, A + 25 * wid_block,
+                          B + wid_block * 25, C + wid_block * 25,
+                          D + wid_block * 25, buffer);
 }
 
 namespace debug {

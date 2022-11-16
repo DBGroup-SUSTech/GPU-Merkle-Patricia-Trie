@@ -5,15 +5,16 @@
 #include "util/util.cuh"
 #include <cuda_runtime.h>
 
-struct Node {                   // 200 bytes
+struct Node {                   // 232 bytes
   Node *childs[16];             // 8 * 16
   const uint8_t *key;           // 8
   const uint8_t *value;         // 8
   int key_size;                 // 4
   int value_size;               // 4
   uint8_t hash[32];             // 32
+  uint8_t hash_of_value[32];    // 32
   Node *parent;                 // 8
-  int visit_count;              // 4 onepass
+  int visit_count;              // 4 for onepass hash
   int parent_visit_count_added; // 4
   bool has_value;               // 1 -- padding to 8
 
