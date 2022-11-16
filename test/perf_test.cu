@@ -52,6 +52,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
 }
 
 int main() {
+  GPUHashMultiThread::load_constants();
   // prepare data
   // const uint8_t *keys_bytes = reinterpret_cast<const uint8_t
   // *>("helloworld"); int keys_indexs[] = {0, 4, 5, 9}; const uint8_t
@@ -96,18 +97,18 @@ int main() {
          timer_cpu_get.get(), n * 1000 / timer_cpu_get.get());
 
   // verify cpu kv
-  for (int i = 0; i < 2; ++i) {
-    printf("\nPUT: ");
-    for (int j = 0; j < element_size(values_indexs, i); ++j) {
-      printf("%02x", element_start(values_indexs, i, values_bytes)[j]);
-    }
+  // for (int i = 0; i < 2; ++i) {
+  //   printf("\nPUT: ");
+  //   for (int j = 0; j < element_size(values_indexs, i); ++j) {
+  //     printf("%02x", element_start(values_indexs, i, values_bytes)[j]);
+  //   }
 
-    printf("\nGET: ");
-    for (int j = 0; j < values_sizes[i]; ++j) {
-      printf("%02x", values_ptrs[i][j]);
-    }
-    printf("\n");
-  }
+  //   printf("\nGET: ");
+  //   for (int j = 0; j < values_sizes[i]; ++j) {
+  //     printf("%02x", values_ptrs[i][j]);
+  //   }
+  //   printf("\n");
+  // }
 
   // gpu test
   GpuMPT gpu_mpt;
@@ -134,18 +135,18 @@ int main() {
          timer_gpu_get.get(), n * 1000 / timer_gpu_get.get());
 
   // verify gpu kv
-  for (int i = 0; i < 2; ++i) {
-    printf("\nPUT: ");
-    for (int j = 0; j < element_size(values_indexs, i); ++j) {
-      printf("%02x", element_start(values_indexs, i, values_bytes)[j]);
-    }
+  // for (int i = 0; i < 2; ++i) {
+  //   printf("\nPUT: ");
+  //   for (int j = 0; j < element_size(values_indexs, i); ++j) {
+  //     printf("%02x", element_start(values_indexs, i, values_bytes)[j]);
+  //   }
 
-    printf("\nGET: ");
-    for (int j = 0; j < values_sizes[i]; ++j) {
-      printf("%02x", values_ptrs[i][j]);
-    }
-    printf("\n");
-  }
+  //   printf("\nGET: ");
+  //   for (int j = 0; j < values_sizes[i]; ++j) {
+  //     printf("%02x", values_ptrs[i][j]);
+  //   }
+  //   printf("\n");
+  // }
 
   // verify cpu & gpu hash
   const uint8_t *cpu_hash = nullptr;
