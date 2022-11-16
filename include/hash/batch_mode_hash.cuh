@@ -27,7 +27,7 @@ __device__ __forceinline__ void batch_keccak_device(uint64_t *data, uint64_t *ou
 
         int const blocks = databitlen / BITRATE;
 
-        for (int block = 0; block < blocks; ++block)
+        for (int block = 0; block < blocks-1; ++block)
         { /* load data without crossing */
             /* a 128-byte boundary. */
             A[t] ^= B[t];
@@ -46,6 +46,18 @@ __device__ __forceinline__ void batch_keccak_device(uint64_t *data, uint64_t *ou
             }
 
             databitlen -= BITRATE;
+        }
+
+        A[t] ^= B[t];
+        data +=BITRATE/64;
+        databitlen -=BITRATE;
+        #pragma unroll 24
+        for(int i=0;i<ROUNDS;++i) { 
+            C[t] = A[s]^A[s+5]^A[s+10]^A[s+15]^A[s+20];
+            D[t] = C[b[20+s]] ^ R64(C[b[5+s]],1,63);
+            C[t] = R64(A[a[t]]^D[b[t]], ro[t][0], ro[t][1]);
+            A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]); 
+            A[t] ^= rc[(t==0) ? 0 : 1][i]; 
         }
 
         B[t] = 0;

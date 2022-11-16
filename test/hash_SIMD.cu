@@ -7,7 +7,7 @@
 #include <string>
 #include "hash/batch_mode_hash.cuh"
 
-#define DATA_INPUT_LENGTH 512
+#define DATA_INPUT_LENGTH 864
 #define MUL_FACTOR 1
 #define GEN_DATA_NUM 16
 #define GEN_DATA_MUL 20
@@ -77,12 +77,31 @@ void data_gen(const uint8_t *&values_bytes, int *&value_indexs, int n, int turn)
   }
 }
 
+void data_gen(const uint8_t* input, const uint8_t *& batch_data, int *&value_indexs, int n, int turn){
+  const int value_size = DATA_INPUT_LENGTH*turn;
+  uint8_t *values = new uint8_t[value_size * n]{};
+  for (int i = 0; i < n; i++)
+  {
+    for (int j = 0; j < value_size; j++)
+    {
+      values[i*value_size+j] = input[j];
+    }
+  }
+  batch_data = values;
+  value_indexs = new int[n]{};
+  printf("finish generating values\n");
+  for (int i = 0; i < n+1; i++){
+    value_indexs[i] = value_size/8;
+  }
+}
+
 int main(){
   const uint8_t * h_data = nullptr;
   int * indexs = nullptr;
   uint64_t * hash = new uint64_t[GEN_DATA_MUL*GEN_DATA_NUM*4];
+  const uint8_t *input = reinterpret_cast<const uint8_t *>("hgfcghvbjk829198sxdrftgyhjhgftygysdjfhusaid0sadkowq9edi0qwoej2189736ey781dhj289ikj982ujhr3w1ksw0i9sdwq-0ejd30qowkdx-0q0owl09ei90123u198ewd3jwq89de90qdjuqhrfduiwqjesuiedhgr3q78yeh879217jes89kqwspGHjasdhfiujsabhnfjidsnfjinewionfiuwehbnfuidsnijfnsdijnfidsjq0w9ie9012e2cdandiujnqwiudn9iasuondcioasjnmdiojasnmdoikjasnmdiojksandiujqnaiuwnqiudnasiujnxcijanmomsomdaopdjmkiowniudnasoidjiowjhquireyguiqwnbfudmioasmcoiadmnciuasdhduiwsahdiuwqnbduiasnmcasod0ajw90qokd0qwjd098hjrqfijwodiqjwudh28971hed89uwhqnd789uqwhdnbucsaijnsauhdbauihwjsbduiqwnbduiwqnuxcsaudhiuqwduw3q2eh2918qed98iqwsjnmdisadcqainjiwuyhe8721uqidnwqadoasmcxiaohjew398i1qdwisacasioedrxdtcvbnvjghfgkkhvgcfgtdxfghjkbvgcfdtxresxtfyghkjhgvcfdxtcghjklnhbvgcfxdxtrfyghjbvgcfxdtfyguhijkbvgcfxdyguhjkbvgcfxdtfyughjbvgcfxdtryfughjbvgcfdtrftyughjbvgcftdrfyughijbvgcfdrttyughibjvgcfdr5t6y8iuhbjvgcfydr57t6uygibhjvgchfydrft");
   
-  data_gen(h_data, indexs, GEN_DATA_NUM*GEN_DATA_MUL, MUL_FACTOR);
+  data_gen(input, h_data, indexs, GEN_DATA_NUM*GEN_DATA_MUL, MUL_FACTOR);
   
   GPUHashMultiThread::load_constants();
 

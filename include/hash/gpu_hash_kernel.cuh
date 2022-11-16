@@ -123,7 +123,7 @@ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen) {
 
         int const blocks = databitlen/BITRATE;
        
-        for(int block=0;block<blocks;++block) { 
+        for(int block=0;block<blocks-1;++block) { 
             A[t] ^= B[t];
 
             data += BITRATE/64; 
@@ -140,6 +140,19 @@ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen) {
 
             databitlen -= BITRATE;
         }
+
+        A[t] ^= B[t];
+        data +=BITRATE/64;
+        databitlen -=BITRATE;
+        #pragma unroll 24
+        for(int i=0;i<ROUNDS;++i) { 
+            C[t] = A[s]^A[s+5]^A[s+10]^A[s+15]^A[s+20];
+            D[t] = C[b[20+s]] ^ R64(C[b[5+s]],1,63);
+            C[t] = R64(A[a[t]]^D[b[t]], ro[t][0], ro[t][1]);
+            A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]); 
+            A[t] ^= rc[(t==0) ? 0 : 1][i]; 
+        }
+
         B[t] = 0;
         if (t<databitlen/64)
         {
@@ -166,8 +179,10 @@ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen) {
             A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]); 
             A[t] ^= rc[(t==0) ? 0 : 1][i]; 
         }
-
-        out[t] = A[t];
+        if (t<4)
+        {
+            out[t] = A[t];
+        }
     }
 }
 
