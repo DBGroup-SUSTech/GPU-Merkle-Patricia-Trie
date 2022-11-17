@@ -50,17 +50,17 @@ struct Node {                   // 232 bytes
     }
     if (has_value) {
       CPUHash::calculate_hash(value, value_size, p);
-      // printf("Current node has value\n\tdata = ");
+      // printf("value\t0x");
       // util::println_hex(value, value_size);
-      // printf("\thash = ");
+      // printf("hash\t0x");
       // util::println_hex(p, 32);
       p += 32;
     }
     // printf("Update hash(%.*s) = %.32s\n", p - tmp_buffer, tmp_buffer, hash);
     CPUHash::calculate_hash(tmp_buffer, p - tmp_buffer, hash);
-    // printf("Update hash\n\tdata = ");
+    // printf("value\t0x");
     // util::println_hex(tmp_buffer, p - tmp_buffer);
-    // printf("\thash = ");
+    // printf("hash\t0x");
     // util::println_hex(hash, 32);
   }
 };

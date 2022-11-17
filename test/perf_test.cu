@@ -14,7 +14,7 @@ __global__ void gpu_addr() {
 
 void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
               const uint8_t *&values_bytes, int *&value_indexs, int &n) {
-  n = 1 << 4;
+  n = 1 << 16;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution dist(0, 1 << 8);
@@ -31,7 +31,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
   const int value_size = 800;
   uint8_t *values = new uint8_t[value_size * n]{};
   for (int i = 0; i < value_size * n; ++i) {
-    values[i] = dist(g);
+    values[i] = 'a';
   }
   values_bytes = values;
 
@@ -81,7 +81,9 @@ int main() {
                DeviceT::CPU);
   timer_cpu_put.stop(); // timer end --------------------------------
 
-  printf("CPU put execution time: %d ms, throughput %d qps\n",
+  printf("\033[31m"
+         "CPU put execution time: %d ms, throughput %d qps\n"
+         "\033[0m",
          timer_cpu_put.get(), n * 1000 / timer_cpu_put.get());
 
   std::fill(values_ptrs, values_ptrs + n, nullptr);
@@ -119,8 +121,11 @@ int main() {
                DeviceT::CPU);
   timer_gpu_put.stop();
 
-  printf("GPU put execution time: %d us, throughput %d qpms\n",
-         timer_gpu_put.get(), n * 1000 / timer_gpu_put.get());
+  printf("\033[31m"
+         "GPU put execution time: %d us, throughput %d qpms (~%d qps)\n"
+         "\033[0m",
+         timer_gpu_put.get(), n * 1000 / timer_gpu_put.get(),
+         n * 1000 / timer_gpu_put.get() * 1000);
 
   std::fill(values_ptrs, values_ptrs + n, nullptr);
   std::fill(values_sizes, values_sizes + n, 0);
