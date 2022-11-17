@@ -22,19 +22,17 @@ __device__ __forceinline__ void batch_keccak_device(const uint64_t *data, uint64
 
         A[t] = 0ULL;
         B[t] = 0ULL;
-        if (t < 17)
-            B[t] = data[t];
-
         int const blocks = databitlen / BITRATE;
 
-        for (int block = 0; block < blocks-1; ++block)
+        for (int block = 0; block < blocks; ++block)
         { /* load data without crossing */
             /* a 128-byte boundary. */
+            if (t < 17)
+                B[t] = data[t];
+
             A[t] ^= B[t];
 
             data += BITRATE / 64;
-            if (t < 17)
-                B[t] = data[t]; /* prefetch data */
 #pragma unroll 24
             for (int i = 0; i < ROUNDS; ++i)
             { /* Keccak-f */
@@ -48,43 +46,34 @@ __device__ __forceinline__ void batch_keccak_device(const uint64_t *data, uint64
             databitlen -= BITRATE;
         }
 
-        A[t] ^= B[t];
-        data +=BITRATE/64;
-        databitlen -=BITRATE;
-        #pragma unroll 24
-        for(int i=0;i<ROUNDS;++i) { 
-            C[t] = A[s]^A[s+5]^A[s+10]^A[s+15]^A[s+20];
-            D[t] = C[b[20+s]] ^ R64(C[b[5+s]],1,63);
-            C[t] = R64(A[a[t]]^D[b[t]], ro[t][0], ro[t][1]);
-            A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]); 
-            A[t] ^= rc[(t==0) ? 0 : 1][i]; 
-        }
-
         B[t] = 0;
-        if (t<databitlen/64)
+        if (t < databitlen / 64)
         {
             B[t] = data[t];
         }
-        
-        int const bytes = databitlen/8;
+
+        int const bytes = databitlen / 8;
         int byte_index = bytes;
         uint8_t *p = (uint8_t *)B;
-        if(t == 0) {
+        if (t == 0)
+        {
             p[byte_index++] = 1;
-            p[BITRATE/8-1] = 0x80;
+            p[BITRATE / 8 - 1] = 0x80;
         }
 
-        if(t<17){
-            A[t]^=B[t];
+        if (t < 17)
+        {
+            A[t] ^= B[t];
         }
-        
-        #pragma unroll 24
-        for(int i=0;i<ROUNDS;++i) {
-            C[t] = A[s]^A[s+5]^A[s+10]^A[s+15]^A[s+20];
-            D[t] = C[b[20+s]] ^ R64(C[b[5+s]],1,63);
-            C[t] = R64(A[a[t]]^D[b[t]], ro[t][0], ro[t][1]);
-            A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]); 
-            A[t] ^= rc[(t==0) ? 0 : 1][i]; 
+
+#pragma unroll 24
+        for (int i = 0; i < ROUNDS; ++i)
+        {
+            C[t] = A[s] ^ A[s + 5] ^ A[s + 10] ^ A[s + 15] ^ A[s + 20];
+            D[t] = C[b[20 + s]] ^ R64(C[b[5 + s]], 1, 63);
+            C[t] = R64(A[a[t]] ^ D[b[t]], ro[t][0], ro[t][1]);
+            A[d[t]] = C[c[t][0]] ^ ((~C[c[t][1]]) & C[c[t][2]]);
+            A[t] ^= rc[(t == 0) ? 0 : 1][i];
         }
         if (t < 4)
         {

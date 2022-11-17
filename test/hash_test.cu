@@ -6,7 +6,7 @@
 #include <random>
 #include <stdlib.h>
 
-#define DATA_INPUT_LENGTH 1024
+#define DATA_INPUT_LENGTH 200
 
 void call_keccak_basic_kernel(const uint8_t *in, uint32_t data_byte_len,
                               uint8_t *out) {
@@ -56,40 +56,40 @@ int main() {
   uint8_t *hash;
   hash = (uint8_t *)malloc(32 * sizeof(uint8_t));
   memset(hash, 0, 32);
+  // const uint8_t *input =
+  //     reinterpret_cast<const uint8_t *>("asydasuydhsuabncuabuaxbcnisuqwec");
 
-  // const uint8_t *input = reinterpret_cast<const uint8_t
-  // *>("hgfcghvbjk8291982cisacasioedrxdtcvbnvjghfgkkhvgcfgtdxfghjkbvgcfdtxresxtfyghkjhgvcfdxtcghjklnhbvgcfxdxtrfyghjbvgcfxdtfyguhijkbvgcfxdyguhjkbvgcfxdtfyughjbvgcfxdtryfughjbvgcfdtrftyughjbvgcftdrfyughijbvgcfdrttyughibjvgcfdr5t6y8iuhbjvgcfydr57t6uygibhjvgchfydrft");
-  const uint8_t input[32]{0x0b, 0xb4, 0x99, 0x70, 0x47, 0x4b, 0x61, 0x74,
-                          0xa7, 0x33, 0x2b, 0xd3, 0xa8, 0xe5, 0x40, 0xea,
-                          0x4e, 0xfc, 0x6d, 0xf6, 0xeb, 0x17, 0xf9, 0x08,
-                          0x83, 0x0d, 0xbe, 0x3f, 0x38, 0xe0, 0x20, 0xd0};
-  CPUHash::calculate_hash(input, 32, hash);
-  printf("CPU hash single-thread:\t");
+  uint8_t input[DATA_INPUT_LENGTH]{};
+  for (int i = 0; i < DATA_INPUT_LENGTH; ++i) {
+    input[i] = 0x75;
+  }
+  constexpr int input_size = DATA_INPUT_LENGTH;
+
+  CPUHash::calculate_hash(input, input_size, hash);
+  printf("CPU single-thread hash:\t");
   util::println_hex(hash, 32);
 
   memset(hash, 0, 32);
 
   uint8_t *device_input;
   uint8_t *device_hash;
-  CUDA_SAFE_CALL(gutil::DeviceAlloc(device_input, 32));
+  CUDA_SAFE_CALL(gutil::DeviceAlloc(device_input, input_size));
   CUDA_SAFE_CALL(gutil::DeviceAlloc(device_hash, 32));
-  CUDA_SAFE_CALL(gutil::DeviceSet(device_input, 0, 32));
+  CUDA_SAFE_CALL(gutil::DeviceSet(device_input, 0, input_size));
   CUDA_SAFE_CALL(gutil::DeviceSet(device_hash, 0, 32));
-  CUDA_SAFE_CALL(gutil::CpyHostToDevice(device_input, input, 32));
+  CUDA_SAFE_CALL(gutil::CpyHostToDevice(device_input, input, input_size));
 
   GPUHashSingleThread::load_constants();
-  GPUHashSingleThread::test_calculate_hash<<<1, 1>>>(device_input, 32,
+  GPUHashSingleThread::test_calculate_hash<<<1, 1>>>(device_input, input_size,
                                                      device_hash);
   CUDA_SAFE_CALL(cudaDeviceSynchronize());
   CUDA_SAFE_CALL(gutil::CpyDeviceToHost(hash, device_hash, 32));
-
-  printf("GPU hash single-thread:\t");
+  printf("GPU single-thread hash:\t");
   util::println_hex(hash, 32);
 
   memset(hash, 0, 32);
-  call_keccak_basic_kernel(input, 32, hash);
-
-  printf("GPU hash multi-thread:\t");
+  call_keccak_basic_kernel(input, input_size, hash);
+  printf("GPU multi-thread hash:\t");
   util::println_hex(hash, 32);
 
   CUDA_SAFE_CALL(gutil::DeviceFree(device_hash));
