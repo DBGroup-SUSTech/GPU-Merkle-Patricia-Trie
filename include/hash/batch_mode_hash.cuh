@@ -24,7 +24,7 @@ __device__ __forceinline__ void batch_keccak_device(uint64_t *data, uint64_t *ou
         B[t] = 0ULL;
         int const blocks = databitlen / BITRATE;
 
-        for (int block = 0; block < blocks - 1; ++block)
+        for (int block = 0; block < blocks; ++block)
         { /* load data without crossing */
             /* a 128-byte boundary. */
             if (t < 17)

@@ -114,7 +114,7 @@ __global__ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen
 
         int const blocks = databitlen / BITRATE;
 
-        for (int block = 0; block < blocks - 1; ++block)
+        for (int block = 0; block < blocks; ++block)
         {
             if (t < 17) // r = 1088
                 B[t] = data[t];

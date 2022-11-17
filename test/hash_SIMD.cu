@@ -7,7 +7,7 @@
 #include <string>
 #include "hash/batch_mode_hash.cuh"
 
-#define DATA_INPUT_LENGTH 32
+#define DATA_INPUT_LENGTH 200
 #define MUL_FACTOR 1
 #define GEN_DATA_NUM 16
 #define GEN_DATA_MUL 20
@@ -107,7 +107,12 @@ int main()
   const uint8_t *h_data = nullptr;
   int *indexs = nullptr;
   uint64_t *hash = new uint64_t[GEN_DATA_MUL * GEN_DATA_NUM * 4];
-  const uint8_t *input = reinterpret_cast<const uint8_t *>("asydasuydhsuabncuabuaxbcnisuqwec");
+  
+  uint8_t input[DATA_INPUT_LENGTH]{};
+  for (int i = 0; i < DATA_INPUT_LENGTH; ++i) {
+    input[i] = 0x75;
+  }
+
   data_gen(input, h_data, indexs, GEN_DATA_NUM * GEN_DATA_MUL, MUL_FACTOR);
 
   GPUHashMultiThread::load_constants();

@@ -6,7 +6,7 @@
 #include <random>
 #include <stdlib.h>
 
-#define DATA_INPUT_LENGTH 32
+#define DATA_INPUT_LENGTH 200
 
 void call_keccak_basic_kernel(const uint8_t *in, uint32_t data_byte_len,
                               uint8_t *out) {
@@ -59,11 +59,11 @@ int main() {
   // const uint8_t *input =
   //     reinterpret_cast<const uint8_t *>("asydasuydhsuabncuabuaxbcnisuqwec");
 
-  uint8_t input[800]{};
-  for (int i = 0; i < 800; ++i) {
-    input[i] = 0x61;
+  uint8_t input[DATA_INPUT_LENGTH]{};
+  for (int i = 0; i < DATA_INPUT_LENGTH; ++i) {
+    input[i] = 0x75;
   }
-  constexpr int input_size = 800;
+  constexpr int input_size = DATA_INPUT_LENGTH;
 
   CPUHash::calculate_hash(input, input_size, hash);
   printf("CPU single-thread hash:\t");
