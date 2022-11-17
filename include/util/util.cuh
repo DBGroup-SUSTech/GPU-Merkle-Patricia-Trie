@@ -103,7 +103,7 @@ template <typename T> cudaError_t DeviceFree(T *data) { return cudaFree(data); }
 
 // common utils
 namespace util {
-inline void println_hex(const uint8_t *str, size_t size) {
+__device__ __host__ inline void println_hex(const uint8_t *str, size_t size) {
   for (size_t i = 0; i < size; ++i) {
     printf("%02x ", str[i]);
   }
