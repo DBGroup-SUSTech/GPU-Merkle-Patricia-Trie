@@ -31,7 +31,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
   const int value_size = 800;
   uint8_t *values = new uint8_t[value_size * n]{};
   for (int i = 0; i < value_size * n; ++i) {
-    values[i] = 'a';
+    values[i] = dist(g);
   }
   values_bytes = values;
 
@@ -122,10 +122,9 @@ int main() {
   timer_gpu_put.stop();
 
   printf("\033[31m"
-         "GPU put execution time: %d us, throughput %d qpms (~%d qps)\n"
+         "GPU put execution time: %d us, throughput %d qps\n"
          "\033[0m",
-         timer_gpu_put.get(), n * 1000 / timer_gpu_put.get(),
-         n * 1000 / timer_gpu_put.get() * 1000);
+         timer_gpu_put.get(), (int)(n * 1000.0 / timer_gpu_put.get() * 1000.0));
 
   std::fill(values_ptrs, values_ptrs + n, nullptr);
   std::fill(values_sizes, values_sizes + n, 0);

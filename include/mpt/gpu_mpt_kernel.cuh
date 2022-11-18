@@ -230,30 +230,13 @@ __device__ __forceinline__ void
 do_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
                         uint64_t *C, uint64_t *D,
                         uint8_t *buffer /*17 * 32 bytes*/) {
-  // printf("thread tid=%d calculating hash\n",
-  //        threadIdx.x + blockDim.x * blockIdx.x);
   // prepare node's value's hash
   batch_keccak_device(reinterpret_cast<const uint64_t *>(leaf->value),
                       reinterpret_cast<uint64_t *>(leaf->hash_of_value),
                       leaf->value_size * 8, lane_id, A, B, C, D);
 
-  // __syncthreads();
   __threadfence(); // make sure the new hash can be seen by other threads
-  // __syncwarp();    // !debug
-  // // ! debug
-  // if (lane_id == 0) {
-  //   printf("hash of value: 0x\n");
-  //   printf("value: ");
-  //   for (int i = 0; i < leaf->value_size; ++i) {
-  //     printf("%02x", leaf->value[i]);
-  //   }
-  //   printf("\n");
-  //   printf("hash: ");
-  //   for (int i = 0; i < 32; ++i) {
-  //     printf("%02x", leaf->hash_of_value[i]);
-  //   }
-  //   printf("\n");
-  // }
+
   while (leaf) {
     // should_visit means all child's hash and my value's hash are ready
     int should_visit_0 = 0;

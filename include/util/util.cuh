@@ -14,7 +14,7 @@
 #define MAX_REQUEST 1 << 20
 #define MAX_KEY_SIZE 128
 #define MAX_DEPTH (MAX_KEY_SIZE * 2) // TODO: compression would eliminate it
-#define MAX_RESULT_BUF 1 << 30
+#define MAX_RESULT_BUF 1 << 30       // TODO: can be smaller
 
 #define WARP_FULL_MASK 0xFFFFFFFF
 

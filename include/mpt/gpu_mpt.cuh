@@ -142,7 +142,7 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
     int *d_buffer_i;
 
     // (1 << 16) * 800 byte. TODO: preallocate
-    buffer_result = new uint8_t[(1 << 26)]{}; // memory leak
+    buffer_result = new uint8_t[MAX_RESULT_BUF]{}; // memory leak
     CHECK_ERROR(gutil::DeviceAlloc(d_buffer_result, MAX_RESULT_BUF));
     CHECK_ERROR(gutil::DeviceAlloc(d_buffer_i, 1));
     CHECK_ERROR(gutil::DeviceSet(d_buffer_i, 0x00, 1));
@@ -182,7 +182,6 @@ void GpuMPT::gets(const uint8_t *keys_bytes, const int *keys_indexs,
     const int num_blocks = (n + block_size - 1) / block_size;
     gkernel::gets<<<num_blocks, block_size>>>(
         d_keys_bytes, d_keys_indexs, d_values_ptrs, d_values_sizes, n, d_root_);
-    // TODO: test, print result
     CHECK_ERROR(cudaDeviceSynchronize());
   }
 }
