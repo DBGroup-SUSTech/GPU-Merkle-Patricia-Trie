@@ -1,8 +1,8 @@
 .vscode
-build
-scripts
-rapidjson
-dataset
-prototype
+*build
+*scripts
+*rapidjson
+*dataset
+*prototype
 
 
