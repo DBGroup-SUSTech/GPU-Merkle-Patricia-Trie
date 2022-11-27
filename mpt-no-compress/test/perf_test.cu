@@ -17,7 +17,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_indexs,
   n = 1 << 16;
   std::random_device rd;
   std::mt19937 g(rd());
-  std::uniform_int_distribution dist(0, 1 << 8);
+  std::uniform_int_distribution<> dist(0, 1 << 8);
 
   // generate keys and shuffle
   uint16_t *keys = new uint16_t[n]{}; // 2 * n byte

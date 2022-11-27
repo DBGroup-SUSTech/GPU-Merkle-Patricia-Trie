@@ -6,7 +6,10 @@ set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
+enable_testing()
+
 find_package(fmt)
+find_package(GTest)
 
 set(SRC_PATH ${PROJECT_SOURCE_DIR}/src)
 set(INC_PATH ${PROJECT_SOURCE_DIR}/include)
@@ -16,7 +19,7 @@ file(GLOB SRC_FILES "src/*.cu" "src/*.cpp")
 # add_compile_options(-fsanitize=address)
 # add_link_options(-fsanitize=address)
 
-# add_executable(PerfTest ${TEST_PATH}/perf_test.cu ${SRC_FILES})
+add_executable(TrieTest ${TEST_PATH}/trie.cu ${SRC_FILES})
 # add_executable(HashTest ${TEST_PATH}/hash_test.cu ${SRC_FILES})
 # add_executable(HashPerf ${TEST_PATH}/hash_perf.cu ${SRC_FILES})
 # add_executable(HashSIMD ${TEST_PATH}/hash_SIMD.cu ${SRC_FILES})
