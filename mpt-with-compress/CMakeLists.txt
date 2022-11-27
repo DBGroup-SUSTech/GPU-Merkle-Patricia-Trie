@@ -18,15 +18,6 @@ set(TEST_PATH ${PROJECT_SOURCE_DIR}/test)
 
 file(GLOB_RECURSE SRC_FILES "src/*.cu" "src/*.cpp")
 file(GLOB_RECURSE TEST_FILES "test/*.cu" "test/*.cpp")
-# add_compile_options(-fsanitize=address)
-# add_link_options(-fsanitize=address)
-
-# add_executable(TrieTest ${TEST_PATH}/trie.cu ${SRC_FILES})
-# add_executable(HashTest ${TEST_PATH}/hash_test.cu ${SRC_FILES})
-# add_executable(HashPerf ${TEST_PATH}/hash_perf.cu ${SRC_FILES})
-# add_executable(HashSIMD ${TEST_PATH}/hash_SIMD.cu ${SRC_FILES})
-
-# target_compile_options(HashSIMD PUBLIC -maxrregcount 64)
 
 foreach(test_file IN LISTS TEST_FILES)
         get_filename_component(test_name ${test_file} NAME_WE)
@@ -38,7 +29,6 @@ endforeach()
 # add_compile_options(-fsanitize=address)
 # add_link_options(-fsanitize=address)
 
-
 include_directories(
         PUBLIC ${INC_PATH}
         PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
@@ -46,6 +36,3 @@ include_directories(
 link_libraries(
         PUBLIC cuda 
         PUBLIC fmt::fmt)
-
-# set_target_properties(PerfTest PROPERTIES
-#         CUDA_SEPARABLE_COMPILATION ON)
