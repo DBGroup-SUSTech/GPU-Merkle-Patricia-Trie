@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <random>
 #include <stdint.h>
+#include <stddef.h>
 
 /// @brief generate data for testing
 /// @param keys_bytes   hex encoding
@@ -32,7 +33,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
     values[i] = dist(g);
   }
   values_bytes = values;
-
+  
   // indexs
   keys_bytes_indexs = new int[n * 2]{};
   values_indexs = new int[n * 2]{};
@@ -87,7 +88,7 @@ void keys_bytes_to_hexs(const uint8_t *keys_bytes, int *keys_bytes_indexs,
   keys_hexs_indexs = hexs_indexs;
 }
 
-TEST(DataGeneration, BasicAssertions) {
+TEST(Trie, GenerateFullTrieData) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
@@ -101,4 +102,12 @@ TEST(DataGeneration, BasicAssertions) {
 
   keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
                      keys_hexs_indexs);
+}
+
+TEST(Trie, Put) {
+
+}
+
+TEST(Trie, Get) {
+  
 }
