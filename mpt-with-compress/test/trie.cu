@@ -1,8 +1,8 @@
 #include "mpt/cpu_mpt.cuh"
 #include <gtest/gtest.h>
 #include <random>
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /// @brief generate data for testing
 /// @param keys_bytes   hex encoding
@@ -33,7 +33,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
     values[i] = dist(g);
   }
   values_bytes = values;
-  
+
   // indexs
   keys_bytes_indexs = new int[n * 2]{};
   values_indexs = new int[n * 2]{};
@@ -102,12 +102,21 @@ TEST(Trie, GenerateFullTrieData) {
 
   keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
                      keys_hexs_indexs);
+
+  for (int i = 0; i < n; ++i) {
+    const uint8_t *key = util::element_start(keys_hexs_indexs, i, keys_hexs);
+    int key_size = util::element_size(keys_hexs_indexs, i);
+    ASSERT_EQ(key[key_size - 1], 16);
+  }
+
+  delete[] keys_bytes;
+  delete[] keys_bytes_indexs;
+  delete[] values_bytes;
+  delete[] values_indexs;
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
 }
 
-TEST(Trie, Put) {
+TEST(Trie, Put) {}
 
-}
-
-TEST(Trie, Get) {
-  
-}
+TEST(Trie, Get) {}

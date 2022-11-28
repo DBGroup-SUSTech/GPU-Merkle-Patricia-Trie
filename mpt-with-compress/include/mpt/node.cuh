@@ -6,29 +6,29 @@ namespace Compress {
 // @note: use reinterpret_cast
 struct Node {
   // TODO compress all nodes into one might gain performance
-  enum class Type {
-    NONE = 0,
-    FULL,
-    SHORT,
-  };
+  enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
 };
 
 struct FullNode : public Node {
   Node *childs[17];
   int dirty;
-
-  uint8_t hash[32];
 };
 
 struct ShortNode : public Node {
-  uint8_t *key;
+  const uint8_t *key;
   int key_size;
-  uint8_t *value;
-  int value_size;
+  Node *val;
   int dirty;
+};
 
-  uint8_t hash[32];
+struct ValueNode : public Node {
+  const uint8_t *value;
+  int value_size;
+};
+
+struct HashNode : public Node {
+  const uint8_t hash[32];
 };
 
 } // namespace Compress

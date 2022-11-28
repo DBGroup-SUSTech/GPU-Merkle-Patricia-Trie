@@ -62,18 +62,48 @@ namespace util {
  * len(indexs) = 2 * n
  * each element is represented by 2 index in indexs
  */
-__host__ __device__ int element_size(const int *indexs, int i) {
+__host__ __device__ __forceinline__ int element_size(const int *indexs, int i) {
   return indexs[2 * i + 1] - indexs[2 * i] + 1;
 }
-__host__ __device__ const uint8_t *element_start(const int *indexs, int i,
-                                                 const uint8_t *all_bytes) {
+__host__ __device__ __forceinline__ const uint8_t *
+element_start(const int *indexs, int i, const uint8_t *all_bytes) {
   return &all_bytes[indexs[2 * i]];
 }
-__host__ __device__ int elements_size_sum(const int *indexs, int n) {
+__host__ __device__ __forceinline__ int elements_size_sum(const int *indexs,
+                                                          int n) {
   int i = n - 1; // i of the last num;
   return indexs[2 * i + 1] + 1;
 }
-__host__ __device__ int indexs_size_sum(int n) { return 2 * n; }
+__host__ __device__ __forceinline__ int indexs_size_sum(int n) { return 2 * n; }
+
+__host__ __device__ __forceinline__ int prefix_len(const uint8_t *bytes1,
+                                                   int bytes1_size,
+                                                   const uint8_t *bytes2,
+                                                   int bytes2_size) {
+  int match = 0;
+  while (match < bytes1_size && bytes2_size) {
+    if (bytes1[match] != bytes2[match]) {
+      return match;
+    }
+    match++;
+  }
+  return match;
+}
+
+__host__ __device__ __forceinline__ bool bytes_equal(const uint8_t *bytes1,
+                                                     int bytes1_size,
+                                                     const uint8_t *bytes2,
+                                                     int bytes2_size) {
+  if (bytes1_size != bytes2_size) {
+    return false;
+  }
+  for (int i = 0; i < bytes1_size; ++i) {
+    if (bytes1[i] != bytes2[i]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 } // namespace util
 
