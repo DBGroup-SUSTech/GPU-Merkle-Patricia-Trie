@@ -8,6 +8,11 @@ set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
+# Enable ASAN only as you need. Please notice
+#       1. This project do not pass leak-santizer
+#       2. Uncomments following santence introduce error to vscode intellisense
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+
 find_package(fmt)
 find_package(GTest)
 
@@ -29,10 +34,6 @@ foreach(test_file IN LISTS TEST_FILES)
                 PRIVATE cuda 
                 PRIVATE fmt::fmt 
                 PRIVATE GTest::gtest_main) 
-        # Enable ASAN only as you need. Please notice
-        #       1. This project do not pass leak-santizer
-        #       2. Uncomments following santence introduce error to vscode intellisense
-        # target_compile_options(${test_name} PRIVATE -fsanitize=address)
-        # target_link_options(${test_name} PRIVATE -fsanitize=address)
+
         gtest_discover_tests(${test_name})
 endforeach()
