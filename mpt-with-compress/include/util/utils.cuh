@@ -17,14 +17,23 @@
 #define MAX_RESULT_BUF 1 << 30
 
 namespace cutil {
-// common utils
-inline void println_hex(const uint8_t *str, size_t size) {
+inline void println_str(const uint8_t *str, size_t size) {
   for (size_t i = 0; i < size; ++i) {
-    printf("%02x ", str[i]);
+    printf("%c ", str[i]);
   }
   printf("\n");
 }
-
+inline void println_hex(const uint8_t *str, size_t size) {
+  for (size_t i = 0; i < size; ++i) {
+    printf("0x%02x ", str[i]);
+  }
+  printf("\n");
+}
+inline void print_hex(const uint8_t *str, size_t size) {
+  for (size_t i = 0; i < size; ++i) {
+    printf("%02x ", str[i]);
+  }
+}
 } // namespace cutil
 
 namespace gutil {

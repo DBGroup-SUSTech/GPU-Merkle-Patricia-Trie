@@ -10,8 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 # Enable ASAN only as you need. Please notice
 #       1. This project do not pass leak-santizer
-#       2. Uncomments following santence introduce error to vscode intellisense
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 
 find_package(fmt)
 find_package(GTest)

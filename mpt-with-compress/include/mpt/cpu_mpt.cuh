@@ -30,9 +30,8 @@ public:
 
   /// @brief CPU baseline get, in-memory version of ethereum
   /// @note only support hex encoding keys_bytes
-  void gets_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
-                     const uint8_t **values_ptrs, int *values_sizes,
-                     int n) const;
+  void gets_baseline(const uint8_t *keys_hexs, const int *keys_indexs, int n,
+                     const uint8_t **values_ptrs, int *values_sizes) const;
 
 private:
   Node *root_ = nullptr;
@@ -59,9 +58,9 @@ private:
 std::tuple<Node *, bool> MPT::dfs_put(Node *node, const uint8_t *prefix,
                                       int prefix_size, const uint8_t *key,
                                       int key_size, Node *value) {
-  // if key_size == 0, then a value node is to insert
+  // if key_size == 0, might value node or other node
   if (key_size == 0) {
-    assert(value->type == Node::Type::VALUE);
+    // if value node, replace the value
     if (node != nullptr && node->type == Node::Type::VALUE) {
       ValueNode *vnode_old = static_cast<ValueNode *>(node);
       ValueNode *vnode_new = static_cast<ValueNode *>(value);
@@ -70,12 +69,14 @@ std::tuple<Node *, bool> MPT::dfs_put(Node *node, const uint8_t *prefix,
       // TODO: remove old value node
       return {vnode_new, dirty};
     }
+    // if other node, collapse the node
     return {value, true};
   }
 
   // if node == nil, should create a short node to insert
   if (node == nullptr) {
     ShortNode *snode = new ShortNode{};
+    snode->type = Node::Type::SHORT;
     snode->key = key;
     snode->key_size = key_size;
     snode->val = value;
@@ -171,7 +172,7 @@ void MPT::puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
   for (int i = 0; i < n; ++i) {
     const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
     int key_size = util::element_size(keys_indexs, i);
-    const uint8_t *value = util::element_start(keys_indexs, i, keys_hexs);
+    const uint8_t *value = util::element_start(values_indexs, i, values_bytes);
     int value_size = util::element_size(values_indexs, i);
     put_baseline(key, key_size, value, value_size);
   }
@@ -227,9 +228,8 @@ void MPT::get_baseline(const uint8_t *key, int key_size, const uint8_t *&value,
                        int &value_size) const {
   dfs_get(root_, key, key_size, 0, value, value_size);
 }
-void MPT::gets_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
-                        const uint8_t **values_ptrs, int *values_sizes,
-                        int n) const {
+void MPT::gets_baseline(const uint8_t *keys_hexs, const int *keys_indexs, int n,
+                        const uint8_t **values_ptrs, int *values_sizes) const {
   for (int i = 0; i < n; ++i) {
     const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
     int key_size = util::element_size(keys_indexs, i);
