@@ -54,18 +54,18 @@ private:
   void get_baseline(const uint8_t *key, int key_size, const uint8_t *&value,
                     int &value_size) const;
 
-  std::tuple<Node *, bool> dfs_put(Node *node, const uint8_t *prefix,
+  std::tuple<Node *, bool> dfs_put_baseline(Node *node, const uint8_t *prefix,
                                    int prefix_size, const uint8_t *key,
                                    int key_size, Node *value);
 
-  void dfs_get(Node *node, const uint8_t *key, int key_size, int pos,
+  void dfs_get_baseline(Node *node, const uint8_t *key, int key_size, int pos,
                const uint8_t *&value, int &value_size) const;
 };
 
 /// @brief insert key and value into subtree with "node" as the root
 /// @return new root node and dirty flag
 /// @note different from ethereum, we try to reuse nodes instead of copy them
-std::tuple<Node *, bool> MPT::dfs_put(Node *node, const uint8_t *prefix,
+std::tuple<Node *, bool> MPT::dfs_put_baseline(Node *node, const uint8_t *prefix,
                                       int prefix_size, const uint8_t *key,
                                       int key_size, Node *value) {
   // if key_size == 0, might value node or other node
@@ -102,7 +102,7 @@ std::tuple<Node *, bool> MPT::dfs_put(Node *node, const uint8_t *prefix,
     // the short node is fully matched, insert to child
     if (matchlen == snode->key_size) {
       auto [new_val, dirty] =
-          dfs_put(snode->val, prefix, prefix_size + matchlen, key + matchlen,
+          dfs_put_baseline(snode->val, prefix, prefix_size + matchlen, key + matchlen,
                   key_size - matchlen, value);
       snode->val = new_val;
       if (dirty) {
@@ -118,14 +118,14 @@ std::tuple<Node *, bool> MPT::dfs_put(Node *node, const uint8_t *prefix,
 
     // point to origin trie
     auto [child_origin, _1] =
-        dfs_put(nullptr, prefix, prefix_size + (matchlen + 1),
+        dfs_put_baseline(nullptr, prefix, prefix_size + (matchlen + 1),
                 snode->key + (matchlen + 1), snode->key_size - (matchlen + 1),
                 snode->val);
     branch->childs[snode->key[matchlen]] = child_origin;
 
     // point to new trie
     auto [child_new, _2] =
-        dfs_put(nullptr, prefix, prefix_size + (matchlen + 1),
+        dfs_put_baseline(nullptr, prefix, prefix_size + (matchlen + 1),
                 key + (matchlen + 1), key_size - (matchlen + 1), value);
     branch->childs[key[matchlen]] = child_new;
 
@@ -148,7 +148,7 @@ std::tuple<Node *, bool> MPT::dfs_put(Node *node, const uint8_t *prefix,
 
     FullNode *fnode = static_cast<FullNode *>(node);
     auto [child_new, dirty] =
-        dfs_put(fnode->childs[key[0]], prefix, prefix_size + 1, key + 1,
+        dfs_put_baseline(fnode->childs[key[0]], prefix, prefix_size + 1, key + 1,
                 key_size - 1, value);
     if (dirty) {
       fnode->childs[key[0]] = child_new;
@@ -172,7 +172,7 @@ void MPT::put_baseline(const uint8_t *key, int key_size, const uint8_t *value,
   vnode->type = Node::Type::VALUE;
   vnode->value = value;
   vnode->value_size = value_size;
-  auto [new_root, _] = dfs_put(root_, key, 0, key, key_size, vnode);
+  auto [new_root, _] = dfs_put_baseline(root_, key, 0, key, key_size, vnode);
   root_ = new_root;
 }
 
@@ -188,7 +188,7 @@ void MPT::puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
   }
 }
 
-void MPT::dfs_get(Node *node, const uint8_t *key, int key_size, int pos,
+void MPT::dfs_get_baseline(Node *node, const uint8_t *key, int key_size, int pos,
                   const uint8_t *&value, int &value_size) const {
   if (node == nullptr) {
     value = nullptr;
@@ -214,7 +214,7 @@ void MPT::dfs_get(Node *node, const uint8_t *key, int key_size, int pos,
       return;
     }
     // short node matched, keep getting in child
-    dfs_get(snode->val, key, key_size, pos + snode->key_size, value,
+    dfs_get_baseline(snode->val, key, key_size, pos + snode->key_size, value,
             value_size);
     return;
   }
@@ -223,7 +223,7 @@ void MPT::dfs_get(Node *node, const uint8_t *key, int key_size, int pos,
     assert(pos < key_size);
 
     FullNode *fnode = static_cast<FullNode *>(node);
-    dfs_get(fnode->childs[key[pos]], key, key_size, pos + 1, value, value_size);
+    dfs_get_baseline(fnode->childs[key[pos]], key, key_size, pos + 1, value, value_size);
     return;
   }
   default: {
@@ -236,7 +236,7 @@ void MPT::dfs_get(Node *node, const uint8_t *key, int key_size, int pos,
 }
 void MPT::get_baseline(const uint8_t *key, int key_size, const uint8_t *&value,
                        int &value_size) const {
-  dfs_get(root_, key, key_size, 0, value, value_size);
+  dfs_get_baseline(root_, key, key_size, 0, value, value_size);
 }
 void MPT::gets_baseline(const uint8_t *keys_hexs, const int *keys_indexs, int n,
                         const uint8_t **values_ptrs, int *values_sizes) const {
