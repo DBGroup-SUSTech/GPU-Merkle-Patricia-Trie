@@ -16,16 +16,26 @@ public:
                      int n);
 
   /// @brief hash according to key value
+  // TODO
   void puts_with_hash_baseline();
+
+  /// @brief hash according to key value
+  // TODO
   void hash_baseline();
 
   /// @brief reduplicate hash using dirty flag
-  void hash_dirty_flag();
+  // void hash_dirty_flag();
+
   /// @brief reduplicate hash with bottom-up hierarchy traverse
+  // TODO
   void hash_ledgerdb();
+
   /// @brief reduplicate hash and multi-thread + wait_group
+  // TODO
   void hash_ethereum();
+
   /// @brief reduplicate hash and parallel on every level
+  // TODO
   void hash_hierarchy();
 
   /// @brief CPU baseline get, in-memory version of ethereum

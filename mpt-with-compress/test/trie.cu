@@ -1,4 +1,5 @@
 #include "mpt/cpu_mpt.cuh"
+#include "mpt/gpu_mpt.cuh"
 #include <gtest/gtest.h>
 #include <random>
 #include <stddef.h>
@@ -200,7 +201,7 @@ TEST(CpuMpt, PutsBaselineOverride) {
   delete[] keys_hexs_indexs;
 }
 
-TEST(Trie, PutsBaselineFullTrie) {
+TEST(CpuMpt, PutsBaselineFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
@@ -250,6 +251,10 @@ TEST(Trie, PutsBaselineFullTrie) {
   delete[] keys_hexs_indexs;
   delete[] values_ptrs;
   delete[] values_sizes;
+}
+
+TEST(GpuMpt, PutsBaselineBasic) {
+  
 }
 
 TEST(Trie, PutBenchmark) {

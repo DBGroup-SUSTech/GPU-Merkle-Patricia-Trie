@@ -34,7 +34,6 @@ struct HashNode : public Node {
 } // namespace Compress
 } // namespace CpuMPT
 
-
 namespace GpuMPT {
 namespace Compress {
 
@@ -58,7 +57,8 @@ struct ShortNode : public Node {
 };
 
 struct ValueNode : public Node {
-  const uint8_t *value;
+  const uint8_t *d_value;
+  const uint8_t *h_value;
   int value_size;
 };
 
