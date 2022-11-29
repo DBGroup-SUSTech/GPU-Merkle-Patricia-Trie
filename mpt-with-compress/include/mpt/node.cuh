@@ -33,3 +33,38 @@ struct HashNode : public Node {
 
 } // namespace Compress
 } // namespace CpuMPT
+
+
+namespace GpuMPT {
+namespace Compress {
+
+// @note: use reinterpret_cast
+struct Node {
+  // TODO compress all nodes into one might gain performance
+  enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
+  Type type;
+};
+
+struct FullNode : public Node {
+  Node *childs[17];
+  int dirty;
+};
+
+struct ShortNode : public Node {
+  const uint8_t *key;
+  int key_size;
+  Node *val;
+  int dirty;
+};
+
+struct ValueNode : public Node {
+  const uint8_t *value;
+  int value_size;
+};
+
+struct HashNode : public Node {
+  const uint8_t hash[32];
+};
+
+} // namespace Compress
+} // namespace GpuMPT
