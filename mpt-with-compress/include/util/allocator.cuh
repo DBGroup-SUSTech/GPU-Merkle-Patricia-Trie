@@ -14,6 +14,13 @@ public:
     // TODO: free them
   }
 
+  void free_all() {
+    CHECK_ERROR(gutil::DeviceFree(d_pool_aligned4_));
+    CHECK_ERROR(gutil::DeviceFree(d_count_aligned4_));
+    d_pool_aligned4_ = nullptr;
+    d_count_aligned4_ = nullptr;
+  }
+
   DynamicAllocator &operator=(const DynamicAllocator &rhs) {
     d_pool_aligned4_ = rhs.d_pool_;
     d_count_aligned4_ = rhs.d_count_;
