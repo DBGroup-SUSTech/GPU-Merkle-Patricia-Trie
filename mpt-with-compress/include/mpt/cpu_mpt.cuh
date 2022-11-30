@@ -42,6 +42,12 @@ public:
   void gets_baseline(const uint8_t *keys_hexs, const int *keys_indexs, int n,
                      const uint8_t **values_ptrs, int *values_sizes) const;
 
+public:
+  //  utils that need testing
+  /// @brief CPU baseline get, return nodes pointer
+  void gets_baseline_nodes(const uint8_t *keys_hexs, const int *keys_indexs,
+                           int n, Node **nodes) const;
+
 private:
   Node *root_ = nullptr;
   uint8_t *buffer_[17 * 32]{};
@@ -53,12 +59,16 @@ private:
   void get_baseline(const uint8_t *key, int key_size, const uint8_t *&value,
                     int &value_size) const;
 
+  void get_baseline_node(const uint8_t *key, int key_size, Node *&node) const;
+
   std::tuple<Node *, bool> dfs_put_baseline(Node *node, const uint8_t *prefix,
                                             int prefix_size, const uint8_t *key,
                                             int key_size, Node *value);
 
   void dfs_get_baseline(Node *node, const uint8_t *key, int key_size, int pos,
                         const uint8_t *&value, int &value_size) const;
+  void dfs_get_baseline_node(Node *node, const uint8_t *key, int key_size,
+                             int pos, Node *&target) const;
 };
 
 /// @brief insert key and value into subtree with "node" as the root
@@ -250,5 +260,64 @@ void MPT::gets_baseline(const uint8_t *keys_hexs, const int *keys_indexs, int n,
   }
 }
 
+void MPT::dfs_get_baseline_node(Node *node, const uint8_t *key, int key_size,
+                                int pos, Node *&target) const {
+  if (node == nullptr) {
+    target = nullptr;
+    return;
+  }
+
+  switch (node->type) {
+  case Node::Type::VALUE: {
+    ValueNode *vnode = static_cast<ValueNode *>(node);
+    target = vnode;
+    return;
+  }
+  case Node::Type::SHORT: {
+    ShortNode *snode = static_cast<ShortNode *>(node);
+    if (key_size - pos < snode->key_size ||
+        !util::bytes_equal(snode->key, snode->key_size, key + pos,
+                           snode->key_size)) {
+      // key not found in the trie
+      target = nullptr;
+      return;
+    }
+    // short node matched, keep getting in child
+    dfs_get_baseline_node(snode->val, key, key_size, pos + snode->key_size,
+                          target);
+    return;
+  }
+  case Node::Type::FULL: {
+    // hex-encoding guarantees that key is not null while reaching branch node
+    assert(pos < key_size);
+
+    FullNode *fnode = static_cast<FullNode *>(node);
+    dfs_get_baseline_node(fnode->childs[key[pos]], key, key_size, pos + 1,
+                          target);
+    return;
+  }
+  default: {
+    printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+        assert(false);
+    return;
+  }
+  }
+  printf("ERROR ON INSERT\n"), assert(false);
+}
+
+void MPT::get_baseline_node(const uint8_t *key, int key_size,
+                            Node *&node) const {
+  dfs_get_baseline_node(root_, key, key_size, 0, node);
+}
+
+void MPT::gets_baseline_nodes(const uint8_t *keys_hexs, const int *keys_indexs,
+                              int n, Node **nodes) const {
+  for (int i = 0; i < n; ++i) {
+    const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
+    int key_size = util::element_size(keys_indexs, i);
+    Node *&node = nodes[i];
+    get_baseline_node(key, key_size, node);
+  }
+}
 } // namespace Compress
 } // namespace CpuMPT
