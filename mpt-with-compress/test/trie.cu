@@ -253,9 +253,46 @@ TEST(CpuMpt, PutsBaselineFullTrie) {
   delete[] values_sizes;
 }
 
-TEST(GpuMpt, PutsBaselineBasic) {
-  
+TEST(CpuMpt, GetBaselineNodesFullTrie) {
+  const uint8_t *keys_bytes = nullptr;
+  int *keys_bytes_indexs = nullptr;
+  const uint8_t *values_bytes = nullptr;
+  int *values_bytes_indexs = nullptr;
+  int n;
+
+  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  CpuMPT::Compress::MPT mpt;
+  mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                    values_bytes_indexs, n);
+
+  auto nodes = new CpuMPT::Compress::Node *[n] {};
+  mpt.gets_baseline_nodes(keys_hexs, keys_hexs_indexs, n, nodes);
+
+  for (int i = 0; i < n; ++i) {
+    ASSERT_TRUE(util::bytes_equal(
+        util::element_start(values_bytes_indexs, i, values_bytes),
+        util::element_size(values_bytes_indexs, i),
+        static_cast<CpuMPT::Compress::ValueNode *>(nodes[i])->value,
+        static_cast<CpuMPT::Compress::ValueNode *>(nodes[i])->value_size));
+  }
+
+  delete[] keys_bytes;
+  delete[] keys_bytes_indexs;
+  delete[] values_bytes;
+  delete[] values_bytes_indexs;
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
+  delete[] nodes;
 }
+
+TEST(GpuMpt, PutsBaselineBasic) {}
 
 TEST(Trie, PutBenchmark) {
   // TODO
