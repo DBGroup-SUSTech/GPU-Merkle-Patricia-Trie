@@ -1,4 +1,5 @@
 #pragma once
+#include "util/utils.cuh"
 #include <stdint.h>
 namespace CpuMPT {
 namespace Compress {
@@ -26,7 +27,7 @@ struct FullNode : public Node {
   ///   different from ethereum, this encoding use childrens current hash
   ///   instead of recursively call child.encode.
   // TODO: currently not support RLP encoding
-  __device__ __forceinline__ int encode(uint8_t *bytes) {
+  __host__ __device__ __forceinline__ int encode(uint8_t *bytes) {
     // encode
     int bytes_size = 0;
     for (int i = 0; i < 17; ++i) {
@@ -42,7 +43,7 @@ struct FullNode : public Node {
     return bytes_size;
   }
 
-  __device__ __forceinline__ int encode_size() {
+  __host__ __device__ __forceinline__ int encode_size() {
     int size = 0;
     for (int i = 0; i < 17; ++i) {
       if (childs[i]) {
@@ -68,7 +69,7 @@ struct ShortNode : public Node {
   ///   different from ethereum, this encoding use child's current hash
   ///   instead of recursively call val.encode.
   // TODO: currently not support RLP encoding
-  __device__ __forceinline__ int encode(uint8_t *bytes) {
+  __host__ __device__ __forceinline__ int encode(uint8_t *bytes) {
     int bytes_size = 0;
 
     int key_compact_size = util::hex_to_compact(key, key_size, bytes);
@@ -84,7 +85,7 @@ struct ShortNode : public Node {
     return bytes_size;
   }
 
-  __device__ __forceinline__ int encode_size() {
+  __host__ __device__ __forceinline__ int encode_size() {
     int key_compact_size = (key_size - 1) / 2 + 1;
     int val_hash_size = val->hash_size;
     return key_compact_size + val_hash_size;

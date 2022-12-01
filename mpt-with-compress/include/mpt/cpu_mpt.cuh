@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hash/cpu_hash.h"
 #include "mpt/node.cuh"
 #include "util/utils.cuh"
 #include <algorithm>
@@ -206,17 +207,71 @@ void MPT::puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
 }
 
 void MPT::dfs_hashs_dirty_flag(Node *node) {
-  // TODO
   if (node == nullptr) {
     return;
   }
   switch (node->type) {
   case Node::Type::SHORT: {
+    ShortNode *snode = static_cast<ShortNode *>(node);
+
+    if (snode->dirty == false) {
+      return;
+    }
+
+    dfs_hashs_dirty_flag(snode->val);
+
+    int encoding_size = snode->encode_size();
+    uint8_t *encoding = new uint8_t[encoding_size]{};
+    assert(encoding_size == snode->encode(encoding));
+
+    if (encoding_size < 32) {
+      memcpy(snode->buffer, encoding, encoding_size);
+      node->hash_size = encoding_size;
+      node->hash = snode->buffer;
+
+    } else {
+      CPUHash::calculate_hash(encoding, encoding_size, snode->buffer);
+      node->hash_size = 32;
+      node->hash = snode->buffer;
+    }
+
+    delete encoding;
+    snode->dirty = false;
     return;
   }
+
   case Node::Type::FULL: {
+    FullNode *fnode = static_cast<FullNode *>(node);
+
+    if (fnode->dirty == false) {
+      return;
+    }
+
+    // hash childrens and encoding
+    for (int i = 0; i < 17; ++i) {
+      dfs_hashs_dirty_flag(fnode->childs[i]);
+    }
+
+    int encoding_size = fnode->encode_size();
+    uint8_t *encoding = new uint8_t[encoding_size]{};
+    assert(encoding_size == fnode->encode(encoding));
+
+    if (encoding_size < 32) {
+      memcpy(fnode->buffer, encoding, encoding_size);
+      node->hash_size = encoding_size;
+      node->hash = fnode->buffer;
+
+    } else {
+      CPUHash::calculate_hash(encoding, encoding_size, fnode->buffer);
+      node->hash_size = 32;
+      node->hash = fnode->buffer;
+    }
+
+    delete encoding;
+    fnode->dirty = false; // hash has updated
     return;
   }
+
   case Node::Type::VALUE: {
     ValueNode *vnode = static_cast<ValueNode *>(node);
     vnode->hash = vnode->value;
