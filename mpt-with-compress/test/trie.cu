@@ -31,7 +31,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
   const int value_size = 800;
   uint8_t *values = new uint8_t[value_size * n]{};
   for (int i = 0; i < value_size * n; ++i) {
-    values[i] = dist(g);
+    values[i] = 'a';
   }
   values_bytes = values;
 

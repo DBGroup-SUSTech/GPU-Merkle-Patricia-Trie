@@ -115,8 +115,8 @@ struct Node {
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
 
-  const uint8_t *hash;
   int hash_size;
+  const uint8_t *hash;
 
   // for onepass hash
   Node *parent;
@@ -125,10 +125,11 @@ struct Node {
 };
 
 struct FullNode : public Node {
+  uint8_t buffer[32]; // save hash or encoding 8 aligned
+  
   Node *childs[17];
   int dirty;
 
-  uint8_t buffer[32]; // save hash or encoding
 
   /// @brief encode current node into bytes, prepare data for hash
   /// @param bytes require at most 17 * 32 bytes
@@ -167,12 +168,13 @@ struct FullNode : public Node {
 };
 
 struct ShortNode : public Node {
+  uint8_t buffer[32]; // save hash or encoding, 8 aligned
+  
   const uint8_t *key;
   int key_size;
   Node *val;
   int dirty;
 
-  uint8_t buffer[32]; // save hash or encoding
 
   /// @brief  encode current nodes into bytes, prepare data for hash
   /// @param bytes require at most key_size + 32 bytes

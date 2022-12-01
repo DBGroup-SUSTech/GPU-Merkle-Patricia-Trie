@@ -26,9 +26,9 @@ inline void println_str(const uint8_t *str, size_t size) {
   }
   printf("\n");
 }
-inline void println_hex(const uint8_t *str, size_t size) {
+__device__ __host__ inline void println_hex(const uint8_t *str, size_t size) {
   for (size_t i = 0; i < size; ++i) {
-    printf("0x%02x ", str[i]);
+    printf("%02x", str[i]);
   }
   printf("\n");
 }
