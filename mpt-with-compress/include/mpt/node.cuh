@@ -8,6 +8,9 @@ struct Node {
   // TODO compress all nodes into one might gain performance
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
+
+  uint8_t hash[32];
+  int hash_size;
 };
 
 struct FullNode : public Node {
@@ -27,9 +30,9 @@ struct ValueNode : public Node {
   int value_size;
 };
 
-struct HashNode : public Node {
-  const uint8_t hash[32];
-};
+// struct HashNode : public Node {
+//   const uint8_t hash[32];
+// };
 
 } // namespace Compress
 } // namespace CpuMPT
@@ -42,6 +45,9 @@ struct Node {
   // TODO compress all nodes into one might gain performance
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
+
+  uint8_t hash[32];
+  int hash_size;
 };
 
 struct FullNode : public Node {
@@ -62,9 +68,9 @@ struct ValueNode : public Node {
   int value_size;
 };
 
-struct HashNode : public Node {
-  const uint8_t hash[32];
-};
+// struct HashNode : public Node {
+//   const uint8_t hash[32];
+// };
 
 } // namespace Compress
 } // namespace GpuMPT
