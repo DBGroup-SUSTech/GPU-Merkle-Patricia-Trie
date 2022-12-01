@@ -2,7 +2,7 @@
 
 // basically from https://github.com/monero-project/monero
 
-#include "util/util.cuh"
+#include "util/utils.cuh"
 
 #define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
 

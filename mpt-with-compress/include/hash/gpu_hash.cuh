@@ -7,7 +7,7 @@
 #include<stdio.h>
 #include<cstdlib>
 #include"util/hash_util.cuh"
-#include"util/util.cuh"
+#include"util/utils.cuh"
 
 #define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
 

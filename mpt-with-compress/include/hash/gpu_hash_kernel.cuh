@@ -2,7 +2,7 @@
 
 // basically from http://www.cayrel.net/?Keccak-implementation-on-GPU
 #include "util/hash_util.cuh"
-#include "util/util.cuh"
+#include "util/utils.cuh"
 
 #define BITRATE 1088 // r=1024
 #define R64(a, b, c) (((a) << b) ^ ((a) >> c))
