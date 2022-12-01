@@ -9,13 +9,15 @@ struct Node {
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
 
-  uint8_t hash[32];
+  uint8_t *hash;
   int hash_size;
 };
 
 struct FullNode : public Node {
   Node *childs[17];
   int dirty;
+
+  uint8_t buffer[32]; // save hash or encoding
 };
 
 struct ShortNode : public Node {
@@ -23,6 +25,8 @@ struct ShortNode : public Node {
   int key_size;
   Node *val;
   int dirty;
+
+  uint8_t buffer[32]; // save hash or encoding 
 };
 
 struct ValueNode : public Node {
@@ -46,13 +50,15 @@ struct Node {
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
 
-  uint8_t hash[32];
+  uint8_t *hash;
   int hash_size;
 };
 
 struct FullNode : public Node {
   Node *childs[17];
   int dirty;
+
+  uint8_t buffer[32]; // save hash or encoding
 };
 
 struct ShortNode : public Node {
@@ -60,6 +66,8 @@ struct ShortNode : public Node {
   int key_size;
   Node *val;
   int dirty;
+
+  uint8_t buffer[32]; // save hash or encoding
 };
 
 struct ValueNode : public Node {

@@ -62,7 +62,8 @@ private:
   void put_baseline(const uint8_t *key, int key_size, const uint8_t *value,
                     int value_size);
 
-  void hash_baseline(const uint8_t *key, int key_size);
+  void dfs_hashs_dirty_flag(Node *node);
+
   void get_baseline(const uint8_t *key, int key_size, const uint8_t *&value,
                     int &value_size) const;
 
@@ -203,6 +204,29 @@ void MPT::puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
     put_baseline(key, key_size, value, value_size);
   }
 }
+
+void MPT::dfs_hashs_dirty_flag(Node *node) {
+  // TODO
+  if (node == nullptr) {
+    return;
+  }
+  switch (node->type) {
+  case Node::Type::SHORT: {
+    return;
+  }
+  case Node::Type::FULL: {
+    return;
+  }
+  case Node::Type::VALUE: {
+    ValueNode *vnode = static_cast<ValueNode *>(node);
+    vnode->hash = vnode->value;
+    vnode->hash_size = vnode->value_size;
+    return;
+  }
+  }
+}
+
+void MPT::hashs_dirty_flag() { dfs_hashs_dirty_flag(root_); }
 
 void MPT::dfs_get_baseline(Node *node, const uint8_t *key, int key_size,
                            int pos, const uint8_t *&value,
