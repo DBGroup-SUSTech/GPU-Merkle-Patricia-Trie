@@ -9,7 +9,7 @@ struct Node {
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
 
-  uint8_t *hash;
+  const uint8_t *hash;
   int hash_size;
 };
 
@@ -26,7 +26,7 @@ struct ShortNode : public Node {
   Node *val;
   int dirty;
 
-  uint8_t buffer[32]; // save hash or encoding 
+  uint8_t buffer[32]; // save hash or encoding
 };
 
 struct ValueNode : public Node {
