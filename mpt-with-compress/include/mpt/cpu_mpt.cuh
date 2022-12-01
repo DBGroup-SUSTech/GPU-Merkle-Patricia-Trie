@@ -15,6 +15,10 @@ public:
   void puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
                      const uint8_t *values_bytes, const int *values_indexs,
                      int n);
+  
+  void puts_ledgerdb(const uint8_t *keys_hexs, const int *keys_indexs,
+                     const uint8_t *values_bytes, const int *values_indexs,
+                     int n);
 
   /// @brief hash according to key value
   // TODO
@@ -62,6 +66,9 @@ private:
 private:
   void put_baseline(const uint8_t *key, int key_size, const uint8_t *value,
                     int value_size);
+                  
+  void put_ledgerdb(const uint8_t *key, int key_size, const uint8_t *value,
+                    int value_size);
 
   void dfs_hashs_dirty_flag(Node *node);
 
@@ -73,6 +80,10 @@ private:
   std::tuple<Node *, bool> dfs_put_baseline(Node *node, const uint8_t *prefix,
                                             int prefix_size, const uint8_t *key,
                                             int key_size, Node *value);
+
+  std::tuple<Node *, bool> dfs_put_ledgerdb(Node *node, const uint8_t *prefix,
+                                            int prefix_size, const uint8_t *key,
+                                            int key_size, Node *value); 
 
   void dfs_get_baseline(Node *node, const uint8_t *key, int key_size, int pos,
                         const uint8_t *&value, int &value_size) const;
@@ -351,6 +362,7 @@ void MPT::gets_baseline_nodes(const uint8_t *keys_hexs, const int *keys_indexs,
     get_baseline_node(key, key_size, node);
   }
 }
+
 void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   // TODO
   if (root_ == nullptr || root_->hash_size == 0) {
@@ -362,6 +374,130 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   hash_size = root_->hash_size;
   return;
 }
+
+std::tuple<Node *, bool> dfs_put_ledgerdb(Node *node, const uint8_t *prefix,
+                                          int prefix_size, const uint8_t *key,
+                                          int key_size, Node *value){
+  // if key_size == 0, might value node or other node
+  if (key_size == 0) {
+    // if value node, replace the value
+    if (node != nullptr && node->type == Node::Type::VALUE) {
+      ValueNode *vnode_old = static_cast<ValueNode *>(node);
+      ValueNode *vnode_new = static_cast<ValueNode *>(value);
+      bool dirty = !util::bytes_equal(vnode_old->value, vnode_old->value_size,
+                                      vnode_new->value, vnode_new->value_size);
+      // TODO: remove old value node
+      return {vnode_new, dirty};
+    }
+    // if other node, collapse the node
+    return {value, true};
+  }
+
+  // if node == nil, should create a short node to insert
+  if (node == nullptr) {
+    ShortNode *snode = new ShortNode{};
+    snode->type = Node::Type::SHORT;
+    snode->key = key;
+    snode->key_size = key_size;
+    snode->val = value;
+    snode->dirty = true;
+    return {snode, true};
+  }
+
+  switch (node->type) {
+  case Node::Type::SHORT: {
+    ShortNode *snode = static_cast<ShortNode *>(node);
+    int matchlen = util::prefix_len(snode->key, snode->key_size, key, key_size);
+
+    // the short node is fully matched, insert to child
+    if (matchlen == snode->key_size) {
+      auto [new_val, dirty] =
+          dfs_put_ledgerdb(snode->val, prefix, prefix_size + matchlen,
+                           key + matchlen, key_size - matchlen, value);
+      snode->val = new_val;
+      if (dirty) {
+        snode->dirty = true;
+      }
+      return {snode, dirty};
+    }
+
+    // the short node is partially matched. create a branch node
+    FullNode *branch = new FullNode{};
+    branch->type = Node::Type::FULL;
+    branch->dirty = true;
+
+    // point to origin trie
+    auto [child_origin, _1] =
+        dfs_put_ledgerdb(nullptr, prefix, prefix_size + (matchlen + 1),
+                         snode->key + (matchlen + 1),
+                         snode->key_size - (matchlen + 1), snode->val);
+    branch->childs[snode->key[matchlen]] = child_origin;
+
+    // point to new trie
+    auto [child_new, _2] = dfs_put_ledgerdb(
+        nullptr, prefix, prefix_size + (matchlen + 1), key + (matchlen + 1),
+        key_size - (matchlen + 1), value);
+    branch->childs[key[matchlen]] = child_new;
+
+    // Replace this shortNode with the branch if it occurs at index 0.
+    if (matchlen == 0) {
+      // TODO: remove old short node
+      return {branch, true};
+    }
+
+    // New branch node is created as a child of origin short node
+    snode->key_size = matchlen;
+    snode->val = branch;
+    snode->dirty = true;
+
+    return {snode, true};
+  }
+  case Node::Type::FULL: {
+    // hex-encoding guarantees that key is not null while reaching branch node
+    assert(key_size > 0);
+
+    FullNode *fnode = static_cast<FullNode *>(node);
+    auto [child_new, dirty] =
+        dfs_put_ledgerdb(fnode->childs[key[0]], prefix, prefix_size + 1,
+                         key + 1, key_size - 1, value);
+    if (dirty) {
+      fnode->childs[key[0]] = child_new;
+      fnode->dirty = true;
+    }
+    return {fnode, dirty};
+  }
+  default: {
+    printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+        assert(false);
+    return {nullptr, 0};
+  }
+  }
+  printf("ERROR ON INSERT\n"), assert(false);
+  return {nullptr, 0}; 
+}
+
+void MPT::put_ledgerdb(const uint8_t *key, int key_size, const uint8_t *value,
+                    int value_size){
+  ValueNode *vnode = new ValueNode{};
+  vnode->type = Node::Type::VALUE;
+  vnode->value = value;
+  vnode->value_size = value_size;
+  auto [new_root, _] = dfs_put_baseline(root_, key, 0, key, key_size, vnode);
+  root_ = new_root; 
+}
+
+void MPT::puts_ledgerdb(const uint8_t *keys_hexs, const int *keys_indexs,
+                        const uint8_t *values_bytes, const int *values_indexs,
+                        int n){
+  for (int i = 0; i < n; ++i) {
+    const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
+    int key_size = util::element_size(keys_indexs, i);
+    const uint8_t *value = util::element_start(values_indexs, i, values_bytes);
+    int value_size = util::element_size(values_indexs, i);
+    put_baseline(key, key_size, value, value_size);
+  }
+}
+
 void MPT::hashs_ledgerdb(Node ** dirty_nodes, int n, uint8_t *& root_hash){
 if (n<1){
   printf("no nodes\n");
@@ -399,12 +535,15 @@ while(nodes.size()>1){
     case Node::Type::VALUE: {
       //compute self hash
       //TODO write parent hash
+
       break;
     }
     case Node::Type::SHORT: {
+
       break;
     }
     case Node::Type::FULL: {
+
       break;
     }
     default:
