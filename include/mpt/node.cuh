@@ -12,9 +12,9 @@ struct Node {           // 192 bytes
   int key_size;         // 4
   int value_size;       // 4
   uint8_t hash[32];     // 32
-  bool has_value;       // 1
-  bool to_visit;        // 1 -- padding to 8
-  
+  int to_visit;         // 4 
+  bool has_value;       // 1 -- padding to 4
+
   /**
    * @param tmp_buffer the buffer is used to store intermediate results maximum
    * buffer needed is (16 + 1) * 32: child's value and my values

@@ -145,25 +145,60 @@ __global__ void gets_shuffle(const uint8_t *keys_bytes, const int *keys_indexs,
 __device__ __forceinline__ void count_depth_and_set_to_visit(const uint8_t *key,
                                                              int key_size,
                                                              Node *root,
-                                                             int &depth) {
-  // TODO
+                                                             int *depth) {
+  int nibble_i = 0;
+  int nibble_max = sizeof_nibble(key_size);
+  while (nibble_i < nibble_max) {
+    assert(root != nullptr);
+    atomicCAS(&root->to_visit, 0, 1);
+    nibble_t nibble = nibble_from_bytes(key, nibble_i);
+    root = root->childs[nibble];
+    nibble_i++;
+  }
+  assert(root != nullptr);
+  atomicCAS(&root->to_visit, 0, 1);
+  atomicMax(depth, nibble_max);
 }
 
 /**
  * @param[out] depth level count of the deepest node in keys.
  * @note assert that all keys can be found
+ * @note depth of root is level 0
  */
 __global__ void counts_depth_and_sets_to_visit(const uint8_t *keys_bytes,
                                                const int *keys_indexs, int n,
                                                Node *root, int *depth) {
-  // TODO
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+  // we assumed that buffer_result is large enough
+  const uint8_t *key = element_start(keys_indexs, tid, keys_bytes);
+  int key_size = element_size(keys_indexs, tid);
+
+  count_depth_and_set_to_visit(key, key_size, root, depth);
 }
 
 __device__ __forceinline__ void get_level_node_to_visit(const uint8_t *key,
                                                         int key_size,
                                                         Node *root, int level,
                                                         Node *&node) {
-  // TODO
+  int nibble_i = 0;
+  int nibble_max = sizeof_nibble(key_size);
+  if (level > nibble_max) {
+    return; // node = nullptr
+  }
+  while (nibble_i < level) {
+    assert(root != nullptr);
+    nibble_t nibble = nibble_from_bytes(key, nibble_i);
+    root = root->childs[nibble];
+    nibble_i++;
+  }
+  assert(root != nullptr);
+  if (1 == atomicCAS(&root->to_visit, 1, 0)) {
+    node = root;
+  }
+  return;
 }
 
 /**
@@ -171,11 +206,19 @@ __device__ __forceinline__ void get_level_node_to_visit(const uint8_t *key,
  * @param[out] level_nodes_to_visit each request has/not-has a node to compute
  * deduplicate by atomicCAS() on to_visit
  */
-__global__ void gets_level_nodes_to_visit(const uint8_t *key_bytes,
+__global__ void gets_level_nodes_to_visit(const uint8_t *keys_bytes,
                                           const int *keys_indexs, int n,
                                           int level, Node *root,
                                           Node **level_nodes_to_visit) {
-  // TODO
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+  const uint8_t *key = element_start(keys_indexs, tid, keys_bytes);
+  int key_size = element_size(keys_indexs, tid);
+  Node *level_node_to_visit = level_nodes_to_visit[tid];
+
+  get_level_node_to_visit(key, key_size, root, level, level_node_to_visit);
 }
 
 /**
