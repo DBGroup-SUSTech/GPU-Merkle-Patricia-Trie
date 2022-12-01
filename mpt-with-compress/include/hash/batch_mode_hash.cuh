@@ -9,7 +9,7 @@ extern __shared__ uint64_t long_shared[];
 /* basic implementation of Keccak uses only one warp of 32 threads. Therefore*/
 /* the batch kernel executes 8 such warps in parallel.                       */
 
-__device__ __forceinline__ void batch_keccak_device(uint64_t *data, uint64_t *out, int databitlen,
+__device__ __forceinline__ void batch_keccak_device(const uint64_t *data, uint64_t *out, int databitlen,
                                                     int t, uint64_t *A, uint64_t *B, uint64_t *C, uint64_t *D)
 {
     int s = t % 5;

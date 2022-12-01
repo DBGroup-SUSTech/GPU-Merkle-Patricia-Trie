@@ -34,6 +34,13 @@ public:
     return reinterpret_cast<T *>(d_pool_aligned4_ + old_count);
   }
 
+  __device__ __forceinline__ uint8_t *malloc(int n) {
+    assert(*d_count_aligned4_ < CAPACITY);
+    assert(n > 0 && n % 4 == 0);
+    uint32_t old_count = atomicAdd(d_count_aligned4_, n / 4);
+    return reinterpret_cast<uint8_t *>(d_pool_aligned4_ + old_count);
+  }
+
   __device__ __forceinline__ uint32_t allocated() const {
     return *d_count_aligned4_ * 4;
   }

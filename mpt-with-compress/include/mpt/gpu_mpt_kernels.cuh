@@ -1,8 +1,7 @@
 #pragma once
+#include "hash/batch_mode_hash.cuh"
 #include "util/allocator.cuh"
 #include "util/utils.cuh"
-#include <cuda/std/tuple>
-
 namespace GpuMPT {
 namespace Compress {
 namespace GKernel {
@@ -266,6 +265,224 @@ __global__ void get_root_hash(const Node *const *root_p, uint8_t *hash,
   }
 }
 
+__device__ __forceinline__ void do_hash_onepass_mark_phase(const uint8_t *key,
+                                                           int key_size,
+                                                           Node *&leaf,
+                                                           Node *root_) {
+  Node *node = root_;
+  int pos = 0;
+  Node *parent = nullptr;
+
+  while (true) {
+    assert(node != nullptr);
+
+    node->parent = parent; // set parent
+
+    // update parent visit count
+    if (parent != nullptr) {
+      int old = atomicCAS(&node->parent_visit_count_added, 0, 1);
+      if (0 == old) {
+        atomicAdd(&parent->visit_count, 1);
+      }
+    }
+
+    switch (node->type) {
+    case Node::Type::VALUE: {
+      ValueNode *vnode = static_cast<ValueNode *>(node);
+      leaf = vnode;
+      // TODO: leaf do not have visit count?
+      atomicAdd(&leaf->visit_count, 1);
+      return;
+    }
+    case Node::Type::SHORT: {
+      const ShortNode *snode = static_cast<const ShortNode *>(node);
+      if (key_size - pos < snode->key_size ||
+          !util::bytes_equal(snode->key, snode->key_size, key + pos,
+                             snode->key_size)) {
+        // key not found in the trie
+        assert(false);
+        return;
+      }
+
+      parent = node; // save parent
+      node = snode->val;
+      pos += snode->key_size;
+      continue;
+    }
+    case Node::Type::FULL: {
+      assert(pos < key_size);
+
+      const FullNode *fnode = static_cast<const FullNode *>(node);
+
+      parent = node; // save parent
+      node = fnode->childs[key[pos]];
+      pos += 1;
+      continue;
+    }
+    default: {
+      printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+          assert(false);
+      return;
+    }
+    }
+    printf("ERROR ON INSERT\n"), assert(false);
+    return;
+  }
+}
+
+/**
+ * @brief get leaf nodes, set visit count and set parent
+ * @param key
+ * @param key_size
+ * @param leaf
+ * @param root
+ */
+__global__ void hash_onepass_mark_phase(const uint8_t *keys_hexs,
+                                        const int *keys_indexs, Node **leafs,
+                                        int n, Node *const *root_p) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  Node *&leaf = leafs[tid];
+
+  do_hash_onepass_mark_phase(key, key_size, leaf, *root_p);
+}
+
+__device__ __forceinline__ void
+do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
+                             uint64_t *C, uint64_t *D,
+                             uint8_t *buffer_shared /*17 * 32 bytes*/,
+                             DynamicAllocator<ALLOC_CAPACITY> &allocator) {
+  // prepare node's value's hash
+  assert(leaf && leaf->type == Node::Type::VALUE);
+  ValueNode *vnode = static_cast<ValueNode *>(leaf);
+  vnode->hash = vnode->d_value;
+  vnode->hash_size = vnode->value_size;
+  __threadfence(); // make sure the new hash can be seen by other threads
+
+  leaf = leaf->parent;
+
+  while (leaf) {
+    assert(leaf->type == Node::Type::FULL || leaf->type == Node::Type::SHORT);
+
+    // should_visit means all child's hash and my value's hash are ready
+    int should_visit_0 = 0;
+    if (lane_id == 0) {
+      should_visit_0 = (1 == atomicSub(&leaf->visit_count, 1));
+    }
+
+    // broadcast from 0 to warp
+    int should_visit = __shfl_sync(WARP_FULL_MASK, should_visit_0, 0);
+    if (!should_visit) {
+      break;
+    }
+
+    // encode data into buffer
+    int encoding_size_0 = 0;
+    uint8_t *hash = nullptr;
+    uint8_t *encoding = nullptr;
+
+    if (lane_id == 0) {
+      // TODO: may encode be parallel?
+      // TODO: is global buffer enc faster or share-memory enc-hash faster?
+      if (leaf->type == Node::Type::FULL) {
+        // printf("full node\n");
+        FullNode *fnode = static_cast<FullNode *>(leaf);
+        encoding_size_0 = fnode->encode_size();
+        if (encoding_size_0 > 17 * 32) { // encode into global memory
+
+          // TODO: delete aligned
+          uint8_t *buffer_global =
+              allocator.malloc(util::align_to<8>(encoding_size_0));
+          // uint8_t *buffer_global = allocator.malloc(encoding_size_0);
+
+          assert(encoding_size_0 == fnode->encode(buffer_global));
+          encoding = buffer_global;
+        } else { // encode into shared memory
+          encoding_size_0 = fnode->encode(buffer_shared);
+          encoding = buffer_shared;
+        }
+
+        hash = fnode->buffer;
+
+      } else {
+        // printf("short node\n");
+        ShortNode *snode = static_cast<ShortNode *>(leaf);
+        encoding_size_0 = snode->encode_size();
+        if (encoding_size_0 > 17 * 32) { // encode into global memory
+
+          // TODO: delete aligned
+          uint8_t *buffer_global =
+              allocator.malloc(util::align_to<8>(encoding_size_0));
+          // uint8_t *buffer_global = allocator.malloc(encoding_size_0);
+
+          assert(encoding_size_0 == snode->encode(buffer_global));
+          encoding = buffer_global;
+        } else { // encode into shared memory
+          encoding_size_0 = snode->encode(buffer_shared);
+          encoding = buffer_shared;
+        }
+
+        hash = snode->buffer;
+      }
+    }
+
+    // broadcast encoding size to warp
+    int encoding_size = __shfl_sync(WARP_FULL_MASK, encoding_size_0, 0);
+
+    if (encoding_size < 32) {
+      // if too short, no hash, only copy
+      hash[lane_id] = encoding[lane_id];
+      leaf->hash_size = encoding_size;
+
+    } else {
+      // else calculate hash
+      // TODO: write to share memory first may be faster?
+
+      // TODO: delete aligned
+      // batch_keccak_device(reinterpret_cast<const uint64_t *>(encoding),
+      //                     reinterpret_cast<uint64_t *>(hash),
+      //                     util::align_to<8>(encoding_size) * 8, lane_id, A, B,
+      //                     C, D);
+      leaf->hash_size = 32;
+    }
+
+    __threadfence(); // make sure the new hash can be seen by other threads
+
+    leaf = leaf->parent;
+  }
+}
+
+__global__ void
+hash_onepass_update_phase(Node *const *leafs, int n,
+                          DynamicAllocator<ALLOC_CAPACITY> allocator) {
+  // TODO
+  int tid_global = blockIdx.x * blockDim.x + threadIdx.x; // global thread id
+  int wid_global = tid_global / 32;                       // global warp id
+  int tid_warp = tid_global % 32;                         // lane id
+  int tid_block = threadIdx.x;
+  int wid_block = tid_block / 32;
+  if (wid_global >= n) {
+    return;
+  }
+
+  assert(blockDim.x == 128);
+  __shared__ uint64_t A[128 / 32 * 25];
+  __shared__ uint64_t B[128 / 32 * 25];
+  __shared__ uint64_t C[128 / 32 * 25];
+  __shared__ uint64_t D[128 / 32 * 25];
+
+  __shared__ uint8_t buffer[(128 / 32) * (17 * 32)]; // 17 * 32 per node
+
+  Node *leaf = leafs[wid_global];
+  do_hash_onepass_update_phase(leaf, tid_warp, A + wid_block * 25,
+                               B + wid_block * 25, C + wid_block * 25,
+                               D + wid_block * 25,
+                               buffer + wid_block * (17 * 32), allocator);
+}
 } // namespace GKernel
 } // namespace Compress
 } // namespace GpuMPT

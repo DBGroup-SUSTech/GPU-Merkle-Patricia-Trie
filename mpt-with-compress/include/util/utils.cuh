@@ -17,6 +17,8 @@
 #define MAX_DEPTH (MAX_KEY_SIZE * 2) // TODO: compression would eliminate it
 #define MAX_RESULT_BUF 1 << 30
 
+#define WARP_FULL_MASK 0xFFFFFFFF
+
 namespace cutil {
 inline void println_str(const uint8_t *str, size_t size) {
   for (size_t i = 0; i < size; ++i) {
@@ -63,6 +65,9 @@ template <typename T> cudaError_t DeviceFree(T *data) { return cudaFree(data); }
 } // namespace gutil
 
 namespace util {
+
+enum class Device { CPU, GPU };
+
 /**
  * keys_bytes:
  * helloworld
@@ -153,7 +158,9 @@ hex_to_compact(const uint8_t *hex, int hex_size, uint8_t *bytes) {
   }
   return bytes_size;
 }
-
+template <int N> __host__ __device__ __forceinline__ int align_to(int n) {
+  return n - (n % N) + N;
+}
 } // namespace util
 
 #define CHECK_ERROR(call)                                                      \

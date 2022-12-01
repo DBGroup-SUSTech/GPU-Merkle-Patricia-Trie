@@ -17,6 +17,9 @@ __global__ void AllocatorBasicKernel(DynamicAllocator<MAX_NODES> alloc) {
   assert(snode - node == sizeof(Node));
   assert(fnode - snode == sizeof(ShortNode));
   assert(vnode - fnode == sizeof(FullNode));
+
+  uint8_t *bytes1 = alloc.malloc(800);
+  uint8_t *bytes2 = alloc.malloc(800);
 }
 
 TEST(Allocator, Basic) {

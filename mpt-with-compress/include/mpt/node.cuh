@@ -27,9 +27,10 @@ struct FullNode : public Node {
   ///   different from ethereum, this encoding use childrens current hash
   ///   instead of recursively call child.encode.
   // TODO: currently not support RLP encoding
-  __host__ __device__ __forceinline__ int encode(uint8_t *bytes) {
+  __host__ __forceinline__ int encode(uint8_t *bytes) {
     // encode
     int bytes_size = 0;
+#pragma unroll
     for (int i = 0; i < 17; ++i) {
       Node *child = childs[i];
       if (child != nullptr) {
@@ -43,8 +44,9 @@ struct FullNode : public Node {
     return bytes_size;
   }
 
-  __host__ __device__ __forceinline__ int encode_size() {
+  __host__ __forceinline__ int encode_size() {
     int size = 0;
+#pragma unroll
     for (int i = 0; i < 17; ++i) {
       if (childs[i]) {
         size += childs[i]->hash_size;
@@ -69,7 +71,7 @@ struct ShortNode : public Node {
   ///   different from ethereum, this encoding use child's current hash
   ///   instead of recursively call val.encode.
   // TODO: currently not support RLP encoding
-  __host__ __device__ __forceinline__ int encode(uint8_t *bytes) {
+  __host__ __forceinline__ int encode(uint8_t *bytes) {
     int bytes_size = 0;
 
     int key_compact_size = util::hex_to_compact(key, key_size, bytes);
@@ -85,7 +87,7 @@ struct ShortNode : public Node {
     return bytes_size;
   }
 
-  __host__ __device__ __forceinline__ int encode_size() {
+  __host__ __forceinline__ int encode_size() {
     int key_compact_size = (key_size - 1) / 2 + 1;
     int val_hash_size = val->hash_size;
     return key_compact_size + val_hash_size;
@@ -113,8 +115,13 @@ struct Node {
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
 
-  uint8_t *hash;
+  const uint8_t *hash;
   int hash_size;
+
+  // for onepass hash
+  Node *parent;
+  int visit_count;
+  int parent_visit_count_added;
 };
 
 struct FullNode : public Node {
@@ -122,6 +129,41 @@ struct FullNode : public Node {
   int dirty;
 
   uint8_t buffer[32]; // save hash or encoding
+
+  /// @brief encode current node into bytes, prepare data for hash
+  /// @param bytes require at most 17 * 32 bytes
+  /// @return encoding length
+  /// @note
+  ///   different from ethereum, this encoding use childrens current hash
+  ///   instead of recursively call child.encode.
+  // TODO: currently not support RLP encoding
+  __device__ __forceinline__ int encode(uint8_t *bytes) {
+    // encode
+    int bytes_size = 0;
+#pragma unroll
+    for (int i = 0; i < 17; ++i) {
+      Node *child = childs[i];
+      if (child != nullptr) {
+        assert(child->hash != nullptr && child->hash_size != 0);
+        memcpy(bytes, child->hash, child->hash_size);
+
+        bytes += child->hash_size;
+        bytes_size += child->hash_size;
+      }
+    }
+    return bytes_size;
+  }
+
+  __device__ __forceinline__ int encode_size() {
+    int size = 0;
+#pragma unroll
+    for (int i = 0; i < 17; ++i) {
+      if (childs[i]) {
+        size += childs[i]->hash_size;
+      }
+    }
+    return size;
+  }
 };
 
 struct ShortNode : public Node {
@@ -131,6 +173,35 @@ struct ShortNode : public Node {
   int dirty;
 
   uint8_t buffer[32]; // save hash or encoding
+
+  /// @brief  encode current nodes into bytes, prepare data for hash
+  /// @param bytes require at most key_size + 32 bytes
+  /// @return encoding length
+  /// @note
+  ///   different from ethereum, this encoding use child's current hash
+  ///   instead of recursively call val.encode.
+  // TODO: currently not support RLP encoding
+  __device__ __forceinline__ int encode(uint8_t *bytes) {
+    int bytes_size = 0;
+
+    int key_compact_size = util::hex_to_compact(key, key_size, bytes);
+    assert((key_size - 1) / 2 + 1 == key_compact_size);
+
+    bytes += key_compact_size;
+    bytes_size += key_compact_size;
+
+    assert(val != nullptr && val->hash != nullptr && val->hash_size != 0);
+    memcpy(bytes, val->hash, val->hash_size);
+
+    bytes_size += val->hash_size;
+    return bytes_size;
+  }
+
+  __device__ __forceinline__ int encode_size() {
+    int key_compact_size = (key_size - 1) / 2 + 1;
+    int val_hash_size = val->hash_size;
+    return key_compact_size + val_hash_size;
+  }
 };
 
 struct ValueNode : public Node {

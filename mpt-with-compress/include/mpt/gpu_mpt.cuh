@@ -140,26 +140,39 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
 }
 
 void MPT::hash_onepass(const uint8_t *keys_hexs, int *keys_indexs, int n) {
+  uint8_t *d_keys_hexs = nullptr;
+  int *d_keys_indexs = nullptr;
+
+  int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
+  int keys_indexs_size = util::indexs_size_sum(n);
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+
+  CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+
   // allocate and set leafs
-  Node **leafs;
-  CHECK_ERROR(gutil::DeviceAlloc(leafs, n));
-  CHECK_ERROR(gutil::DeviceSet(leafs, 0, n));
+  Node **d_leafs;
+  CHECK_ERROR(gutil::DeviceAlloc(d_leafs, n));
+  CHECK_ERROR(gutil::DeviceSet(d_leafs, 0, n));
   // mark phase
   const int rpthread_block_size = 128;
   const int rpthread_num_blocks =
       (n + rpthread_block_size - 1) / rpthread_block_size;
-  // TODO mark phase
-  // GKernel::onepass_mark_phase<<<rpthread_num_blocks, rpthread_block_size>>>(
-  //     d_keys_bytes, d_keys_indexs, leafs, n, d_root_);
+
+  GKernel::
+      hash_onepass_mark_phase<<<rpthread_num_blocks, rpthread_block_size>>>(
+          d_keys_hexs, d_keys_indexs, d_leafs, n, d_root_p_);
 
   // update phase
   const int rpwarp_block_size = 128;
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size; // one warp per request
-  // TODO update phase
-  // GKernel::onepass_update_phase<<<rpwarp_num_blocks,
-  // rpwarp_block_size>>>(leafs,
-  //                                                                         n);
+
+  GKernel::hash_onepass_update_phase<<<rpwarp_num_blocks, rpwarp_block_size>>>(
+      d_leafs, n, allocator_);
 
   CHECK_ERROR(cudaDeviceSynchronize());
 }
@@ -174,7 +187,7 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   CHECK_ERROR(gutil::DeviceAlloc(d_hash, 32));
   CHECK_ERROR(gutil::DeviceSet(d_hash, 0x00, 32));
   CHECK_ERROR(gutil::DeviceAlloc(d_hash_size_p, 1));
-  CHECK_ERROR(gutil::DeviceSet(d_hash_size_p, 0x00, 32));
+  CHECK_ERROR(gutil::DeviceSet(d_hash_size_p, 0x00, 1));
 
   GKernel::get_root_hash<<<1, 32>>>(d_root_p_, d_hash, d_hash_size_p);
 
