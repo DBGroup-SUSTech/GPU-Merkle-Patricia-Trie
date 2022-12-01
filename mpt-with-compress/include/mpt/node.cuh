@@ -41,6 +41,16 @@ struct FullNode : public Node {
     }
     return bytes_size;
   }
+
+  __device__ __forceinline__ int encode_size() {
+    int size = 0;
+    for (int i = 0; i < 17; ++i) {
+      if (childs[i]) {
+        size += childs[i]->hash_size;
+      }
+    }
+    return size;
+  }
 };
 
 struct ShortNode : public Node {
@@ -60,12 +70,24 @@ struct ShortNode : public Node {
   // TODO: currently not support RLP encoding
   __device__ __forceinline__ int encode(uint8_t *bytes) {
     int bytes_size = 0;
-    memcpy(bytes, key, key_size);
-    bytes += key_size;
-    bytes_size += key_size;
+
+    int key_compact_size = util::hex_to_compact(key, key_size, bytes);
+    assert((key_size - 1) / 2 + 1 == key_compact_size);
+
+    bytes += key_compact_size;
+    bytes_size += key_compact_size;
+
     assert(val != nullptr && val->hash != nullptr && val->hash_size != 0);
     memcpy(bytes, val->hash, val->hash_size);
+
     bytes_size += val->hash_size;
+    return bytes_size;
+  }
+
+  __device__ __forceinline__ int encode_size() {
+    int key_compact_size = (key_size - 1) / 2 + 1;
+    int val_hash_size = val->hash_size;
+    return key_compact_size + val_hash_size;
   }
 };
 
