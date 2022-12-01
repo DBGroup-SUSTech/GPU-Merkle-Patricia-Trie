@@ -234,7 +234,7 @@ void MPT::dfs_hashs_dirty_flag(Node *node) {
       node->hash = snode->buffer;
     }
 
-    delete encoding;
+    delete[] encoding;
     snode->dirty = false;
     return;
   }
@@ -266,7 +266,7 @@ void MPT::dfs_hashs_dirty_flag(Node *node) {
       node->hash = fnode->buffer;
     }
 
-    delete encoding;
+    delete[] encoding;
     fnode->dirty = false; // hash has updated
     return;
   }
