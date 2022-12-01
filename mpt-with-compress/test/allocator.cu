@@ -22,8 +22,8 @@ __global__ void AllocatorBasicKernel(DynamicAllocator<MAX_NODES> alloc) {
   uint8_t *bytes2 = alloc.malloc(800);
 }
 
-TEST(Allocator, Basic) {
-  DynamicAllocator<MAX_NODES> alloc;
-  AllocatorBasicKernel<<<1, 1>>>(alloc);
-  CHECK_ERROR(cudaDeviceSynchronize());
-}
+// TEST(Allocator, Basic) {
+//   DynamicAllocator<MAX_NODES> alloc;
+//   AllocatorBasicKernel<<<1, 1>>>(alloc);
+//   CHECK_ERROR(cudaDeviceSynchronize());
+// }
