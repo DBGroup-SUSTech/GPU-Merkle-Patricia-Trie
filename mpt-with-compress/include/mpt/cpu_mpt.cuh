@@ -2,6 +2,7 @@
 
 #include "mpt/node.cuh"
 #include "util/utils.cuh"
+#include "hash/cpu_hash.h"
 #include <algorithm>
 #include <tuple>
 
@@ -29,7 +30,7 @@ public:
 
   /// @brief reduplicate hash with bottom-up hierarchy traverse
   // TODO
-  void hashs_ledgerdb();
+  void hashs_ledgerdb(Node ** dirty_nodes, int n, uint8_t *& root_hash);
 
   /// @brief reduplicate hash and multi-thread + wait_group
   // use golang's version
@@ -360,6 +361,62 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   hash = root_->hash;
   hash_size = root_->hash_size;
   return;
+}
+void MPT::hashs_ledgerdb(Node ** dirty_nodes, int n, uint8_t *& root_hash){
+if (n<1){
+  printf("no nodes\n");
+  assert(false);
+}
+std::vector<Node*> nodes;
+nodes.insert(nodes.end(), dirty_nodes, dirty_nodes + n);
+while(nodes.size()>1){
+  std::vector<Node*> parents;
+  for(int i = 0;i < nodes.size();i++){
+    Node * parent = nodes[i]->parent;
+    if(parent == nullptr){
+      assert(i!=0);
+      switch (nodes[i]->type){
+      case Node::Type::SHORT: {
+        ShortNode * root = static_cast<ShortNode *>(nodes[i]);
+        CPUHash::calculate_hash(root->hash, root->hash_size, root->buffer);
+        memcpy(root_hash, root->buffer, 32);
+        return;
+      }
+      case Node::Type::FULL: {
+        FullNode * root = static_cast<FullNode *>(nodes[i]);
+        CPUHash::calculate_hash(root->hash, root->hash_size, root->buffer);
+        memcpy(root_hash, root->buffer , 32);
+        return;
+      }
+      default:{
+        assert(false);
+        printf("wrong root node type");
+        return;
+      }
+      } 
+    }
+    switch (nodes[i]->type){
+    case Node::Type::VALUE: {
+      //compute self hash
+      //TODO write parent hash
+      break;
+    }
+    case Node::Type::SHORT: {
+      break;
+    }
+    case Node::Type::FULL: {
+      break;
+    }
+    default:
+      break;
+    }
+  nodes = std::move(parents);
+}
+Node * node = nullptr;
+
+return;
+
+}
 }
 
 } // namespace Compress

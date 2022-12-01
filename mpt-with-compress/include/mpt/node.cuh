@@ -8,7 +8,7 @@ struct Node {
   // TODO compress all nodes into one might gain performance
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
-
+  Node * parent;
   const uint8_t *hash;
   int hash_size;
 };
