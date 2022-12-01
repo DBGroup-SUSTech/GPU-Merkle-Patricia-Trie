@@ -127,6 +127,33 @@ key_bytes_to_hex(const uint8_t *key_bytes, int key_bytes_size,
   return key_bytes_size * 2 + 1;
 }
 
+/// @brief hex encoding to compact encoding according to ethereum yellow paper
+/// @param bytes should contain len(hex without terminator)/2+1 bytes
+__host__ __device__ __forceinline__ int
+hex_to_compact(const uint8_t *hex, int hex_size, uint8_t *bytes) {
+  uint8_t terminator = 0x00;
+  // delete terminator
+  if (hex_size > 0 && hex[hex_size - 1] == 16) {
+    terminator = 1;
+    hex_size -= 1;
+  }
+  int bytes_size = hex_size / 2 + 1;
+  // encoding flags
+  bytes[0] = terminator < 5;
+  if (hex_size & 1 == 1) {
+    bytes[0] |= (1 << 4); // old flag
+    bytes[0] |= hex[0];   // first nibble
+    hex += 1;
+    hex_size -= 1;
+    bytes += 1;
+  }
+  // decode nibbles
+  for (int bi = 0, ni = 0; ni < hex_size; bi += 1, ni += 2) {
+    bytes[bi] = hex[ni] << 4 | hex[ni + 1];
+  }
+  return bytes_size;
+}
+
 } // namespace util
 
 #define CHECK_ERROR(call)                                                      \
