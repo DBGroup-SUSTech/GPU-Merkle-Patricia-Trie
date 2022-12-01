@@ -25,7 +25,6 @@ public:
   void hashs_baseline(const uint8_t *keys_hexs, const int *keys_indexs, int n);
 
   /// @brief reduplicate hash using dirty flag
-  // TODO
   void hashs_dirty_flag();
 
   /// @brief reduplicate hash with bottom-up hierarchy traverse
