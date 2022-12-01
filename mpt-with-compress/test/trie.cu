@@ -51,17 +51,6 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
   //        2, value_size);
 }
 
-int key_bytes_to_hex(const uint8_t *key_bytes, int key_bytes_size,
-                     uint8_t *key_hexs) {
-  int l = key_bytes_size * 2 + 1;
-  for (int i = 0; i < key_bytes_size; ++i) {
-    key_hexs[i * 2] = key_bytes[i] / 16;
-    key_hexs[i * 2 + 1] = key_bytes[i] % 16;
-  }
-  key_hexs[l - 1] = 16;
-  return key_bytes_size * 2 + 1;
-}
-
 void keys_bytes_to_hexs(const uint8_t *keys_bytes, int *keys_bytes_indexs,
                         int n, const uint8_t *&keys_hexs,
                         int *&keys_hexs_indexs) {
@@ -77,7 +66,7 @@ void keys_bytes_to_hexs(const uint8_t *keys_bytes, int *keys_bytes_indexs,
     int key_bytes_size = util::element_size(keys_bytes_indexs, i);
 
     int key_hexs_size =
-        key_bytes_to_hex(key_bytes, key_bytes_size, hexs + next_key_hexs);
+        util::key_bytes_to_hex(key_bytes, key_bytes_size, hexs + next_key_hexs);
 
     hexs_indexs[2 * i] = next_key_hexs;
     hexs_indexs[2 * i + 1] = next_key_hexs + key_hexs_size - 1;
