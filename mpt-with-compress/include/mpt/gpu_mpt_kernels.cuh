@@ -245,6 +245,27 @@ __global__ void gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
 
   get(key, key_size, value_hp, value_size, *root_p);
 }
+
+__global__ void get_root_hash(const Node *const *root_p, uint8_t *hash,
+                              int *hash_size_p) {
+  assert(blockDim.x == 32 && gridDim.x == 1);
+  assert(root_p != nullptr);
+  if (*root_p == nullptr || (*root_p)->hash_size == 0) {
+    *hash_size_p = 0;
+    return;
+  }
+  int tid = threadIdx.x;
+
+  int hash_size = (*root_p)->hash_size;
+  if (tid == 0) {
+    *hash_size_p = hash_size;
+  }
+
+  if (tid < hash_size) {
+    hash[tid] = (*root_p)->hash[tid];
+  }
+}
+
 } // namespace GKernel
 } // namespace Compress
 } // namespace GpuMPT

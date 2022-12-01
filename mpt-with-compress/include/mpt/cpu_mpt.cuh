@@ -411,7 +411,6 @@ void MPT::gets_baseline_nodes(const uint8_t *keys_hexs, const int *keys_indexs,
   }
 }
 void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
-  // TODO
   if (root_ == nullptr || root_->hash_size == 0) {
     hash = nullptr;
     hash_size = 0;

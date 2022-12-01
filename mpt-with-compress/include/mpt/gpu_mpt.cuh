@@ -35,7 +35,7 @@ public:
 
   /// @brief mark and update hash on GPU
   // TODO
-  void hash_onepass();
+  void hash_onepass(const uint8_t *keys_hexs, int *keys_indexs, int n);
 
   /// @brief baseline get, in-memory parallel version of ethereum
   /// @note GPU saves both value data(for hash) and CPU-side pointer(for get)
@@ -43,6 +43,10 @@ public:
   // TODO
   void gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
                      const uint8_t **values_hps, int *values_sizes) const;
+
+public:
+  // utils that need test
+  void get_root_hash(const uint8_t *&hash, int &hash_size) const;
 
 private:
   Node **d_root_p_; // &root = *d_root_ptr
@@ -134,5 +138,56 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   CHECK_ERROR(gutil::CpyDeviceToHost(values_hps, d_values_hps, n));
   CHECK_ERROR(gutil::CpyDeviceToHost(values_sizes, d_values_sizes, n));
 }
+
+void MPT::hash_onepass(const uint8_t *keys_hexs, int *keys_indexs, int n) {
+  // allocate and set leafs
+  Node **leafs;
+  CHECK_ERROR(gutil::DeviceAlloc(leafs, n));
+  CHECK_ERROR(gutil::DeviceSet(leafs, 0, n));
+  // mark phase
+  const int rpthread_block_size = 128;
+  const int rpthread_num_blocks =
+      (n + rpthread_block_size - 1) / rpthread_block_size;
+  // TODO mark phase
+  // GKernel::onepass_mark_phase<<<rpthread_num_blocks, rpthread_block_size>>>(
+  //     d_keys_bytes, d_keys_indexs, leafs, n, d_root_);
+
+  // update phase
+  const int rpwarp_block_size = 128;
+  const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
+                                rpwarp_block_size; // one warp per request
+  // TODO update phase
+  // GKernel::onepass_update_phase<<<rpwarp_num_blocks,
+  // rpwarp_block_size>>>(leafs,
+  //                                                                         n);
+
+  CHECK_ERROR(cudaDeviceSynchronize());
+}
+
+void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
+  uint8_t *h_hash = new uint8_t[32]{};
+  int h_hash_size = 0;
+
+  uint8_t *d_hash = nullptr;
+  int *d_hash_size_p = nullptr;
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_hash, 32));
+  CHECK_ERROR(gutil::DeviceSet(d_hash, 0x00, 32));
+  CHECK_ERROR(gutil::DeviceAlloc(d_hash_size_p, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_hash_size_p, 0x00, 32));
+
+  GKernel::get_root_hash<<<1, 32>>>(d_root_p_, d_hash, d_hash_size_p);
+
+  CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_size, d_hash_size_p, 1));
+  CHECK_ERROR(gutil::CpyDeviceToHost(h_hash, d_hash, 32));
+
+  hash = h_hash_size == 0 ? nullptr : h_hash;
+  hash_size = h_hash_size;
+
+  CHECK_ERROR(gutil::DeviceFree(d_hash));
+  CHECK_ERROR(gutil::DeviceFree(d_hash_size_p));
+  // TODO free h_hash if not passed out
+}
+
 } // namespace Compress
 } // namespace GpuMPT
