@@ -277,7 +277,13 @@ void MPT::dfs_hashs_dirty_flag(Node *node) {
     vnode->hash_size = vnode->value_size;
     return;
   }
+  default: {
+    printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+        assert(false);
+    return;
   }
+  }
+  printf("ERROR ON INSERT\n"), assert(false);
 }
 
 void MPT::hashs_dirty_flag() { dfs_hashs_dirty_flag(root_); }
