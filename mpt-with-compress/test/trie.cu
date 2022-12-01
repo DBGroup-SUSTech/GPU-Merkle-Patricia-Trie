@@ -242,7 +242,7 @@ TEST(CpuMpt, PutsBaselineFullTrie) {
   delete[] values_sizes;
 }
 
-TEST(CpuMpt, GetBaselineNodesFullTrie) {
+TEST(CpuMpt, GetsBaselineNodesFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
@@ -279,6 +279,68 @@ TEST(CpuMpt, GetBaselineNodesFullTrie) {
   delete[] keys_hexs;
   delete[] keys_hexs_indexs;
   delete[] nodes;
+}
+
+TEST(CpuMpt, HashsDirtyFlagFullTrie) {
+  const uint8_t *keys_bytes = nullptr;
+  int *keys_bytes_indexs = nullptr;
+  const uint8_t *values_bytes = nullptr;
+  int *values_bytes_indexs = nullptr;
+  int n;
+
+  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  CpuMPT::Compress::MPT mpt;
+  mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                    values_bytes_indexs, n);
+
+  mpt.hashs_dirty_flag();
+
+  // test if trie is still right
+  const uint8_t **values_ptrs = new const uint8_t *[n] {};
+  int *values_sizes = new int[n]{};
+  mpt.gets_baseline(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+
+  for (int i = 0; i < n; ++i) {
+    ASSERT_TRUE(util::bytes_equal(
+        util::element_start(values_bytes_indexs, i, values_bytes),
+        util::element_size(values_bytes_indexs, i), values_ptrs[i],
+        values_sizes[i]));
+    // printf("Key=");
+    // cutil::println_hex(util::element_start(keys_bytes_indexs, i, keys_bytes),
+    //                    util::element_size(keys_bytes_indexs, i));
+    // printf("Hex=");
+    // cutil::println_hex(util::element_start(keys_hexs_indexs, i, keys_hexs),
+    //                    util::element_size(keys_hexs_indexs, i));
+    // printf("Value=");
+    // cutil::println_hex(
+    //     util::element_start(values_bytes_indexs, i, values_bytes),
+    //     util::element_size(values_bytes_indexs, i));
+    // printf("Get=");
+    // cutil::println_hex(values_ptrs[i], values_sizes[i]);
+  }
+
+  // check hash
+  const uint8_t *hash = nullptr;
+  int hash_size = 0;
+  mpt.get_root_hash(hash, hash_size);
+  printf("Root Hash is: ");
+  cutil::println_hex(hash, hash_size);
+
+  delete[] keys_bytes;
+  delete[] keys_bytes_indexs;
+  delete[] values_bytes;
+  delete[] values_bytes_indexs;
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
+  delete[] values_ptrs;
+  delete[] values_sizes;
 }
 
 TEST(GpuMpt, PutsBaselineBasic) {
