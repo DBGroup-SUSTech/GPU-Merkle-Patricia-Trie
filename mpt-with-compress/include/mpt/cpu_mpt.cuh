@@ -34,7 +34,7 @@ public:
 
   /// @brief reduplicate hash with bottom-up hierarchy traverse
   // TODO
-  void hashs_ledgerdb(Node ** dirty_nodes, int n, uint8_t *& root_hash);
+  void hashs_ledgerdb(Node ** dirty_nodes, int n, uint8_t * root_hash);
 
   /// @brief reduplicate hash and multi-thread + wait_group
   // use golang's version
@@ -59,11 +59,14 @@ public:
   /// @param hash_size 0 of no hash or no root
   void get_root_hash(const uint8_t *&hash, int &hash_size) const;
 
+  void traverse_tree();
+
 private:
   Node *root_ = nullptr;
   uint8_t *buffer_[17 * 32]{};
 
 private:
+  void dfs_traverse_tree(Node * root);
   void put_baseline(const uint8_t *key, int key_size, const uint8_t *value,
                     int value_size);
                   
@@ -435,9 +438,9 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   return;
 }
 
-std::tuple<Node *, bool> dfs_put_ledgerdb(Node * parent, Node *node, const uint8_t *prefix,
-                                          int prefix_size, const uint8_t *key,
-                                          int key_size, Node *value){
+std::tuple<Node *, bool> MPT::dfs_put_ledgerdb(Node * parent, Node *node, const uint8_t *prefix,
+                                            int prefix_size, const uint8_t *key,
+                                            int key_size, Node *value){
   // if key_size == 0, might value node or other node
   if (key_size == 0) {
     // if value node, replace the value
@@ -447,19 +450,23 @@ std::tuple<Node *, bool> dfs_put_ledgerdb(Node * parent, Node *node, const uint8
       bool dirty = !util::bytes_equal(vnode_old->value, vnode_old->value_size,
                                       vnode_new->value, vnode_new->value_size);
       // TODO: remove old value node
+      vnode_new->parent = parent;
       return {vnode_new, dirty};
     }
     // if other node, collapse the node
+    value->parent = parent;
     return {value, true};
   }
 
   // if node == nil, should create a short node to insert
   if (node == nullptr) {
     ShortNode *snode = new ShortNode{};
+    snode->parent = parent;
     snode->type = Node::Type::SHORT;
     snode->key = key;
     snode->key_size = key_size;
     snode->val = value;
+    snode->val->parent = snode;
     snode->dirty = true;
     return {snode, true};
   }
@@ -478,6 +485,7 @@ std::tuple<Node *, bool> dfs_put_ledgerdb(Node * parent, Node *node, const uint8
       if (dirty) {
         snode->dirty = true;
       }
+      snode->parent = parent;
       return {snode, dirty};
     }
 
@@ -503,6 +511,7 @@ std::tuple<Node *, bool> dfs_put_ledgerdb(Node * parent, Node *node, const uint8
     // Replace this shortNode with the branch if it occurs at index 0.
     if (matchlen == 0) {
       // TODO: remove old short node
+      branch->parent = parent;
       return {branch, true};
     }
 
@@ -510,7 +519,7 @@ std::tuple<Node *, bool> dfs_put_ledgerdb(Node * parent, Node *node, const uint8
     snode->key_size = matchlen;
     snode->val = branch;
     snode->dirty = true;
-
+    snode->parent = parent;
     return {snode, true};
   }
   case Node::Type::FULL: {
@@ -559,7 +568,7 @@ void MPT::puts_ledgerdb(const uint8_t *keys_hexs, const int *keys_indexs,
   }
 }
 
-void MPT::hashs_ledgerdb(Node ** dirty_nodes, int n, uint8_t *& root_hash){
+void MPT::hashs_ledgerdb(Node ** dirty_nodes, int n, uint8_t * root_hash){
 if (n<1){
   printf("no nodes\n");
   assert(false);
@@ -570,20 +579,29 @@ while(nodes.size()>1){
   std::vector<Node*> parents;
   for(int i = 0;i < nodes.size();i++){
     Node * parent = nodes[i]->parent;
-    FullNode * cached_full;
     if(parent == nullptr){
       assert(i!=0);
       switch (nodes[i]->type){
       case Node::Type::SHORT: {
         ShortNode * root = static_cast<ShortNode *>(nodes[i]);
-        CPUHash::calculate_hash(root->hash, root->hash_size, root->buffer);
-        memcpy(root_hash, root->buffer, 32);
+        uint8_t * buffer = (uint8_t*)malloc(root->encode_size()*sizeof(uint8_t));
+        root->encode(buffer);
+        CPUHash::calculate_hash(buffer, root->hash_size, root->buffer);
+        root->hash = root->buffer;
+        root->hash_size = 32;
+        memcpy(root_hash, root->hash, root->hash_size);
+        free(buffer);
         return;
       }
       case Node::Type::FULL: {
         FullNode * root = static_cast<FullNode *>(nodes[i]);
-        CPUHash::calculate_hash(root->hash, root->hash_size, root->buffer);
-        memcpy(root_hash, root->buffer , 32);
+        uint8_t * buffer = (uint8_t*)malloc(root->encode_size()*sizeof(uint8_t));
+        root->encode(buffer);
+        CPUHash::calculate_hash(buffer, root->hash_size, root->buffer);
+        root->hash = root->buffer;
+        root->hash_size = 32;
+        memcpy(root_hash, root->hash, root->hash_size);
+        free(buffer);
         return;
       }
       default:{
@@ -595,26 +613,78 @@ while(nodes.size()>1){
     }
     switch (nodes[i]->type){
     case Node::Type::VALUE: {
+      parents.emplace_back(parent);
       break;
     }
     case Node::Type::SHORT: {
-      CPUHash::calculate_hash();
+      ShortNode * node = static_cast<ShortNode *>(nodes[i]);
+      uint8_t * buffer = (uint8_t*)malloc(node->encode_size()*sizeof(uint8_t));
+      node->encode(buffer);
+      CPUHash::calculate_hash(buffer, node->encode_size(), node->buffer);
+      node->hash = node->buffer;
+      node->hash_size = 32;
+      parents.emplace_back(parent);
+      free(buffer);
       break;
     }
     case Node::Type::FULL: {
-
+      FullNode * node = static_cast<FullNode *>(nodes[i]);
+      uint8_t * buffer = (uint8_t*)malloc(node->encode_size()*sizeof(uint8_t));
+      node->encode(buffer);
+      CPUHash::calculate_hash(buffer, node->encode_size(), node->buffer);
+      node->hash = node->buffer;
+      node->hash_size = 32;
+      parents.emplace_back(parent);
+      free(buffer);
       break;
     }
     default:
+      assert(false);
+      printf("wrong root node type");
       break;
     }
   nodes = std::move(parents);
 }
-Node * node = nullptr;
 
 return;
 
 }
+}
+
+void MPT::dfs_traverse_tree(Node * root){
+  if (root ==nullptr)
+  {
+    return;
+  }
+  switch (root->type)
+  {
+  case Node::Type::VALUE: {
+    printf("VALUE parent %p, self %p\n",root->parent,root);
+    return;
+  }
+  case Node::Type::SHORT: {
+    ShortNode * s = static_cast<ShortNode*>(root);
+    dfs_traverse_tree(s->val);
+    printf("SHORT parent %p, self %p\n",root->parent,root);
+    return;
+  }
+  case Node::Type::FULL: {
+    FullNode * f = static_cast<FullNode*>(root);
+    for (size_t i = 0; i < 17; i++)
+    {
+      dfs_traverse_tree(f->childs[i]);
+    }
+    printf("FULL parent %p, self %p\n",root->parent,root);
+    return;
+  }
+  default:
+    assert(false);
+    return;
+  }
+}
+
+void MPT::traverse_tree(){
+  dfs_traverse_tree(root_);
 }
 
 } // namespace Compress
