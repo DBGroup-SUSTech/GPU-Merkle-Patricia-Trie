@@ -48,6 +48,11 @@ public:
   void gets_baseline_nodes(const uint8_t *keys_hexs, const int *keys_indexs,
                            int n, Node **nodes) const;
 
+  /// @brief get root hash
+  /// @param hash nullptr if no hash or no root
+  /// @param hash_size 0 of no hash or no root
+  void get_root_hash(const uint8_t *&hash, int &hash_size) const;
+
 private:
   Node *root_ = nullptr;
   uint8_t *buffer_[17 * 32]{};
@@ -318,6 +323,18 @@ void MPT::gets_baseline_nodes(const uint8_t *keys_hexs, const int *keys_indexs,
     Node *&node = nodes[i];
     get_baseline_node(key, key_size, node);
   }
+}
+
+void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
+  // TODO
+  if (root_ == nullptr || root_->hash_size == 0) {
+    hash = nullptr;
+    hash_size = 0;
+    return;
+  }
+  hash = root_->hash;
+  hash_size = root_->hash_size;
+  return;
 }
 } // namespace Compress
 } // namespace CpuMPT
