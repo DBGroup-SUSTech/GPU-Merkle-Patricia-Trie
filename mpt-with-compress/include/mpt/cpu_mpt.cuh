@@ -81,7 +81,7 @@ private:
                                             int prefix_size, const uint8_t *key,
                                             int key_size, Node *value);
 
-  std::tuple<Node *, bool> dfs_put_ledgerdb(Node *node, const uint8_t *prefix,
+  std::tuple<Node *, bool> dfs_put_ledgerdb(Node * parent, Node *node, const uint8_t *prefix,
                                             int prefix_size, const uint8_t *key,
                                             int key_size, Node *value); 
 
@@ -435,7 +435,7 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   return;
 }
 
-std::tuple<Node *, bool> dfs_put_ledgerdb(Node *node, const uint8_t *prefix,
+std::tuple<Node *, bool> dfs_put_ledgerdb(Node * parent, Node *node, const uint8_t *prefix,
                                           int prefix_size, const uint8_t *key,
                                           int key_size, Node *value){
   // if key_size == 0, might value node or other node
@@ -472,7 +472,7 @@ std::tuple<Node *, bool> dfs_put_ledgerdb(Node *node, const uint8_t *prefix,
     // the short node is fully matched, insert to child
     if (matchlen == snode->key_size) {
       auto [new_val, dirty] =
-          dfs_put_ledgerdb(snode->val, prefix, prefix_size + matchlen,
+          dfs_put_ledgerdb(snode, snode->val, prefix, prefix_size + matchlen,
                            key + matchlen, key_size - matchlen, value);
       snode->val = new_val;
       if (dirty) {
@@ -484,18 +484,19 @@ std::tuple<Node *, bool> dfs_put_ledgerdb(Node *node, const uint8_t *prefix,
     // the short node is partially matched. create a branch node
     FullNode *branch = new FullNode{};
     branch->type = Node::Type::FULL;
+    branch->parent = snode;
     branch->dirty = true;
 
     // point to origin trie
     auto [child_origin, _1] =
-        dfs_put_ledgerdb(nullptr, prefix, prefix_size + (matchlen + 1),
+        dfs_put_ledgerdb(branch, nullptr, prefix, prefix_size + (matchlen + 1),
                          snode->key + (matchlen + 1),
                          snode->key_size - (matchlen + 1), snode->val);
     branch->childs[snode->key[matchlen]] = child_origin;
 
     // point to new trie
     auto [child_new, _2] = dfs_put_ledgerdb(
-        nullptr, prefix, prefix_size + (matchlen + 1), key + (matchlen + 1),
+        branch, nullptr, prefix, prefix_size + (matchlen + 1), key + (matchlen + 1),
         key_size - (matchlen + 1), value);
     branch->childs[key[matchlen]] = child_new;
 
@@ -518,7 +519,7 @@ std::tuple<Node *, bool> dfs_put_ledgerdb(Node *node, const uint8_t *prefix,
 
     FullNode *fnode = static_cast<FullNode *>(node);
     auto [child_new, dirty] =
-        dfs_put_ledgerdb(fnode->childs[key[0]], prefix, prefix_size + 1,
+        dfs_put_ledgerdb(fnode, fnode->childs[key[0]], prefix, prefix_size + 1,
                          key + 1, key_size - 1, value);
     if (dirty) {
       fnode->childs[key[0]] = child_new;
@@ -542,7 +543,7 @@ void MPT::put_ledgerdb(const uint8_t *key, int key_size, const uint8_t *value,
   vnode->type = Node::Type::VALUE;
   vnode->value = value;
   vnode->value_size = value_size;
-  auto [new_root, _] = dfs_put_baseline(root_, key, 0, key, key_size, vnode);
+  auto [new_root, _] = dfs_put_ledgerdb(nullptr, root_, key, 0, key, key_size, vnode);
   root_ = new_root; 
 }
 
@@ -554,7 +555,7 @@ void MPT::puts_ledgerdb(const uint8_t *keys_hexs, const int *keys_indexs,
     int key_size = util::element_size(keys_indexs, i);
     const uint8_t *value = util::element_start(values_indexs, i, values_bytes);
     int value_size = util::element_size(values_indexs, i);
-    put_baseline(key, key_size, value, value_size);
+    put_ledgerdb(key, key_size, value, value_size);
   }
 }
 
@@ -569,6 +570,7 @@ while(nodes.size()>1){
   std::vector<Node*> parents;
   for(int i = 0;i < nodes.size();i++){
     Node * parent = nodes[i]->parent;
+    FullNode * cached_full;
     if(parent == nullptr){
       assert(i!=0);
       switch (nodes[i]->type){
@@ -593,13 +595,10 @@ while(nodes.size()>1){
     }
     switch (nodes[i]->type){
     case Node::Type::VALUE: {
-      //compute self hash
-      //TODO write parent hash
-
       break;
     }
     case Node::Type::SHORT: {
-
+      CPUHash::calculate_hash();
       break;
     }
     case Node::Type::FULL: {
