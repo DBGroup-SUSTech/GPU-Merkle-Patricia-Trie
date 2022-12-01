@@ -17,18 +17,19 @@ public:
 
   /// @brief hash according to key value
   // TODO
-  void puts_with_hash_baseline();
+  void puts_with_hashs_baseline();
 
   /// @brief hash according to key value
   // TODO
-  void hash_baseline();
+  void hashs_baseline(const uint8_t *keys_hexs, const int *keys_indexs, int n);
 
   /// @brief reduplicate hash using dirty flag
-  // void hash_dirty_flag();
+  // TODO
+  void hashs_dirty_flag();
 
   /// @brief reduplicate hash with bottom-up hierarchy traverse
   // TODO
-  void hash_ledgerdb();
+  void hashs_ledgerdb();
 
   /// @brief reduplicate hash and multi-thread + wait_group
   // use golang's version
@@ -61,6 +62,7 @@ private:
   void put_baseline(const uint8_t *key, int key_size, const uint8_t *value,
                     int value_size);
 
+  void hash_baseline(const uint8_t *key, int key_size);
   void get_baseline(const uint8_t *key, int key_size, const uint8_t *&value,
                     int &value_size) const;
 
@@ -324,7 +326,6 @@ void MPT::gets_baseline_nodes(const uint8_t *keys_hexs, const int *keys_indexs,
     get_baseline_node(key, key_size, node);
   }
 }
-
 void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   // TODO
   if (root_ == nullptr || root_->hash_size == 0) {
@@ -336,5 +337,6 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   hash_size = root_->hash_size;
   return;
 }
+
 } // namespace Compress
 } // namespace CpuMPT
