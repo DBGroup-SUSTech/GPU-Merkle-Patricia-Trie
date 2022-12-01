@@ -115,6 +115,18 @@ __host__ __device__ __forceinline__ bool bytes_equal(const uint8_t *bytes1,
   return true;
 }
 
+__host__ __device__ __forceinline__ int
+key_bytes_to_hex(const uint8_t *key_bytes, int key_bytes_size,
+                 uint8_t *key_hexs) {
+  int l = key_bytes_size * 2 + 1;
+  for (int i = 0; i < key_bytes_size; ++i) {
+    key_hexs[i * 2] = key_bytes[i] / 16;
+    key_hexs[i * 2 + 1] = key_bytes[i] % 16;
+  }
+  key_hexs[l - 1] = 16;
+  return key_bytes_size * 2 + 1;
+}
+
 } // namespace util
 
 #define CHECK_ERROR(call)                                                      \
