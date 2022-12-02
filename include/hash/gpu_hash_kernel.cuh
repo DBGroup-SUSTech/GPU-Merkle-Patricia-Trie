@@ -136,14 +136,18 @@ __global__ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen
         }
 
         B[t] = 0;
-        if (t < databitlen / 64)
+        int _64byte_index = databitlen/64;
+        if(databitlen%64 !=0) {
+            _64byte_index ++;
+        }
+        if (t < _64byte_index)
         {
             B[t] = data[t];
         }
-
         int const bytes = databitlen / 8;
         int byte_index = bytes;
         uint8_t *p = (uint8_t *)B;
+
         if (t == 0)
         {
             p[byte_index++] = 1;

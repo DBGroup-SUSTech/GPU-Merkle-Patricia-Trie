@@ -6,7 +6,7 @@
 #include <random>
 #include <stdlib.h>
 
-#define DATA_INPUT_LENGTH 200
+#define DATA_INPUT_LENGTH 1
 
 void call_keccak_basic_kernel(const uint8_t *in, uint32_t data_byte_len,
                               uint8_t *out) {
@@ -60,8 +60,9 @@ int main() {
   //     reinterpret_cast<const uint8_t *>("asydasuydhsuabncuabuaxbcnisuqwec");
 
   uint8_t input[DATA_INPUT_LENGTH]{};
-  for (int i = 0; i < DATA_INPUT_LENGTH; ++i) {
-    input[i] = 0x75;
+  for (int i = 0; i < DATA_INPUT_LENGTH*8; ++i) {
+    if(i==0){input[i] = 0x75;}
+    else input[i] = 0x00;
   }
   constexpr int input_size = DATA_INPUT_LENGTH;
 
