@@ -1,6 +1,7 @@
 #include "mpt/cpu_mpt.cuh"
-#include "mpt/node.cuh"
 #include "mpt/gpu_mpt.cuh"
+#include "mpt/node.cuh"
+#include "util/timer.cuh"
 #include <gtest/gtest.h>
 #include <random>
 #include <stddef.h>
@@ -15,7 +16,7 @@
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int *&values_indexs, int &n) {
   // parameters
-  n = 1;
+  n = 1 << 16;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution<> dist(0, 1 << 8);
@@ -480,6 +481,8 @@ TEST(GpuMpt, PutsBaselineFullTrie) {
 }
 
 TEST(GpuMpt, HashsOnepassFullTrie) {
+  GPUHashMultiThread::load_constants();
+
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
@@ -497,7 +500,7 @@ TEST(GpuMpt, HashsOnepassFullTrie) {
   GpuMPT::Compress::MPT mpt;
   mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
                     values_bytes_indexs, n);
-
+  printf("finish puts\n");
   mpt.hash_onepass(keys_hexs, keys_hexs_indexs, n);
 
   // test if trie is still right
@@ -540,8 +543,74 @@ TEST(GpuMpt, HashsOnepassFullTrie) {
   delete[] values_ptrs;
   delete[] values_sizes;
 }
+
 TEST(Trie, PutBenchmark) {
   // TODO
+}
+
+TEST(Trie, HashBenchmark) {
+  GPUHashMultiThread::load_constants();
+
+  const uint8_t *keys_bytes = nullptr;
+  int *keys_bytes_indexs = nullptr;
+  const uint8_t *values_bytes = nullptr;
+  int *values_bytes_indexs = nullptr;
+  int n;
+
+  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  GpuMPT::Compress::MPT gpu_mpt;
+  gpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                        values_bytes_indexs, n);
+
+  CpuMPT::Compress::MPT cpu_mpt;
+  cpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                        values_bytes_indexs, n);
+
+  perf::CpuTimer<perf::ms> timer_cpu_hash; // timer start ------------
+  timer_cpu_hash.start();
+  cpu_mpt.hashs_dirty_flag();
+  timer_cpu_hash.stop(); // timer end --------------------------------
+
+  printf("\033[31m"
+         "CPU hash execution time: %d ms, throughput %d qps\n"
+         "\033[0m",
+         timer_cpu_hash.get(), n * 1000 / timer_cpu_hash.get());
+
+  perf::CpuTimer<perf::us> timer_gpu_hash;
+  timer_gpu_hash.start();
+  gpu_mpt.hash_onepass(keys_hexs, keys_hexs_indexs, n);
+  timer_gpu_hash.stop();
+
+  printf("\033[31m"
+         "GPU hash execution time: %d us, throughput %d qps\n"
+         "\033[0m",
+         timer_gpu_hash.get(),
+         (int)(n * 1000.0 / timer_gpu_hash.get() * 1000.0));
+
+  // check hash
+  // TODO: not equal
+  const uint8_t *hash = nullptr;
+  int hash_size = 0;
+  gpu_mpt.get_root_hash(hash, hash_size);
+  printf("GPU root Hash is: ");
+  cutil::println_hex(hash, hash_size);
+  cpu_mpt.get_root_hash(hash, hash_size);
+  printf("CPU root hash is: ");
+  cutil::println_hex(hash, hash_size);
+
+  delete[] keys_bytes;
+  delete[] keys_bytes_indexs;
+  delete[] values_bytes;
+  delete[] values_bytes_indexs;
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
 }
 
 TEST(CpuMpt, PutsLedgerFullTrie) {
@@ -573,24 +642,24 @@ TEST(CpuMpt, PutsLedgerFullTrie) {
   //       util::element_size(values_bytes_indexs, i), values_ptrs[i],
   //       values_sizes[i]));
   // }
-  
+
   auto nodes = new CpuMPT::Compress::Node *[n] {};
   mpt.gets_baseline_nodes(keys_hexs, keys_hexs_indexs, n, nodes);
 
-  for (size_t i = 0; i < n; i++)
-  {
-    CpuMPT::Compress::Node * parent = nodes[i]->parent;
+  for (size_t i = 0; i < n; i++) {
+    CpuMPT::Compress::Node *parent = nodes[i]->parent;
 
-    CpuMPT::Compress::Node * parent_child;
-    switch (parent->type)
-    {
+    CpuMPT::Compress::Node *parent_child;
+    switch (parent->type) {
     case CpuMPT::Compress::Node::Type::SHORT: {
-      CpuMPT::Compress::ShortNode *sn = static_cast<CpuMPT::Compress::ShortNode*>(parent);
+      CpuMPT::Compress::ShortNode *sn =
+          static_cast<CpuMPT::Compress::ShortNode *>(parent);
       parent_child = sn->val;
       break;
     }
     case CpuMPT::Compress::Node::Type::FULL: {
-      CpuMPT::Compress::FullNode *fn = static_cast<CpuMPT::Compress::FullNode*>(parent);
+      CpuMPT::Compress::FullNode *fn =
+          static_cast<CpuMPT::Compress::FullNode *>(parent);
       parent_child = fn->childs[16];
       break;
     }
@@ -601,17 +670,17 @@ TEST(CpuMpt, PutsLedgerFullTrie) {
     }
     EXPECT_EQ(parent_child, nodes[i]);
   }
-    // cutil::println_hex(util::element_start(keys_bytes_indexs, i, keys_bytes),
-    //                    util::element_size(keys_bytes_indexs, i));
-    // printf("Hex=");
-    // cutil::println_hex(util::element_start(keys_hexs_indexs, i, keys_hexs),
-    //                    util::element_size(keys_hexs_indexs, i));
-    // printf("Value=");
-    // cutil::println_hex(
-    //     util::element_start(values_bytes_indexs, i, values_bytes),
-    //     util::element_size(values_bytes_indexs, i));
-    // printf("Get=");
-    // cutil::println_hex(values_ptrs[i], values_sizes[i]);
+  // cutil::println_hex(util::element_start(keys_bytes_indexs, i, keys_bytes),
+  //                    util::element_size(keys_bytes_indexs, i));
+  // printf("Hex=");
+  // cutil::println_hex(util::element_start(keys_hexs_indexs, i, keys_hexs),
+  //                    util::element_size(keys_hexs_indexs, i));
+  // printf("Value=");
+  // cutil::println_hex(
+  //     util::element_start(values_bytes_indexs, i, values_bytes),
+  //     util::element_size(values_bytes_indexs, i));
+  // printf("Get=");
+  // cutil::println_hex(values_ptrs[i], values_sizes[i]);
 
   delete[] keys_bytes;
   delete[] keys_bytes_indexs;
@@ -647,7 +716,7 @@ TEST(CpuMPT, LedgerdbHash) {
   uint8_t hash[32];
   mpt.hashs_ledgerdb(nodes, n, hash);
   cutil::println_hex(hash, 32);
-  
+
   delete[] keys_bytes;
   delete[] keys_bytes_indexs;
   delete[] values_bytes;

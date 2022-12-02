@@ -389,7 +389,6 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
       // TODO: may encode be parallel?
       // TODO: is global buffer enc faster or share-memory enc-hash faster?
       if (leaf->type == Node::Type::FULL) {
-        // printf("full node\n");
         FullNode *fnode = static_cast<FullNode *>(leaf);
         encoding_size_0 = fnode->encode_size();
         if (encoding_size_0 > 17 * 32) { // encode into global memory
@@ -397,18 +396,20 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
           // TODO: delete aligned
           uint8_t *buffer_global =
               allocator.malloc(util::align_to<8>(encoding_size_0));
+          memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
 
           fnode->encode(buffer_global);
           encoding_0 = buffer_global;
 
         } else { // encode into shared memory
+          memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
+
           fnode->encode(buffer_shared);
           encoding_0 = buffer_shared;
         }
         hash_0 = fnode->buffer;
 
       } else {
-        // printf("short node\n");
         ShortNode *snode = static_cast<ShortNode *>(leaf);
         encoding_size_0 = snode->encode_size();
         if (encoding_size_0 > 17 * 32) { // encode into global memory
@@ -416,11 +417,13 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
           // TODO: delete aligned
           uint8_t *buffer_global =
               allocator.malloc(util::align_to<8>(encoding_size_0));
+          memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
 
           snode->encode(buffer_global);
           encoding_0 = buffer_global;
-
         } else { // encode into shared memory
+          memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
+
           snode->encode(buffer_shared);
           encoding_0 = buffer_shared;
         }
@@ -429,6 +432,7 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
     }
 
     // broadcast encoding size to warp
+    __syncthreads();
     int encoding_size = __shfl_sync(WARP_FULL_MASK, encoding_size_0, 0);
     uint8_t *encoding = reinterpret_cast<uint8_t *>(__shfl_sync(
         WARP_FULL_MASK, reinterpret_cast<unsigned long>(encoding_0), 0));
@@ -437,28 +441,21 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
 
     if (encoding_size < 32) {
       // if too short, no hash, only copy
-      hash[lane_id] = encoding[lane_id];
+      if (lane_id < encoding_size) {
+        hash[lane_id] = encoding[lane_id];
+      }
       leaf->hash = hash;
       leaf->hash_size = encoding_size;
     } else {
       // else calculate hash
       // TODO: write to share memory first may be faster?
       // TODO: delete aligned
-
-      if (lane_id == 0) {
-        cutil::println_hex(leaf->hash, 32);
-      }
-
       batch_keccak_device(reinterpret_cast<const uint64_t *>(encoding),
                           reinterpret_cast<uint64_t *>(hash),
                           util::align_to<8>(encoding_size) * 8, lane_id, A, B,
                           C, D);
       leaf->hash = hash;
       leaf->hash_size = 32;
-
-      if (lane_id == 0) {
-        cutil::println_hex(leaf->hash, 32);
-      }
     }
 
     __threadfence(); // make sure the new hash can be seen by other threads
@@ -470,7 +467,6 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
 __global__ void
 hash_onepass_update_phase(Node *const *leafs, int n,
                           DynamicAllocator<ALLOC_CAPACITY> allocator) {
-  // TODO
   int tid_global = blockIdx.x * blockDim.x + threadIdx.x; // global thread id
   int wid_global = tid_global / 32;                       // global warp id
   int tid_warp = tid_global % 32;                         // lane id

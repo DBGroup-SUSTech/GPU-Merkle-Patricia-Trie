@@ -9,7 +9,7 @@ struct Node {
   // TODO compress all nodes into one might gain performance
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
-  Node * parent;
+  Node *parent;
   const uint8_t *hash;
   int hash_size;
 };
@@ -126,10 +126,9 @@ struct Node {
 
 struct FullNode : public Node {
   uint8_t buffer[32]; // save hash or encoding 8 aligned
-  
+
   Node *childs[17];
   int dirty;
-
 
   /// @brief encode current node into bytes, prepare data for hash
   /// @param bytes require at most 17 * 32 bytes
@@ -169,12 +168,11 @@ struct FullNode : public Node {
 
 struct ShortNode : public Node {
   uint8_t buffer[32]; // save hash or encoding, 8 aligned
-  
+
   const uint8_t *key;
   int key_size;
   Node *val;
   int dirty;
-
 
   /// @brief  encode current nodes into bytes, prepare data for hash
   /// @param bytes require at most key_size + 32 bytes
