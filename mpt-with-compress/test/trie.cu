@@ -33,7 +33,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
   const int value_size = 800;
   uint8_t *values = new uint8_t[value_size * n]{};
   for (int i = 0; i < value_size * n; ++i) {
-    values[i] = 'a';
+    values[i] = dist(g);
   }
   values_bytes = values;
 
@@ -49,8 +49,8 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
     values_indexs[2 * i + 1] = value_size * (i + 1) - 1;
   }
 
-  // printf("finish generating data. %d key-value pairs(%d byte, %d byte)\n", n,
-  //        2, value_size);
+  printf("finish generating data. %d key-value pairs(%d byte, %d byte)\n", n, 2,
+         value_size);
 }
 
 void keys_bytes_to_hexs(const uint8_t *keys_bytes, int *keys_bytes_indexs,
@@ -565,44 +565,62 @@ TEST(Trie, HashBenchmark) {
   keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
                      keys_hexs_indexs);
 
-  GpuMPT::Compress::MPT gpu_mpt;
-  gpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
-                        values_bytes_indexs, n);
+  CpuMPT::Compress::MPT cpu_mpt_dirty_flag;
+  cpu_mpt_dirty_flag.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                                   values_bytes_indexs, n);
 
-  CpuMPT::Compress::MPT cpu_mpt;
-  cpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
-                        values_bytes_indexs, n);
+  // CpuMPT::Compress::MPT cpu_mpt_ledgerdb;
+  // cpu_mpt_ledgerdb.puts_ledgerdb(keys_hexs, keys_hexs_indexs, values_bytes,
+  //                                values_bytes_indexs, n);
 
-  perf::CpuTimer<perf::ms> timer_cpu_hash; // timer start ------------
-  timer_cpu_hash.start();
-  cpu_mpt.hashs_dirty_flag();
-  timer_cpu_hash.stop(); // timer end --------------------------------
+  GpuMPT::Compress::MPT gpu_mpt_onepass;
+  gpu_mpt_onepass.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                                values_bytes_indexs, n);
 
-  printf("\033[31m"
-         "CPU hash execution time: %d ms, throughput %d qps\n"
-         "\033[0m",
-         timer_cpu_hash.get(), n * 1000 / timer_cpu_hash.get());
-
-  perf::CpuTimer<perf::us> timer_gpu_hash;
-  timer_gpu_hash.start();
-  gpu_mpt.hash_onepass(keys_hexs, keys_hexs_indexs, n);
-  timer_gpu_hash.stop();
+  perf::CpuTimer<perf::us> timer_cpu_hash_dirty_flag; // timer start --
+  timer_cpu_hash_dirty_flag.start();
+  cpu_mpt_dirty_flag.hashs_dirty_flag();
+  timer_cpu_hash_dirty_flag.stop(); // timer end ----------------------
 
   printf("\033[31m"
-         "GPU hash execution time: %d us, throughput %d qps\n"
+         "CPU hash dirty flag execution time: %d us, throughput %d qps\n"
          "\033[0m",
-         timer_gpu_hash.get(),
-         (int)(n * 1000.0 / timer_gpu_hash.get() * 1000.0));
+         timer_cpu_hash_dirty_flag.get(),
+         (int)(n * 1000.0 / timer_cpu_hash_dirty_flag.get() * 1000.0));
+
+  // perf::CpuTimer<perf::ms> timer_cpu_hash_ledgerdb; // timer start --
+  // timer_cpu_hash_ledgerdb.start();
+  // cpu_mpt_ledgerdb.hashs_ledgerdb();
+  // timer_cpu_hash_ledgerdb.stop(); // timer end ----------------------
+
+  // printf("\033[31m"
+  //        "CPU hash ledgerdb execution time: %d ms, throughput %d qps\n"
+  //        "\033[0m",
+  //        timer_cpu_hash_dirty_flag.get(),
+  //        n * 1000 / timer_cpu_hash_dirty_flag.get());
+
+  perf::CpuTimer<perf::us> timer_gpu_hash_onepass;
+  timer_gpu_hash_onepass.start();
+  gpu_mpt_onepass.hash_onepass(keys_hexs, keys_hexs_indexs, n);
+  timer_gpu_hash_onepass.stop();
+
+  printf("\033[31m"
+         "GPU hash onepass execution time: %d us, throughput %d qps\n"
+         "\033[0m",
+         timer_gpu_hash_onepass.get(),
+         (int)(n * 1000.0 / timer_gpu_hash_onepass.get() * 1000.0));
 
   // check hash
   // TODO: not equal
   const uint8_t *hash = nullptr;
   int hash_size = 0;
-  gpu_mpt.get_root_hash(hash, hash_size);
-  printf("GPU root Hash is: ");
   cutil::println_hex(hash, hash_size);
-  cpu_mpt.get_root_hash(hash, hash_size);
-  printf("CPU root hash is: ");
+  cpu_mpt_dirty_flag.get_root_hash(hash, hash_size);
+  printf("CPU dirty flag root hash is: ");
+  // cpu_mpt_ledgerdb.get_root_hash(hash, hash_size)
+  // printf("CPU ledgerdb root hash is: ");
+  gpu_mpt_onepass.get_root_hash(hash, hash_size);
+  printf("GPU onepass root Hash is: ");
   cutil::println_hex(hash, hash_size);
 
   delete[] keys_bytes;
@@ -692,7 +710,7 @@ TEST(CpuMpt, PutsLedgerFullTrie) {
   delete[] values_sizes;
 }
 
-TEST(CpuMPT, LedgerdbHash) {
+TEST(CpuMpt, LedgerdbHash) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
