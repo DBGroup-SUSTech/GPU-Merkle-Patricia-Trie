@@ -45,9 +45,13 @@ __device__ __forceinline__ void batch_keccak_device(uint64_t *data, uint64_t *ou
 
             databitlen -= BITRATE;
         }
-
+        
         B[t] = 0;
-        if (t < databitlen / 64)
+        int _64byte_index = databitlen/64;
+        if(databitlen%64 !=0) {
+            _64byte_index ++;
+        }
+        if (t < _64byte_index)
         {
             B[t] = data[t];
         }
@@ -82,7 +86,7 @@ __device__ __forceinline__ void batch_keccak_device(uint64_t *data, uint64_t *ou
     }
 }
 
-__global__ void keccak_kernel_batch(uint64_t **d_data, uint64_t **d_out, int *data_64bit_len, int data_num_block, int n)
+__global__ void keccak_kernel_batch(uint64_t **d_data, uint64_t **d_out, int *data_byte_len, int data_num_block, int n)
 {
     int const tid = threadIdx.x;
     int const warp_in_block = tid / 32;                  /* warp of the thread local to the block */
@@ -105,7 +109,7 @@ __global__ void keccak_kernel_batch(uint64_t **d_data, uint64_t **d_out, int *da
         uint64_t *__restrict__ D = D_ + 25 * warp_in_block;
         uint64_t *__restrict__ data = d_data[gw];
         uint64_t *__restrict__ out = d_out[gw];
-        uint64_t databitlen = data_64bit_len[gw] * 64;
+        uint64_t databitlen = data_byte_len[gw] * 8;
         batch_keccak_device(data, out, databitlen, t, A, B, C, D);
     }
 }

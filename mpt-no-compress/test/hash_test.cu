@@ -6,7 +6,7 @@
 #include <random>
 #include <stdlib.h>
 
-#define DATA_INPUT_LENGTH 200
+#define DATA_INPUT_LENGTH 75
 
 void call_keccak_basic_kernel(const uint8_t *in, uint32_t data_byte_len,
                               uint8_t *out) {
