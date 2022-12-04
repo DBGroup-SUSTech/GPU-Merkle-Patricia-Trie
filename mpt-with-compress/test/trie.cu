@@ -16,7 +16,7 @@
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int *&values_indexs, int &n) {
   // parameters
-  n = 1 << 20;
+  n = 1 << 16;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution<> dist(0, 1 << 8);
@@ -33,6 +33,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
   const int value_size = 800;
   uint8_t *values = new uint8_t[value_size * n]{};
   for (int i = 0; i < value_size * n; ++i) {
+    // values[i] = dist(g);
     values[i] = dist(g);
   }
   values_bytes = values;
@@ -614,13 +615,13 @@ TEST(Trie, HashBenchmark) {
   // TODO: not equal
   const uint8_t *hash = nullptr;
   int hash_size = 0;
-  cutil::println_hex(hash, hash_size);
   cpu_mpt_dirty_flag.get_root_hash(hash, hash_size);
-  printf("CPU dirty flag root hash is: ");
+  printf("CPU dirty flag root hash is: %p\n", hash);
+  cutil::println_hex(hash, hash_size);
   // cpu_mpt_ledgerdb.get_root_hash(hash, hash_size)
   // printf("CPU ledgerdb root hash is: ");
   gpu_mpt_onepass.get_root_hash(hash, hash_size);
-  printf("GPU onepass root Hash is: ");
+  printf("GPU onepass root Hash is: %p\n", hash);
   cutil::println_hex(hash, hash_size);
 
   delete[] keys_bytes;
