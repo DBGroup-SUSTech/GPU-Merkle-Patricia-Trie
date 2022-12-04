@@ -34,7 +34,7 @@ public:
 
   /// @brief reduplicate hash with bottom-up hierarchy traverse
   // TODO
-  void hashs_ledgerdb(Node ** dirty_nodes, int n, uint8_t * root_hash);
+  void hashs_ledgerdb(Node ** dirty_nodes, int n);
 
   /// @brief reduplicate hash and multi-thread + wait_group
   // use golang's version
@@ -567,7 +567,7 @@ void MPT::puts_ledgerdb(const uint8_t *keys_hexs, const int *keys_indexs,
   }
 }
 
-void MPT::hashs_ledgerdb(Node ** dirty_nodes, int n, uint8_t * root_hash){
+void MPT::hashs_ledgerdb(Node ** dirty_nodes, int n){
 if (n<1){
   printf("no nodes\n");
   assert(false);
@@ -576,64 +576,49 @@ std::vector<Node*> nodes;
 nodes.insert(nodes.end(), dirty_nodes, dirty_nodes + n);
 while(nodes.size()>1){
   std::vector<Node*> parents;
+  FullNode * full_cached = nullptr;
   for(int i = 0;i < nodes.size();i++){
     Node * parent = nodes[i]->parent;
-    if(parent == nullptr){
-      assert(i!=0);
-      switch (nodes[i]->type){
-      case Node::Type::SHORT: {
-        ShortNode * root = static_cast<ShortNode *>(nodes[i]);
-        uint8_t * buffer = (uint8_t*)malloc(root->encode_size()*sizeof(uint8_t));
-        root->encode(buffer);
-        CPUHash::calculate_hash(buffer, root->hash_size, root->buffer);
-        root->hash = root->buffer;
-        root->hash_size = 32;
-        memcpy(root_hash, root->hash, root->hash_size);
-        free(buffer);
-        return;
+    if (parent != nullptr && parent != full_cached){
+      if(parent->type == Node::Type::FULL){
+        full_cached = static_cast<FullNode*>(parent);
       }
-      case Node::Type::FULL: {
-        FullNode * root = static_cast<FullNode *>(nodes[i]);
-        uint8_t * buffer = (uint8_t*)malloc(root->encode_size()*sizeof(uint8_t));
-        root->encode(buffer);
-        CPUHash::calculate_hash(buffer, root->hash_size, root->buffer);
-        root->hash = root->buffer;
-        root->hash_size = 32;
-        memcpy(root_hash, root->hash, root->hash_size);
-        free(buffer);
-        return;
-      }
-      default:{
-        assert(false);
-        printf("wrong root node type");
-        return;
-      }
-      } 
+      parents.emplace_back(parent);
     }
     switch (nodes[i]->type){
     case Node::Type::VALUE: {
-      parents.emplace_back(parent);
       break;
     }
     case Node::Type::SHORT: {
       ShortNode * node = static_cast<ShortNode *>(nodes[i]);
-      uint8_t * buffer = (uint8_t*)malloc(node->encode_size()*sizeof(uint8_t));
+      int encode_size = node->encode_size();
+      uint8_t * buffer = (uint8_t*)malloc(encode_size*sizeof(uint8_t));
       node->encode(buffer);
-      CPUHash::calculate_hash(buffer, node->encode_size(), node->buffer);
-      node->hash = node->buffer;
-      node->hash_size = 32;
-      parents.emplace_back(parent);
+      if (node->encode_size()<32){
+        node->hash = buffer;
+        node->hash_size = encode_size;
+      } else {
+        CPUHash::calculate_hash(buffer, encode_size, node->buffer);
+        node->hash = node->buffer;
+        node->hash_size = 32;
+      }
       free(buffer);
       break;
     }
     case Node::Type::FULL: {
       FullNode * node = static_cast<FullNode *>(nodes[i]);
-      uint8_t * buffer = (uint8_t*)malloc(node->encode_size()*sizeof(uint8_t));
+      int encode_size = node->encode_size();
+      uint8_t * buffer = (uint8_t*)malloc(encode_size*sizeof(uint8_t));
       node->encode(buffer);
-      CPUHash::calculate_hash(buffer, node->encode_size(), node->buffer);
-      node->hash = node->buffer;
-      node->hash_size = 32;
-      parents.emplace_back(parent);
+      node->encode(buffer);
+      if (node->encode_size()<32){
+        node->hash = buffer;
+        node->hash_size = encode_size;
+      } else {
+        CPUHash::calculate_hash(buffer, encode_size, node->buffer);
+        node->hash = node->buffer;
+        node->hash_size = 32;
+      }
       free(buffer);
       break;
     }
@@ -644,10 +629,8 @@ while(nodes.size()>1){
     }
   nodes = std::move(parents);
 }
-
-return;
-
 }
+return;
 }
 
 void MPT::dfs_traverse_tree(Node * root){

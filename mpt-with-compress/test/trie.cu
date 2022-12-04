@@ -16,7 +16,7 @@
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int *&values_indexs, int &n) {
   // parameters
-  n = 1 << 16;
+  n = 1 << 20;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution<> dist(0, 1 << 8);
@@ -731,9 +731,11 @@ TEST(CpuMpt, LedgerdbHash) {
 
   auto nodes = new CpuMPT::Compress::Node *[n] {};
   mpt.gets_baseline_nodes(keys_hexs, keys_hexs_indexs, n, nodes);
-  uint8_t hash[32];
-  mpt.hashs_ledgerdb(nodes, n, hash);
-  cutil::println_hex(hash, 32);
+  const uint8_t* hash = nullptr; 
+  int hash_size;
+  mpt.hashs_ledgerdb(nodes, n);
+  mpt.get_root_hash(hash, hash_size);
+  cutil::println_hex(hash, hash_size);
 
   delete[] keys_bytes;
   delete[] keys_bytes_indexs;
