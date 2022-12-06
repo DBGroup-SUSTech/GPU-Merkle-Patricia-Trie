@@ -202,5 +202,47 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   // TODO free h_hash if not passed out
 }
 
+void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
+                   const uint8_t *values_bytes, int *values_indexs, int n){
+  const uint8_t **values_hps = new const uint8_t *[n];
+  for (int i = 0; i < n; ++i) {
+    values_hps[i] = util::element_start(values_indexs, i, values_bytes);
+  }
+
+  // assert datas on CPU, first transfer to GPU
+  uint8_t *d_keys_hexs = nullptr;
+  int *d_keys_indexs = nullptr;
+  uint8_t *d_values_bytes = nullptr;
+  int *d_values_indexs = nullptr;
+  const uint8_t **d_values_hps = nullptr;
+
+  int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
+  int keys_indexs_size = util::indexs_size_sum(n);
+  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int values_indexs_size = util::indexs_size_sum(n);
+  int values_hps_size = n;
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
+
+  CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_values_bytes, values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::CpyHostToDevice(d_values_indexs, values_indexs,
+                                     values_indexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
+
+  // puts
+  GKernel::puts_baseline<<<1, 1>>>(d_keys_hexs, d_keys_indexs, d_values_bytes,
+                                   d_values_indexs, d_values_hps, n, d_root_p_,
+                                   allocator_);
+  CHECK_ERROR(cudaDeviceSynchronize());
+}
 } // namespace Compress
 } // namespace GpuMPT

@@ -129,6 +129,8 @@ struct FullNode : public Node {
 
   Node *childs[17];
   int dirty;
+  int need_compress = 0;
+  int compressed = 0;
 
   /// @brief encode current node into bytes, prepare data for hash
   /// @param bytes require at most 17 * 32 bytes
@@ -164,6 +166,27 @@ struct FullNode : public Node {
     }
     return size;
   }
+
+  __device__ __forceinline__ int child_num() {
+    int size = 0;
+#pragma unroll
+    for (int i = 0; i < 17; i++){
+      if (childs[i]) {
+        size ++;
+      }
+    }
+    return size;
+  }
+
+  __device__ __forceinline__ int find_single_child() {
+    // assert(child_num()>1);
+#pragma unroll
+    for (int i = 0; i < 17; i++){
+      if (childs[i]) {
+        return i;
+      }
+    } 
+  }
 };
 
 struct ShortNode : public Node {
@@ -173,6 +196,7 @@ struct ShortNode : public Node {
   int key_size;
   Node *val;
   int dirty;
+  int to_split = 0;
 
   /// @brief  encode current nodes into bytes, prepare data for hash
   /// @param bytes require at most key_size + 32 bytes

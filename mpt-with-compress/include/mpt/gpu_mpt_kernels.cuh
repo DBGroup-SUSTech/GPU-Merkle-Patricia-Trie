@@ -493,6 +493,257 @@ __global__ void hash_onepass_update_phase(
                                D + wid_block * 25,
                                buffer + wid_block * (17 * 32), allocator);
 }
+
+__device__ __forceinline__ void split_node(ShortNode * snode, Node *& split_end,  
+    uint8_t last_key, DynamicAllocator<ALLOC_CAPACITY> &allocator) {
+  const uint8_t * key_router = snode->key;
+  FullNode * first_f_node = allocator.malloc<FullNode>();
+  first_f_node->parent = snode->parent; 
+  FullNode * parent = first_f_node;
+  for (int i = 1; i < snode->key_size; i++){
+    FullNode* f_node = allocator.malloc<FullNode>();
+    f_node->parent = parent;
+    int index = static_cast<int>(*key_router);
+    key_router++;
+    parent->childs[index] = f_node;
+    parent = f_node;
+  }
+  int index = static_cast<int>(*key_router);
+  parent->childs[index] = snode->val;
+  parent->need_compress = 1;
+  split_end = parent;
+  if(snode->parent!=nullptr){
+    FullNode * f_node = static_cast<FullNode*>(snode->parent);
+    f_node->childs[last_key] = first_f_node;
+  }
+}
+
+__device__ __forceinline__ void do_put_2phase_get_split_phase(const uint8_t* key, int key_size,
+    Node * root, Node *& split_end, DynamicAllocator<ALLOC_CAPACITY> &allocator){
+  int remain_key_size = key_size;
+  const uint8_t * key_router = key;
+  Node * node = root;
+  uint8_t last_key;
+  while(remain_key_size>0 || node != nullptr){
+    switch (node->type){
+    case Node::Type::SHORT: {
+      ShortNode * s_node = static_cast<ShortNode*>(node);
+      int match = util::prefix_len(s_node->key, s_node->key_size, key_router, remain_key_size);
+      if(match<s_node->key_size){
+        int to_split = atomicCAS(&s_node->to_split, 0, 1);
+        if (to_split == 0){
+          split_node(s_node, split_end, last_key, allocator);
+        }
+        return; // short node unmatch -> split 
+      }
+      remain_key_size -= match;
+      key_router += match;
+      node = s_node->val;
+      break;
+    }
+    case Node::Type::FULL: {
+      FullNode * f_node = static_cast<FullNode*>(node);
+      remain_key_size --;
+      last_key = static_cast<int>(*key_router);
+      key_router++;
+      Node * child = f_node->childs[last_key];
+      node = child;
+      break;
+    }
+    case Node::Type::VALUE: {
+      return; // no split
+    }
+    default:{
+      assert(false); //wrong
+    }
+    } 
+  }
+  return; // no split
+}
+/**
+ * @brief split all nodes need to be split and return split_ends
+ * @param key
+ * @param key_indexs
+ * @param split_ends: all ends
+ * @param end_num: number of ends
+ * @param n number of leaves
+ */
+__global__ void puts_2phase_get_split_phase(const uint8_t *keys_hexs,
+                                        const int *keys_indexs, Node **split_ends,
+                                        int &end_num, int n, Node *const *root_p,
+                                        DynamicAllocator<ALLOC_CAPACITY> &allocator){
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
+  if (tid >= n){
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  Node * split_end = nullptr;
+  do_put_2phase_get_split_phase(key, key_size, *root_p, split_end, allocator);
+  if (split_end != nullptr){
+    int ends_place = atomicAdd(&end_num, 1);
+    split_ends[ends_place] = split_end;
+  }
+}
+
+__device__ __forceinline__ void do_put_2phase_put_mark_phase(
+    const uint8_t *key, int key_size, const uint8_t *value, int value_size,
+    const uint8_t *value_hp, Node *&root, FullNode *& compress_node,
+    DynamicAllocator<ALLOC_CAPACITY> &node_allocator){
+  ValueNode *vnode = node_allocator.malloc<ValueNode>();
+  vnode->type = Node::Type::VALUE;
+  vnode->h_value = value_hp;
+  vnode->d_value = value;
+  vnode->value_size = value_size;
+  int remain_key_size = key_size;
+  const uint8_t * key_router = key;
+  Node * node = root;
+  FullNode * next_insert_node = node_allocator.malloc<FullNode>();
+  while (remain_key_size>0){
+    switch (node->type)
+    {
+    case Node::Type::SHORT: {
+      ShortNode * s_node = static_cast<ShortNode *>(node);
+      // assert(remain_key_size <= s_node->key_size); 
+      key_router += s_node->key_size;
+      remain_key_size -= s_node->key_size;
+      if(remain_key_size == 0) {
+        vnode->parent = s_node;
+        atomicExch((unsigned long long int *)&s_node->val,
+                  (unsigned long long int)vnode);
+        return;
+      }
+      unsigned long long int old =
+        atomicCAS((unsigned long long int *)&s_node->val, 0,
+                  (unsigned long long int)next_insert_node);
+      node = s_node->val;
+      if (old == 0) {
+        next_insert_node = node_allocator.malloc<FullNode>();
+      }
+        
+      break;
+    }
+    case Node::Type::FULL: {
+      FullNode * f_node = static_cast<FullNode *>(node);
+      const int index = static_cast<int>(*key_router);
+      key_router ++;
+      remain_key_size --;
+      if(remain_key_size == 0) {
+        vnode->parent = f_node;
+        atomicCAS(&f_node->need_compress, 0, 1);
+        compress_node = f_node;
+        atomicExch((unsigned long long int *)&f_node->childs[index],
+                  (unsigned long long int)vnode);
+        return;
+      }
+      unsigned long long int old =
+        atomicCAS((unsigned long long int *)&f_node->childs[index], 0,
+                  (unsigned long long int)next_insert_node);
+      node = f_node->childs[index]; 
+      if (old == 0) {
+        next_insert_node = node_allocator.malloc<FullNode>();
+      }
+      break;
+    }
+    default:{
+      assert(false);
+      break;
+    }
+    }
+  }
+   
+}
+
+__global__ void puts_2phase_put_mark_phase(const uint8_t *keys_hexs, int *keys_indexs,
+                              const uint8_t *values_bytes, int *values_indexs,
+                              const uint8_t *const *values_hps, int n, int& compress_num,
+                              Node **root_p, FullNode ** compress_nodes,
+                              DynamicAllocator<ALLOC_CAPACITY> node_allocator){
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if(tid > n){
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  const uint8_t *value = util::element_start(values_indexs, tid, values_bytes);
+  int value_size = util::element_size(values_indexs, tid);
+  const uint8_t *value_hp = values_hps[tid];
+  FullNode * compress_node = nullptr;
+  do_put_2phase_put_mark_phase(key, key_size, value, value_size, value_hp, *root_p,
+                 compress_node, node_allocator);
+  if(compress_node != nullptr) {
+    int compress_place = atomicAdd(&compress_place, 1);
+    compress_nodes[compress_place] = compress_node;
+  }
+}
+
+__device__ __forceinline__ void compress(ShortNode *& compressing_node, FullNode * compress_target,
+                                        DynamicAllocator<ALLOC_CAPACITY> &allocator) {
+  // assert(compress_target->child_num()>1);
+  // assert(compress_target->parent->type != Node::Type::FULL);
+  int index = compress_target->find_single_child();
+  if (index == 16){
+    compressing_node->val = compress_target->childs[index];
+  }
+  int key_size = compressing_node->key_size++;
+  uint8_t *new_key = allocator.malloc(key_size+1);
+  memcpy(new_key, compressing_node->key, key_size);
+  memset(new_key+key_size, (uint8_t)index, 1);
+  compressing_node->key = new_key;
+  FullNode * compress_target_parent = static_cast<FullNode*>(compress_target->parent);
+  if (compress_target_parent->child_num()>1) {
+#pragma unroll 17
+    for (int i = 0; i<17;i++) {
+      atomicCAS((unsigned long long int *)&compress_target_parent->childs[i], 
+      (unsigned long long int)compress_target, (unsigned long long int)compressing_node);
+    }
+    compressing_node->parent = compress_target_parent;
+  }
+}
+
+__device__ __forceinline__ void do_put_2phase_compress_phase(FullNode * compress_node,
+                                      DynamicAllocator<ALLOC_CAPACITY> &allocator){
+  if (compress_node->child_num()>1){
+    return;
+  } 
+  ShortNode * compressing_node = allocator.malloc<ShortNode>();
+  compress(compressing_node, compress_node, allocator);
+  Node * node = compress_node->parent;
+  while(node != nullptr) {
+    switch (node->type){
+    case Node::Type::SHORT: {
+      return;
+    }
+    case Node::Type::FULL: {
+      FullNode * f_node = static_cast<FullNode*>(node);
+      int old = atomicCAS(&f_node->compressed, 0, 1);
+      if (old) {
+        return;
+      }
+      if(f_node->child_num()==1) {
+        compress(compressing_node, f_node, allocator);  
+      } else {
+        compressing_node = allocator.malloc<ShortNode>();
+      }
+      node = f_node->parent;
+    }
+    default:{
+      assert(false);
+      break;
+    }
+    }
+  }
+}
+
+__global__ void puts_2phase_compress_phase(FullNode *const *compress_nodes, int n,
+                                DynamicAllocator<ALLOC_CAPACITY> allocator){
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if(tid > n){
+    return;
+  }
+  FullNode * compress_node = compress_nodes[tid];
+  do_put_2phase_compress_phase(compress_node, allocator);
+}
 }  // namespace GKernel
-}  // namespace Compress
+}  // namespace Compress        
 }  // namespace GpuMPT
