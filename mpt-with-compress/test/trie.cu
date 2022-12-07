@@ -745,3 +745,23 @@ TEST(CpuMpt, LedgerdbHash) {
   delete[] keys_hexs;
   delete[] keys_hexs_indexs;
 }
+
+TEST(GpuMPT, Pus2PhaseTest) {
+  const uint8_t *keys_bytes = nullptr;
+  int *keys_bytes_indexs = nullptr;
+  const uint8_t *values_bytes = nullptr;
+  int *values_bytes_indexs = nullptr;
+  int n;
+
+  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  GpuMPT::Compress::MPT mpt;
+  mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
+                    values_bytes_indexs, n); 
+}

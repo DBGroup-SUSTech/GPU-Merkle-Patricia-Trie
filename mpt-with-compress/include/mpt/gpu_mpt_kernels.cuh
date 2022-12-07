@@ -494,7 +494,7 @@ __global__ void hash_onepass_update_phase(
                                buffer + wid_block * (17 * 32), allocator);
 }
 
-__device__ __forceinline__ void split_node(ShortNode * snode, Node *& split_end,  
+__device__ __forceinline__ void split_node(ShortNode * snode, FullNode *& split_end,  
     uint8_t last_key, DynamicAllocator<ALLOC_CAPACITY> &allocator) {
   const uint8_t * key_router = snode->key;
   FullNode * first_f_node = allocator.malloc<FullNode>();
@@ -519,7 +519,7 @@ __device__ __forceinline__ void split_node(ShortNode * snode, Node *& split_end,
 }
 
 __device__ __forceinline__ void do_put_2phase_get_split_phase(const uint8_t* key, int key_size,
-    Node * root, Node *& split_end, DynamicAllocator<ALLOC_CAPACITY> &allocator){
+    Node * root, FullNode *& split_end, DynamicAllocator<ALLOC_CAPACITY> &allocator){
   int remain_key_size = key_size;
   const uint8_t * key_router = key;
   Node * node = root;
@@ -569,7 +569,7 @@ __device__ __forceinline__ void do_put_2phase_get_split_phase(const uint8_t* key
  * @param n number of leaves
  */
 __global__ void puts_2phase_get_split_phase(const uint8_t *keys_hexs,
-                                        const int *keys_indexs, Node **split_ends,
+                                        const int *keys_indexs, FullNode **split_ends,
                                         int &end_num, int n, Node *const *root_p,
                                         DynamicAllocator<ALLOC_CAPACITY> &allocator){
   int tid = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
@@ -578,7 +578,7 @@ __global__ void puts_2phase_get_split_phase(const uint8_t *keys_hexs,
   }
   const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
   int key_size = util::element_size(keys_indexs, tid);
-  Node * split_end = nullptr;
+  FullNode * split_end = nullptr;
   do_put_2phase_get_split_phase(key, key_size, *root_p, split_end, allocator);
   if (split_end != nullptr){
     int ends_place = atomicAdd(&end_num, 1);
@@ -588,7 +588,7 @@ __global__ void puts_2phase_get_split_phase(const uint8_t *keys_hexs,
 
 __device__ __forceinline__ void do_put_2phase_put_mark_phase(
     const uint8_t *key, int key_size, const uint8_t *value, int value_size,
-    const uint8_t *value_hp, Node *&root, FullNode *& compress_node,
+    const uint8_t *value_hp, Node *root, FullNode *& compress_node,
     DynamicAllocator<ALLOC_CAPACITY> &node_allocator){
   ValueNode *vnode = node_allocator.malloc<ValueNode>();
   vnode->type = Node::Type::VALUE;
@@ -735,10 +735,10 @@ __device__ __forceinline__ void do_put_2phase_compress_phase(FullNode * compress
   }
 }
 
-__global__ void puts_2phase_compress_phase(FullNode *const *compress_nodes, int n,
+__global__ void puts_2phase_compress_phase(FullNode ** compress_nodes, int compress_num,
                                 DynamicAllocator<ALLOC_CAPACITY> allocator){
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if(tid > n){
+  if(tid > compress_num){
     return;
   }
   FullNode * compress_node = compress_nodes[tid];

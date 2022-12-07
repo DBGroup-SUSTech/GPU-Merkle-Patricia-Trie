@@ -238,10 +238,27 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   CHECK_ERROR(
       gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
 
-  // puts
-  GKernel::puts_baseline<<<1, 1>>>(d_keys_hexs, d_keys_indexs, d_values_bytes,
-                                   d_values_indexs, d_values_hps, n, d_root_p_,
-                                   allocator_);
+  // split get
+  int compress_num = 0;
+  FullNode ** d_compress_nodes;
+  CHECK_ERROR(gutil::DeviceAlloc(d_compress_nodes, 2*n));
+  CHECK_ERROR(gutil::DeviceSet(d_compress_nodes, 0, 2*n));
+  const int block_size = 128;
+  int num_blocks = (n + block_size - 1) / block_size;
+  GKernel::
+    puts_2phase_get_split_phase<<<num_blocks, block_size>>>(d_keys_hexs, d_keys_indexs, d_compress_nodes, 
+                                      compress_num, n, d_root_p_, allocator_);
+  // put mark
+  CHECK_ERROR(cudaDeviceSynchronize());
+  GKernel::
+    puts_2phase_put_mark_phase<<<num_blocks, block_size>>>(d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, 
+                            d_values_hps, n, compress_num, d_root_p_, d_compress_nodes, allocator_);
+  CHECK_ERROR(cudaDeviceSynchronize());
+  // compress
+  num_blocks = (compress_num + block_size -1)/block_size;
+  GKernel::
+    puts_2phase_compress_phase<<<num_blocks, block_size>>>(d_compress_nodes, compress_num, allocator_);
+  
   CHECK_ERROR(cudaDeviceSynchronize());
 }
 } // namespace Compress
