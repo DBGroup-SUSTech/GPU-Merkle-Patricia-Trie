@@ -590,6 +590,7 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
     const uint8_t *key, int key_size, const uint8_t *value, int value_size,
     const uint8_t *value_hp, Node *root, FullNode *& compress_node,
     DynamicAllocator<ALLOC_CAPACITY> &node_allocator){
+  assert(root == nullptr);
   ValueNode *vnode = node_allocator.malloc<ValueNode>();
   vnode->type = Node::Type::VALUE;
   vnode->h_value = value_hp;
@@ -609,8 +610,7 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
       remain_key_size -= s_node->key_size;
       if(remain_key_size == 0) {
         vnode->parent = s_node;
-        atomicExch((unsigned long long int *)&s_node->val,
-                  (unsigned long long int)vnode);
+        s_node->val = vnode;
         return;
       }
       unsigned long long int old =
@@ -630,10 +630,11 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
       remain_key_size --;
       if(remain_key_size == 0) {
         vnode->parent = f_node;
-        atomicCAS(&f_node->need_compress, 0, 1);
-        compress_node = f_node;
-        atomicExch((unsigned long long int *)&f_node->childs[index],
-                  (unsigned long long int)vnode);
+        unsigned long long int old_need_compress = atomicCAS(&f_node->need_compress, 0, 1);
+        if (old_need_compress == 0) {
+          compress_node = f_node;
+        }
+        f_node->childs[index] = vnode;
         return;
       }
       unsigned long long int old =
@@ -651,7 +652,6 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
     }
     }
   }
-   
 }
 
 __global__ void puts_2phase_put_mark_phase(const uint8_t *keys_hexs, int *keys_indexs,
@@ -679,17 +679,19 @@ __global__ void puts_2phase_put_mark_phase(const uint8_t *keys_hexs, int *keys_i
 
 __device__ __forceinline__ void compress(ShortNode *& compressing_node, FullNode * compress_target,
                                         DynamicAllocator<ALLOC_CAPACITY> &allocator) {
-  // assert(compress_target->child_num()>1);
-  // assert(compress_target->parent->type != Node::Type::FULL);
+  assert(compress_target->child_num()>1);
+  assert(compress_target->parent->type != Node::Type::FULL);
   int index = compress_target->find_single_child();
-  if (index == 16){
+  int key_size = compressing_node->key_size++;
+  if (key_size == 0) {
     compressing_node->val = compress_target->childs[index];
   }
-  int key_size = compressing_node->key_size++;
-  uint8_t *new_key = allocator.malloc(key_size+1);
+  uint8_t *new_key = new uint8_t[key_size+1];
+  const uint8_t *old_key = compressing_node->key;
   memcpy(new_key, compressing_node->key, key_size);
-  memset(new_key+key_size, (uint8_t)index, 1);
+  memset(new_key+key_size, index, 1);
   compressing_node->key = new_key;
+  delete old_key;
   FullNode * compress_target_parent = static_cast<FullNode*>(compress_target->parent);
   if (compress_target_parent->child_num()>1) {
 #pragma unroll 17
