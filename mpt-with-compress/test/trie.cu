@@ -612,17 +612,20 @@ TEST(Trie, HashBenchmark) {
          (int)(n * 1000.0 / timer_gpu_hash_onepass.get() * 1000.0));
 
   // check hash
-  // TODO: not equal
   const uint8_t *hash = nullptr;
   int hash_size = 0;
   cpu_mpt_dirty_flag.get_root_hash(hash, hash_size);
   printf("CPU dirty flag root hash is: %p\n", hash);
   cutil::println_hex(hash, hash_size);
+  std::vector<uint8_t> hash_cpu_mpt_dirty_flag(hash, hash + 32);
   // cpu_mpt_ledgerdb.get_root_hash(hash, hash_size)
   // printf("CPU ledgerdb root hash is: ");
   gpu_mpt_onepass.get_root_hash(hash, hash_size);
   printf("GPU onepass root Hash is: %p\n", hash);
   cutil::println_hex(hash, hash_size);
+  std::vector<uint8_t> hash_gpu_mpt_onepass(hash, hash + 32);
+
+  ASSERT_EQ(hash_cpu_mpt_dirty_flag, hash_gpu_mpt_onepass);
 
   delete[] keys_bytes;
   delete[] keys_bytes_indexs;
@@ -732,7 +735,7 @@ TEST(CpuMpt, LedgerdbHash) {
 
   auto nodes = new CpuMPT::Compress::Node *[n] {};
   mpt.gets_baseline_nodes(keys_hexs, keys_hexs_indexs, n, nodes);
-  const uint8_t* hash = nullptr; 
+  const uint8_t *hash = nullptr;
   int hash_size;
   mpt.hashs_ledgerdb(nodes, n);
   mpt.get_root_hash(hash, hash_size);

@@ -49,17 +49,25 @@ public:
   void get_root_hash(const uint8_t *&hash, int &hash_size) const;
 
 private:
+  /// @note d_start always saves the root node. d_root_p_ = &d_start.val
+  ShortNode *d_start_;
   Node **d_root_p_; // &root = *d_root_ptr
   DynamicAllocator<ALLOC_CAPACITY> allocator_;
 
 public:
   MPT() {
-    CHECK_ERROR(gutil::DeviceAlloc(d_root_p_, 1));
-    CHECK_ERROR(gutil::DeviceSet(d_root_p_, 0x00, 1)); // nullptr
+    CHECK_ERROR(gutil::DeviceAlloc(d_start_, 1));
+    CHECK_ERROR(gutil::DeviceSet(d_start_, 0x00, 1));
+    // set d_root_p to &d_start.val
+    Node ***tmp = nullptr;
+    CHECK_ERROR(gutil::DeviceAlloc(tmp, 1));
+    GKernel::set_root_ptr<<<1, 1>>>(d_start_, tmp);
+    CHECK_ERROR(gutil::CpyDeviceToHost(&d_root_p_, tmp, 1));
+    CHECK_ERROR(gutil::DeviceFree(tmp));
   }
   ~MPT() {
     // TODO release all nodes
-    CHECK_ERROR(gutil::DeviceFree(d_root_p_));
+    CHECK_ERROR(gutil::DeviceFree(d_start_));
     allocator_.free_all();
   }
 };

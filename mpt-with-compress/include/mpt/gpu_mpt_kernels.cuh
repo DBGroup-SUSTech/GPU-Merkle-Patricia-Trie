@@ -1,16 +1,24 @@
 #pragma once
 #include "hash/batch_mode_hash.cuh"
 #include "util/allocator.cuh"
+#include "util/lock.cuh"
 #include "util/utils.cuh"
 namespace GpuMPT {
 namespace Compress {
 namespace GKernel {
+
+__global__ void set_root_ptr(ShortNode *start, Node ***tmp) {
+  assert(blockDim.x == 1 && gridDim.x == 1);
+  *tmp = &start->val;
+}
+
 /// @brief adaptive from ethereum. return value in node_ret and dirty_ret
 /// @return
-__device__ __forceinline__ void dfs_put_baseline(
-    Node *node, const uint8_t *prefix, int prefix_size, const uint8_t *key,
-    int key_size, Node *value, DynamicAllocator<ALLOC_CAPACITY> &node_allocator,
-    Node *&node_ret, bool &dirty_ret) {
+__device__ __forceinline__ void
+dfs_put_baseline(Node *node, const uint8_t *prefix, int prefix_size,
+                 const uint8_t *key, int key_size, Node *value,
+                 DynamicAllocator<ALLOC_CAPACITY> &node_allocator,
+                 Node *&node_ret, bool &dirty_ret) {
   // if key_size == 0, might value node or other node
   if (key_size == 0) {
     // if value node, replace the value
@@ -46,93 +54,92 @@ __device__ __forceinline__ void dfs_put_baseline(
   }
 
   switch (node->type) {
-    case Node::Type::SHORT: {
-      ShortNode *snode = static_cast<ShortNode *>(node);
-      int matchlen =
-          util::prefix_len(snode->key, snode->key_size, key, key_size);
+  case Node::Type::SHORT: {
+    ShortNode *snode = static_cast<ShortNode *>(node);
+    int matchlen = util::prefix_len(snode->key, snode->key_size, key, key_size);
 
-      // the short node is fully matched, insert to child
-      if (matchlen == snode->key_size) {
-        Node *new_val = nullptr;
-        bool dirty = false;
-        /*auto [new_val, dirty] = */ dfs_put_baseline(
-            snode->val, prefix, prefix_size + matchlen, key + matchlen,
-            key_size - matchlen, value, node_allocator, new_val, dirty);
-        snode->val = new_val;
-        if (dirty) {
-          snode->dirty = true;
-        }
-        node_ret = snode;
-        dirty_ret = snode;
-        return /*{snode, dirty}*/;
-      }
-
-      // the short node is partially matched. create a branch node
-      FullNode *branch = node_allocator.malloc<FullNode>();
-      branch->type = Node::Type::FULL;
-      branch->dirty = true;
-
-      // point to origin trie
-      Node *child_origin = nullptr;
-      bool _1 = false;
-      /*auto [child_origin, _1] = */ dfs_put_baseline(
-          nullptr, prefix, prefix_size + (matchlen + 1),
-          snode->key + (matchlen + 1), snode->key_size - (matchlen + 1),
-          snode->val, node_allocator, child_origin, _1);
-      branch->childs[snode->key[matchlen]] = child_origin;
-
-      // point to new trie
-      Node *child_new = nullptr;
-      bool _2 = false;
-      /*auto [child_new, _2] = */ dfs_put_baseline(
-          nullptr, prefix, prefix_size + (matchlen + 1), key + (matchlen + 1),
-          key_size - (matchlen + 1), value, node_allocator, child_new, _2);
-      branch->childs[key[matchlen]] = child_new;
-
-      // Replace this shortNode with the branch if it occurs at index 0.
-      if (matchlen == 0) {
-        // TODO: remove old short node
-        node_ret = branch;
-        dirty_ret = true;
-        return /*{branch, true}*/;
-      }
-
-      // New branch node is created as a child of origin short node
-      snode->key_size = matchlen;
-      snode->val = branch;
-      snode->dirty = true;
-
-      node_ret = snode;
-      dirty_ret = true;
-      return /*{snode, true}*/;
-    }
-    case Node::Type::FULL: {
-      // hex-encoding guarantees that key is not null while reaching branch node
-      assert(key_size > 0);
-
-      FullNode *fnode = static_cast<FullNode *>(node);
-
-      Node *child_new = nullptr;
+    // the short node is fully matched, insert to child
+    if (matchlen == snode->key_size) {
+      Node *new_val = nullptr;
       bool dirty = false;
-      /*auto [child_new, dirty] =*/
-      dfs_put_baseline(fnode->childs[key[0]], prefix, prefix_size + 1, key + 1,
-                       key_size - 1, value, node_allocator, child_new, dirty);
+      /*auto [new_val, dirty] = */ dfs_put_baseline(
+          snode->val, prefix, prefix_size + matchlen, key + matchlen,
+          key_size - matchlen, value, node_allocator, new_val, dirty);
+      snode->val = new_val;
       if (dirty) {
-        fnode->childs[key[0]] = child_new;
-        fnode->dirty = true;
+        snode->dirty = true;
       }
+      node_ret = snode;
+      dirty_ret = snode;
+      return /*{snode, dirty}*/;
+    }
 
-      node_ret = fnode;
-      dirty_ret = dirty;
-      return /*{fnode, dirty}*/;
+    // the short node is partially matched. create a branch node
+    FullNode *branch = node_allocator.malloc<FullNode>();
+    branch->type = Node::Type::FULL;
+    branch->dirty = true;
+
+    // point to origin trie
+    Node *child_origin = nullptr;
+    bool _1 = false;
+    /*auto [child_origin, _1] = */ dfs_put_baseline(
+        nullptr, prefix, prefix_size + (matchlen + 1),
+        snode->key + (matchlen + 1), snode->key_size - (matchlen + 1),
+        snode->val, node_allocator, child_origin, _1);
+    branch->childs[snode->key[matchlen]] = child_origin;
+
+    // point to new trie
+    Node *child_new = nullptr;
+    bool _2 = false;
+    /*auto [child_new, _2] = */ dfs_put_baseline(
+        nullptr, prefix, prefix_size + (matchlen + 1), key + (matchlen + 1),
+        key_size - (matchlen + 1), value, node_allocator, child_new, _2);
+    branch->childs[key[matchlen]] = child_new;
+
+    // Replace this shortNode with the branch if it occurs at index 0.
+    if (matchlen == 0) {
+      // TODO: remove old short node
+      node_ret = branch;
+      dirty_ret = true;
+      return /*{branch, true}*/;
     }
-    default: {
-      printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
-          assert(false);
-      node_ret = nullptr;
-      dirty_ret = 0;
-      return /*{nullptr, 0}*/;
+
+    // New branch node is created as a child of origin short node
+    snode->key_size = matchlen;
+    snode->val = branch;
+    snode->dirty = true;
+
+    node_ret = snode;
+    dirty_ret = true;
+    return /*{snode, true}*/;
+  }
+  case Node::Type::FULL: {
+    // hex-encoding guarantees that key is not null while reaching branch node
+    assert(key_size > 0);
+
+    FullNode *fnode = static_cast<FullNode *>(node);
+
+    Node *child_new = nullptr;
+    bool dirty = false;
+    /*auto [child_new, dirty] =*/
+    dfs_put_baseline(fnode->childs[key[0]], prefix, prefix_size + 1, key + 1,
+                     key_size - 1, value, node_allocator, child_new, dirty);
+    if (dirty) {
+      fnode->childs[key[0]] = child_new;
+      fnode->dirty = true;
     }
+
+    node_ret = fnode;
+    dirty_ret = dirty;
+    return /*{fnode, dirty}*/;
+  }
+  default: {
+    printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+        assert(false);
+    node_ret = nullptr;
+    dirty_ret = 0;
+    return /*{nullptr, 0}*/;
+  }
   }
   printf("ERROR ON INSERT\n"), assert(false);
   node_ret = nullptr;
@@ -141,10 +148,10 @@ __device__ __forceinline__ void dfs_put_baseline(
 }
 
 /// @brief adaptive from ethereum put
-__device__ __forceinline__ void put_baseline(
-    const uint8_t *key, int key_size, const uint8_t *value, int value_size,
-    const uint8_t *value_hp, Node *&root,
-    DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
+__device__ __forceinline__ void
+put_baseline(const uint8_t *key, int key_size, const uint8_t *value,
+             int value_size, const uint8_t *value_hp, Node *&root,
+             DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
   ValueNode *vnode = node_allocator.malloc<ValueNode>();
   vnode->type = Node::Type::VALUE;
   vnode->h_value = value_hp;
@@ -158,7 +165,7 @@ __device__ __forceinline__ void put_baseline(
   root = new_root;
 }
 
-/// @brief single thread baseline
+/// @brief single thread baseline, adaptive from ethereum
 __global__ void puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
                               const uint8_t *values_bytes, int *values_indexs,
                               const uint8_t *const *values_hps, int n,
@@ -176,6 +183,48 @@ __global__ void puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
   }
 }
 
+__device__ __forceinline__ void
+put_latching(const uint8_t *key, int key_size, const uint8_t *value,
+             int value_size, const uint8_t *value_hp, Node **root_p,
+             DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
+  // only lane_id = 0 is activated
+  assert(threadIdx.x % 32 == 0);
+
+  ValueNode *vnode = node_allocator.malloc<ValueNode>();
+  vnode->type = Node::Type::VALUE;
+  vnode->h_value = value_hp;
+  vnode->d_value = value;
+  vnode->value_size = value_size;
+
+  assert(*root_p != nullptr);
+
+  // insert into a tree with root
+  // TODO
+}
+
+/// @brief per request per warp
+__global__ void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
+                              const uint8_t *values_bytes, int *values_indexs,
+                              const uint8_t *const *values_hps, int n,
+                              Node **root_p,
+                              DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
+  int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
+  if (wid >= n) {
+    return;
+  }
+  int lid_w = threadIdx.x % 32;
+  if (lid_w > 0) { // TODO: warp sharing
+    return;
+  }
+
+  const uint8_t *key = util::element_start(keys_indexs, wid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, wid);
+  const uint8_t *value = util::element_start(values_indexs, wid, values_bytes);
+  int value_size = util::element_size(values_indexs, wid);
+  const uint8_t *value_hp = values_hps[wid];
+  put_latching(key, key_size, value, value_size, value_hp, root_p,
+               node_allocator);
+}
 /// @brief adaptive from ethereum, recursive to flat loop
 __device__ __forceinline__ void get(const uint8_t *key, int key_size,
                                     const uint8_t *&value_hp, int &value_size,
@@ -190,41 +239,41 @@ __device__ __forceinline__ void get(const uint8_t *key, int key_size,
     }
 
     switch (node->type) {
-      case Node::Type::VALUE: {
-        const ValueNode *vnode = static_cast<const ValueNode *>(node);
-        value_hp = vnode->h_value;
-        value_size = vnode->value_size;
+    case Node::Type::VALUE: {
+      const ValueNode *vnode = static_cast<const ValueNode *>(node);
+      value_hp = vnode->h_value;
+      value_size = vnode->value_size;
+      return;
+    }
+    case Node::Type::SHORT: {
+      const ShortNode *snode = static_cast<const ShortNode *>(node);
+      if (key_size - pos < snode->key_size ||
+          !util::bytes_equal(snode->key, snode->key_size, key + pos,
+                             snode->key_size)) {
+        // key not found in the trie
+        value_hp = nullptr;
+        value_size = 0;
         return;
       }
-      case Node::Type::SHORT: {
-        const ShortNode *snode = static_cast<const ShortNode *>(node);
-        if (key_size - pos < snode->key_size ||
-            !util::bytes_equal(snode->key, snode->key_size, key + pos,
-                               snode->key_size)) {
-          // key not found in the trie
-          value_hp = nullptr;
-          value_size = 0;
-          return;
-        }
 
-        node = snode->val;
-        pos += snode->key_size;
-        continue;
-      }
-      case Node::Type::FULL: {
-        assert(pos < key_size);
+      node = snode->val;
+      pos += snode->key_size;
+      continue;
+    }
+    case Node::Type::FULL: {
+      assert(pos < key_size);
 
-        const FullNode *fnode = static_cast<const FullNode *>(node);
+      const FullNode *fnode = static_cast<const FullNode *>(node);
 
-        node = fnode->childs[key[pos]];
-        pos += 1;
-        continue;
-      }
-      default: {
-        printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
-            assert(false);
-        return;
-      }
+      node = fnode->childs[key[pos]];
+      pos += 1;
+      continue;
+    }
+    default: {
+      printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+          assert(false);
+      return;
+    }
     }
     printf("ERROR ON INSERT\n"), assert(false);
     return;
@@ -276,7 +325,7 @@ __device__ __forceinline__ void do_hash_onepass_mark_phase(const uint8_t *key,
   while (true) {
     assert(node != nullptr);
 
-    node->parent = parent;  // set parent
+    node->parent = parent; // set parent
 
     // update parent visit count
     if (parent != nullptr) {
@@ -287,43 +336,43 @@ __device__ __forceinline__ void do_hash_onepass_mark_phase(const uint8_t *key,
     }
 
     switch (node->type) {
-      case Node::Type::VALUE: {
-        ValueNode *vnode = static_cast<ValueNode *>(node);
-        leaf = vnode;
-        // TODO: leaf do not have visit count?
-        atomicAdd(&leaf->visit_count, 1);
+    case Node::Type::VALUE: {
+      ValueNode *vnode = static_cast<ValueNode *>(node);
+      leaf = vnode;
+      // TODO: leaf do not have visit count?
+      atomicAdd(&leaf->visit_count, 1);
+      return;
+    }
+    case Node::Type::SHORT: {
+      const ShortNode *snode = static_cast<const ShortNode *>(node);
+      if (key_size - pos < snode->key_size ||
+          !util::bytes_equal(snode->key, snode->key_size, key + pos,
+                             snode->key_size)) {
+        // key not found in the trie
+        assert(false);
         return;
       }
-      case Node::Type::SHORT: {
-        const ShortNode *snode = static_cast<const ShortNode *>(node);
-        if (key_size - pos < snode->key_size ||
-            !util::bytes_equal(snode->key, snode->key_size, key + pos,
-                               snode->key_size)) {
-          // key not found in the trie
+
+      parent = node; // save parent
+      node = snode->val;
+      pos += snode->key_size;
+      continue;
+    }
+    case Node::Type::FULL: {
+      assert(pos < key_size);
+
+      const FullNode *fnode = static_cast<const FullNode *>(node);
+
+      parent = node; // save parent
+      node = fnode->childs[key[pos]];
+      pos += 1;
+      continue;
+    }
+    default: {
+      printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
           assert(false);
-          return;
-        }
-
-        parent = node;  // save parent
-        node = snode->val;
-        pos += snode->key_size;
-        continue;
-      }
-      case Node::Type::FULL: {
-        assert(pos < key_size);
-
-        const FullNode *fnode = static_cast<const FullNode *>(node);
-
-        parent = node;  // save parent
-        node = fnode->childs[key[pos]];
-        pos += 1;
-        continue;
-      }
-      default: {
-        printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
-            assert(false);
-        return;
-      }
+      return;
+    }
     }
     printf("ERROR ON INSERT\n"), assert(false);
     return;
@@ -351,16 +400,17 @@ __global__ void hash_onepass_mark_phase(const uint8_t *keys_hexs,
   do_hash_onepass_mark_phase(key, key_size, leaf, *root_p);
 }
 
-__device__ __forceinline__ void do_hash_onepass_update_phase(
-    Node *leaf, int lane_id, uint64_t *A, uint64_t *B, uint64_t *C, uint64_t *D,
-    uint8_t *buffer_shared /*17 * 32 bytes*/,
-    DynamicAllocator<ALLOC_CAPACITY> &allocator) {
+__device__ __forceinline__ void
+do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
+                             uint64_t *C, uint64_t *D,
+                             uint8_t *buffer_shared /*17 * 32 bytes*/,
+                             DynamicAllocator<ALLOC_CAPACITY> &allocator) {
   // prepare node's value's hash
   assert(leaf && leaf->type == Node::Type::VALUE);
   ValueNode *vnode = static_cast<ValueNode *>(leaf);
   vnode->hash = vnode->d_value;
   vnode->hash_size = vnode->value_size;
-  __threadfence();  // make sure the new hash can be seen by other threads
+  __threadfence(); // make sure the new hash can be seen by other threads
 
   leaf = leaf->parent;
 
@@ -390,7 +440,7 @@ __device__ __forceinline__ void do_hash_onepass_update_phase(
       if (leaf->type == Node::Type::FULL) {
         FullNode *fnode = static_cast<FullNode *>(leaf);
         encoding_size_0 = fnode->encode_size();
-        if (encoding_size_0 > 17 * 32) {  // encode into global memory
+        if (encoding_size_0 > 17 * 32) { // encode into global memory
 
           // TODO: delete aligned
           uint8_t *buffer_global =
@@ -400,7 +450,7 @@ __device__ __forceinline__ void do_hash_onepass_update_phase(
           fnode->encode(buffer_global);
           encoding_0 = buffer_global;
 
-        } else {  // encode into shared memory
+        } else { // encode into shared memory
           // memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
 
           fnode->encode(buffer_shared);
@@ -411,7 +461,7 @@ __device__ __forceinline__ void do_hash_onepass_update_phase(
       } else {
         ShortNode *snode = static_cast<ShortNode *>(leaf);
         encoding_size_0 = snode->encode_size();
-        if (encoding_size_0 > 17 * 32) {  // encode into global memory
+        if (encoding_size_0 > 17 * 32) { // encode into global memory
 
           // TODO: delete aligned
           uint8_t *buffer_global =
@@ -420,7 +470,7 @@ __device__ __forceinline__ void do_hash_onepass_update_phase(
 
           snode->encode(buffer_global);
           encoding_0 = buffer_global;
-        } else {  // encode into shared memory
+        } else { // encode into shared memory
           // memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
 
           snode->encode(buffer_shared);
@@ -462,17 +512,18 @@ __device__ __forceinline__ void do_hash_onepass_update_phase(
       leaf->hash_size = 32;
     }
 
-    __threadfence();  // make sure the new hash can be seen by other threads
+    __threadfence(); // make sure the new hash can be seen by other threads
 
     leaf = leaf->parent;
   }
 }
 
-__global__ void hash_onepass_update_phase(
-    Node *const *leafs, int n, DynamicAllocator<ALLOC_CAPACITY> allocator) {
-  int tid_global = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
-  int wid_global = tid_global / 32;                        // global warp id
-  int tid_warp = tid_global % 32;                          // lane id
+__global__ void
+hash_onepass_update_phase(Node *const *leafs, int n,
+                          DynamicAllocator<ALLOC_CAPACITY> allocator) {
+  int tid_global = blockIdx.x * blockDim.x + threadIdx.x; // global thread id
+  int wid_global = tid_global / 32;                       // global warp id
+  int tid_warp = tid_global % 32;                         // lane id
   int tid_block = threadIdx.x;
   int wid_block = tid_block / 32;
   if (wid_global >= n) {
@@ -485,7 +536,7 @@ __global__ void hash_onepass_update_phase(
   __shared__ uint64_t C[128 / 32 * 25];
   __shared__ uint64_t D[128 / 32 * 25];
 
-  __shared__ uint8_t buffer[(128 / 32) * (17 * 32)];  // 17 * 32 per node
+  __shared__ uint8_t buffer[(128 / 32) * (17 * 32)]; // 17 * 32 per node
 
   Node *leaf = leafs[wid_global];
   do_hash_onepass_update_phase(leaf, tid_warp, A + wid_block * 25,
@@ -493,6 +544,6 @@ __global__ void hash_onepass_update_phase(
                                D + wid_block * 25,
                                buffer + wid_block * (17 * 32), allocator);
 }
-}  // namespace GKernel
-}  // namespace Compress
-}  // namespace GpuMPT
+} // namespace GKernel
+} // namespace Compress
+} // namespace GpuMPT
