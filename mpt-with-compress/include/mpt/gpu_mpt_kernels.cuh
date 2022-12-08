@@ -185,28 +185,109 @@ __global__ void puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
 
 __device__ __forceinline__ void
 put_latching(const uint8_t *key, int key_size, const uint8_t *value,
-             int value_size, const uint8_t *value_hp, Node **root_p,
+             int value_size, const uint8_t *value_hp, ShortNode *start_node,
              DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
   // only lane_id = 0 is activated
   assert(threadIdx.x % 32 == 0);
 
-  ValueNode *vnode = node_allocator.malloc<ValueNode>();
-  vnode->type = Node::Type::VALUE;
-  vnode->h_value = value_hp;
-  vnode->d_value = value;
-  vnode->value_size = value_size;
-
-  assert(*root_p != nullptr);
+  ValueNode *leaf = node_allocator.malloc<ValueNode>();
+  leaf->type = Node::Type::VALUE;
+  leaf->h_value = value_hp;
+  leaf->d_value = value;
+  leaf->value_size = value_size;
 
   // insert into a tree with root
   // TODO
+  Node *parent = start_node;
+  Node **curr = &start_node->val;
+  gutil::acquire_lock(&start_node->lock);
+
+  while (*curr) {
+    Node *node = *curr;
+    gutil::acquire_lock(&node->lock);
+
+    // special situation handling: a value node
+    if (node->type == Node::Type::VALUE) {
+      // TODO: remove dirty check, dirty is not used
+      ValueNode *vnode_old = static_cast<ValueNode *>(node);
+      ValueNode *vnode_new = leaf;
+      bool dirty =
+          !util::bytes_equal(vnode_old->d_value, vnode_old->value_size,
+                             vnode_new->d_value, vnode_new->value_size);
+      // remove the current one;
+      *curr = nullptr;
+      // go to leaf insertion
+      // no need to release old vnode's lock
+      break;
+    }
+
+    // handle short node and full node
+    switch (node->type) {
+    case Node::Type::SHORT: {
+      ShortNode *snode = static_cast<ShortNode *>(node);
+      int matchlen =
+          util::prefix_len(snode->key, snode->key_size, key, key_size);
+      // fully match, no need to split
+      if (matchlen == snode->key_size) {
+        gutil::release_lock(&parent->lock);
+        parent = snode;
+        curr = &snode->val;
+        break;
+      }
+
+      // split the node
+      FullNode *branch = node_allocator.malloc<FullNode>();
+      branch->type = Node::Type::FULL;
+
+      // construct 3 short nodes (or nil)
+      //  1. branch.old_child(left child),
+      // branch.new_child(right child) and branch.parent
+      //  2. branch.
+      uint8_t left_nibble = snode->key[matchlen];
+      const uint8_t *left_key = snode->key + (matchlen + 1);
+      const int left_key_size = snode->key_size - (matchlen + 1);
+
+      uint8_t right_nibble = key[matchlen];
+      const uint8_t *right_key = key + (matchlen + 1);
+      const int right_key_size = key_size - (matchlen + 1); 
+
+      // TODO
+
+      // branch.new_child
+    }
+    case Node::Type::FULL: {
+    }
+    default: {
+      printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+          assert(false);
+      break;
+    }
+    }
+  }
+
+  // curr = null, try to insert a leaf
+  if (key_size == 0) {
+    leaf->parent = parent;
+    *curr = leaf;
+  } else {
+    ShortNode *snode = node_allocator.malloc<ShortNode>();
+    snode->key = key;
+    snode->key_size = key_size;
+    snode->val = leaf;
+    snode->dirty = true; // dirty
+
+    leaf->parent = snode;
+    snode->parent = parent;
+    *curr = snode;
+  }
+  gutil::release_lock(&parent->lock);
 }
 
 /// @brief per request per warp
 __global__ void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
                               const uint8_t *values_bytes, int *values_indexs,
                               const uint8_t *const *values_hps, int n,
-                              Node **root_p,
+                              ShortNode *start_node,
                               DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
   int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
   if (wid >= n) {
@@ -222,9 +303,10 @@ __global__ void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
   const uint8_t *value = util::element_start(values_indexs, wid, values_bytes);
   int value_size = util::element_size(values_indexs, wid);
   const uint8_t *value_hp = values_hps[wid];
-  put_latching(key, key_size, value, value_size, value_hp, root_p,
+  put_latching(key, key_size, value, value_size, value_hp, start_node,
                node_allocator);
 }
+
 /// @brief adaptive from ethereum, recursive to flat loop
 __device__ __forceinline__ void get(const uint8_t *key, int key_size,
                                     const uint8_t *&value_hp, int &value_size,
