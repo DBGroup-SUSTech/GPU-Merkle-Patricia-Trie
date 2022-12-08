@@ -16,7 +16,7 @@
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int *&values_indexs, int &n) {
   // parameters
-  n = 1 << 16;
+  n = 1 << 2;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution<> dist(0, 1 << 8);
@@ -747,16 +747,19 @@ TEST(CpuMpt, LedgerdbHash) {
 }
 
 TEST(GpuMPT, Pus2PhaseTest) {
-  const uint8_t *keys_bytes = nullptr;
-  int *keys_bytes_indexs = nullptr;
-  const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
-  int n;
-
-  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+  const int n = 3;
+  const uint8_t *keys_bytes =
+      reinterpret_cast<const uint8_t *>("doedogdogglesworth");
+  int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
+  const uint8_t *values_bytes =
+      reinterpret_cast<const uint8_t *>("reindeerpuppycat");
+  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
+
+  const uint8_t *values_ptrs[n]{};
+  int values_sizes[n]{};
 
   keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
                      keys_hexs_indexs);

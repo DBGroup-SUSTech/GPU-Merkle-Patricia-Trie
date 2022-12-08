@@ -37,6 +37,7 @@ __device__ __forceinline__ void dfs_put_baseline(
     snode->type = Node::Type::SHORT;
     snode->key = key;
     snode->key_size = key_size;
+    value->parent = snode;
     snode->val = value;
     snode->dirty = true;
 
@@ -495,27 +496,31 @@ __global__ void hash_onepass_update_phase(
 }
 
 __device__ __forceinline__ void split_node(ShortNode * snode, FullNode *& split_end,  
-    uint8_t last_key, DynamicAllocator<ALLOC_CAPACITY> &allocator) {
+    Node * root, uint8_t last_key, DynamicAllocator<ALLOC_CAPACITY> &allocator) {
   const uint8_t * key_router = snode->key;
   FullNode * first_f_node = allocator.malloc<FullNode>();
-  first_f_node->parent = snode->parent; 
-  FullNode * parent = first_f_node;
-  for (int i = 1; i < snode->key_size; i++){
-    FullNode* f_node = allocator.malloc<FullNode>();
-    f_node->parent = parent;
-    int index = static_cast<int>(*key_router);
-    key_router++;
-    parent->childs[index] = f_node;
-    parent = f_node;
-  }
+  // first_f_node->parent = snode->parent; 
+  // FullNode * parent = first_f_node;
+  // for (int i = 1; i < snode->key_size; i++){
+  //   FullNode* f_node = allocator.malloc<FullNode>();
+  //   f_node->parent = parent;
+  //   int index = static_cast<int>(*key_router);
+  //   key_router++;
+  //   parent->childs[index] = f_node;
+  //   parent = f_node;
+  // }
   int index = static_cast<int>(*key_router);
-  parent->childs[index] = snode->val;
-  parent->need_compress = 1;
-  split_end = parent;
-  if(snode->parent!=nullptr){
-    FullNode * f_node = static_cast<FullNode*>(snode->parent);
-    f_node->childs[last_key] = first_f_node;
-  }
+  // parent->childs[index] = snode->val;
+  // parent->need_compress = 1;
+  // split_end = parent;
+  // if(snode->parent!=nullptr){
+  //   FullNode * f_node = static_cast<FullNode*>(snode->parent);
+  //   f_node->childs[last_key] = first_f_node;
+  // } else {
+  //   // assert(false);
+  //   atomicCAS((unsigned long long int *)&root, 
+  //   (unsigned long long int)snode, (unsigned long long int)first_f_node);
+  // }
 }
 
 __device__ __forceinline__ void do_put_2phase_get_split_phase(const uint8_t* key, int key_size,
@@ -524,24 +529,28 @@ __device__ __forceinline__ void do_put_2phase_get_split_phase(const uint8_t* key
   const uint8_t * key_router = key;
   Node * node = root;
   uint8_t last_key;
-  while(remain_key_size>0 || node != nullptr){
+  // printf("%d\n", node->type);
+  while(remain_key_size>0 && node != nullptr){
     switch (node->type){
     case Node::Type::SHORT: {
       ShortNode * s_node = static_cast<ShortNode*>(node);
+      // printf("%d\n",s_node->val->type);
       int match = util::prefix_len(s_node->key, s_node->key_size, key_router, remain_key_size);
       if(match<s_node->key_size){
         int to_split = atomicCAS(&s_node->to_split, 0, 1);
         if (to_split == 0){
-          split_node(s_node, split_end, last_key, allocator);
+          split_node(s_node, split_end, root, last_key, allocator);
         }
         return; // short node unmatch -> split 
       }
       remain_key_size -= match;
       key_router += match;
       node = s_node->val;
-      break;
+      return;
+      // break;
     }
     case Node::Type::FULL: {
+      assert(false);
       FullNode * f_node = static_cast<FullNode*>(node);
       remain_key_size --;
       last_key = static_cast<int>(*key_router);
@@ -745,6 +754,43 @@ __global__ void puts_2phase_compress_phase(FullNode ** compress_nodes, int compr
   }
   FullNode * compress_node = compress_nodes[tid];
   do_put_2phase_compress_phase(compress_node, allocator);
+}
+
+__device__ __forceinline__ void dfs_traverse_trie(Node * root) {
+  if (root ==nullptr)
+  {
+    return;
+  }
+  switch (root->type)
+  {
+  case Node::Type::VALUE: {
+    ValueNode * v = static_cast<ValueNode*>(root);
+    v->print_self();
+    return;
+  }
+  case Node::Type::SHORT: {
+    ShortNode * s = static_cast<ShortNode*>(root);
+    s->print_self();
+    dfs_traverse_trie(s->val);
+    return;
+  }
+  case Node::Type::FULL: {
+    FullNode * f = static_cast<FullNode*>(root);
+    f->print_self();
+    for (size_t i = 0; i < 17; i++)
+    {
+      dfs_traverse_trie(f->childs[i]);
+    }
+    return;
+  }
+  default:
+    assert(false);
+    return;
+  }
+}
+
+__global__ void traverse_trie(Node ** root) {
+  dfs_traverse_trie(*root);
 }
 }  // namespace GKernel
 }  // namespace Compress        

@@ -242,12 +242,16 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   GKernel::
     puts_baseline<<<1, 1>>>(d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps, 1,
                                             d_root_p_, allocator_);
-  d_keys_hexs += util::elements_size_sum(keys_indexs, 1);
-  d_keys_indexs += 2;
-  d_values_bytes += util::elements_size_sum(values_indexs, 1);
-  d_values_indexs += 2;
-  d_values_hps += 1;
-  n -= 1;
+  // CHECK_ERROR(cudaDeviceSynchronize());
+    GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
+  // printf("%d\n",util::elements_size_sum(keys_indexs, 1));
+  // printf("%d\n",util::elements_size_sum(values_indexs, 1)); 
+  // d_keys_hexs += util::elements_size_sum(keys_indexs, 1);
+  // d_keys_indexs += 2;
+  // d_values_bytes += util::elements_size_sum(values_indexs, 1);
+  // d_values_indexs += 2;
+  // d_values_hps += 1;
+  // n -= 1;
 
   // split get
   int compress_num = 0;
@@ -258,19 +262,20 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   int num_blocks = (n + block_size - 1) / block_size;
   GKernel::
     puts_2phase_get_split_phase<<<num_blocks, block_size>>>(d_keys_hexs, d_keys_indexs, d_compress_nodes, 
-                                      compress_num, n-1, d_root_p_, allocator_);
+                                      compress_num, n, d_root_p_, allocator_);
+  GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   // put mark
-  CHECK_ERROR(cudaDeviceSynchronize());
-  GKernel::
-    puts_2phase_put_mark_phase<<<num_blocks, block_size>>>(d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, 
-                            d_values_hps, n, compress_num, d_root_p_, d_compress_nodes, allocator_);
-  CHECK_ERROR(cudaDeviceSynchronize());
-  // compress
-  num_blocks = (compress_num + block_size -1)/block_size;
-  GKernel::
-    puts_2phase_compress_phase<<<num_blocks, block_size>>>(d_compress_nodes, compress_num, allocator_);
+  // CHECK_ERROR(cudaDeviceSynchronize());
+  // GKernel::
+  //   puts_2phase_put_mark_phase<<<num_blocks, block_size>>>(d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, 
+  //                           d_values_hps, n, compress_num, d_root_p_, d_compress_nodes, allocator_);
+  // CHECK_ERROR(cudaDeviceSynchronize());
+  // // compress
+  // num_blocks = (compress_num + block_size -1)/block_size;
+  // GKernel::
+  //   puts_2phase_compress_phase<<<num_blocks, block_size>>>(d_compress_nodes, compress_num, allocator_);
   
-  CHECK_ERROR(cudaDeviceSynchronize());
+  // CHECK_ERROR(cudaDeviceSynchronize());
 }
 } // namespace Compress
 } // namespace GpuMPT
