@@ -52,8 +52,8 @@ put(const uint8_t *key, int key_size, const uint8_t *value, int value_size,
 }
 
 __global__ void puts(const uint8_t *keys_bytes, const int *keys_indexs,
-                     const uint8_t *values_bytes, const int *values_indexs, int n,
-                     Node *root,
+                     const uint8_t *values_bytes, const int *values_indexs,
+                     int n, Node *root,
                      PoolAllocator<Node, MAX_NODES> node_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
@@ -98,9 +98,11 @@ __global__ void gets(const uint8_t *keys_bytes, const int *keys_indexs,
   get(key, key_size, value_ptr, value_size, root);
 }
 
-__device__ __forceinline__ void
-get_shuffle(const uint8_t *key, int key_size, const uint8_t *&value_ptr,
-            int &value_size, Node *root, uint8_t *buffer_result, int &buffer_i) {
+__device__ __forceinline__ void get_shuffle(const uint8_t *key, int key_size,
+                                            const uint8_t *&value_ptr,
+                                            int &value_size, Node *root,
+                                            uint8_t *buffer_result,
+                                            int &buffer_i) {
   int nibble_i = 0;
   int nibble_max = sizeof_nibble(key_size);
   while (nibble_i < nibble_max && nullptr != root) {
@@ -122,8 +124,9 @@ get_shuffle(const uint8_t *key, int key_size, const uint8_t *&value_ptr,
 }
 
 __global__ void gets_shuffle(const uint8_t *keys_bytes, const int *keys_indexs,
-                             const uint8_t **values_ptrs, int *values_sizes, int n,
-                             Node *root, uint8_t *buffer_result, int *buffer_i) {
+                             const uint8_t **values_ptrs, int *values_sizes,
+                             int n, Node *root, uint8_t *buffer_result,
+                             int *buffer_i) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
     return;

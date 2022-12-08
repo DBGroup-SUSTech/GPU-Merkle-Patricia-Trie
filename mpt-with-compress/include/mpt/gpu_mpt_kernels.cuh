@@ -189,6 +189,7 @@ put_latching(const uint8_t *key, int key_size, const uint8_t *value,
              DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
   // only lane_id = 0 is activated
   assert(threadIdx.x % 32 == 0);
+  // printf("tid=%d, key_size=%d\n", threadIdx.x, key_size);
 
   ValueNode *leaf = node_allocator.malloc<ValueNode>();
   leaf->type = Node::Type::VALUE;
@@ -196,19 +197,23 @@ put_latching(const uint8_t *key, int key_size, const uint8_t *value,
   leaf->d_value = value;
   leaf->value_size = value_size;
 
-  // insert into a tree with root
-  // TODO
+  // TODO parent is not set. may not be locked
   Node *parent = start_node;
   Node **curr = &start_node->val;
+  // printf("tid=%d try ack lock start node\n", threadIdx.x);
   gutil::acquire_lock(&start_node->lock);
+  // printf("tid=%d ack lock start node\n", threadIdx.x);
 
   while (*curr) {
     Node *node = *curr;
+    // printf("tid=%d try ack lock node %p\n", threadIdx.x, node);
     gutil::acquire_lock(&node->lock);
+    // printf("tid=%d ack lock node %p\n", threadIdx.x, node);
 
     // special situation handling: a value node
     if (node->type == Node::Type::VALUE) {
       // TODO: remove dirty check, dirty is not used
+      assert(key_size == 0);
       ValueNode *vnode_old = static_cast<ValueNode *>(node);
       ValueNode *vnode_new = leaf;
       bool dirty =
@@ -227,9 +232,14 @@ put_latching(const uint8_t *key, int key_size, const uint8_t *value,
       ShortNode *snode = static_cast<ShortNode *>(node);
       int matchlen =
           util::prefix_len(snode->key, snode->key_size, key, key_size);
+      // printf("tid=%d\n snode matchlen = %d\n", threadIdx.x, matchlen);
       // fully match, no need to split
       if (matchlen == snode->key_size) {
+        // printf("tid=%d\n snode fully match, release lock node %p\n",
+        //        threadIdx.x, parent);
         gutil::release_lock(&parent->lock);
+        key += matchlen;
+        key_size -= matchlen;
         parent = snode;
         curr = &snode->val;
         break;
@@ -240,22 +250,84 @@ put_latching(const uint8_t *key, int key_size, const uint8_t *value,
       branch->type = Node::Type::FULL;
 
       // construct 3 short nodes (or nil)
-      //  1. branch.old_child(left child),
-      // branch.new_child(right child) and branch.parent
-      //  2. branch.
+      //  1. branch.old_child(left),
+      //  2. branch.parent(upper)
+      //  3. contine -> branch.new_child(right)
       uint8_t left_nibble = snode->key[matchlen];
       const uint8_t *left_key = snode->key + (matchlen + 1);
       const int left_key_size = snode->key_size - (matchlen + 1);
 
       uint8_t right_nibble = key[matchlen];
       const uint8_t *right_key = key + (matchlen + 1);
-      const int right_key_size = key_size - (matchlen + 1); 
+      const int right_key_size = key_size - (matchlen + 1);
 
-      // TODO
+      const uint8_t *upper_key = snode->key;
+      const int upper_key_size = matchlen;
 
-      // branch.new_child
+      // left
+      if (0 != left_key_size) {
+        ShortNode *left_node = node_allocator.malloc<ShortNode>();
+        left_node->type = Node::Type::SHORT;
+        left_node->key = left_key;
+        left_node->key_size = left_key_size;
+        // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, left_node,
+        //        left_node->key_size);
+        branch->childs[left_nibble] = left_node;
+        left_node->val = snode->val;
+        // snode->val->parent = left_node;
+        // left_node->parent = branch;
+      } else {
+        branch->childs[left_nibble] = snode->val;
+        // snode->val->parent = branch;
+      }
+
+      // upper
+      if (0 != upper_key_size) {
+        ShortNode *upper_node = node_allocator.malloc<ShortNode>();
+        upper_node->type = Node::Type::SHORT;
+        upper_node->key = upper_key;
+        upper_node->key_size = upper_key_size;
+        // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, upper_node,
+        //        upper_node->key_size);
+        *curr = upper_node; // set parent.child
+        upper_node->val = branch;
+        // branch->parent = upper_node;
+        // upper_node->parent = parent;
+      } else {
+        *curr = branch;
+        // branch->parent = parent;
+      }
+
+      // switch lock(snode) to lock(branch)
+      branch->lock = 1;
+
+      // link constructed. release parent lock. other thread can w upper node
+      // printf("tid=%d\n splited, release lock node %p\n", threadIdx.x,
+      // parent);
+      gutil::release_lock(&parent->lock);
+
+      // continue to insert right child
+      key = right_key;
+      key_size = right_key_size;
+      parent = branch;
+      curr = &branch->childs[right_nibble];
+      break;
     }
+
     case Node::Type::FULL: {
+      assert(key_size > 0);
+
+      FullNode *fnode = static_cast<FullNode *>(node);
+      // printf("tid=%d\n full node match, release lock node %p\n", threadIdx.x,
+      //        parent);
+      gutil::release_lock(&parent->lock);
+
+      const uint8_t nibble = key[0];
+      key = key + 1;
+      key_size -= 1;
+      parent = fnode;
+      curr = &fnode->childs[nibble];
+      break;
     }
     default: {
       printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
@@ -267,19 +339,24 @@ put_latching(const uint8_t *key, int key_size, const uint8_t *value,
 
   // curr = null, try to insert a leaf
   if (key_size == 0) {
-    leaf->parent = parent;
+    // leaf->parent = parent;
     *curr = leaf;
   } else {
     ShortNode *snode = node_allocator.malloc<ShortNode>();
+    snode->type = Node::Type::SHORT;
     snode->key = key;
     snode->key_size = key_size;
-    snode->val = leaf;
-    snode->dirty = true; // dirty
 
-    leaf->parent = snode;
-    snode->parent = parent;
+    // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, snode,
+    //        snode->key_size);
+    snode->val = leaf;
+    // leaf->parent = snode;
+    // snode->parent = parent;
+
     *curr = snode;
   }
+  // printf("tid=%d finish insert, release lock node %p\n", threadIdx.x,
+  // parent);
   gutil::release_lock(&parent->lock);
 }
 
@@ -290,6 +367,7 @@ __global__ void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
                               ShortNode *start_node,
                               DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
   int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
+
   if (wid >= n) {
     return;
   }
@@ -297,12 +375,12 @@ __global__ void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
   if (lid_w > 0) { // TODO: warp sharing
     return;
   }
-
   const uint8_t *key = util::element_start(keys_indexs, wid, keys_hexs);
   int key_size = util::element_size(keys_indexs, wid);
   const uint8_t *value = util::element_start(values_indexs, wid, values_bytes);
   int value_size = util::element_size(values_indexs, wid);
   const uint8_t *value_hp = values_hps[wid];
+
   put_latching(key, key_size, value, value_size, value_hp, start_node,
                node_allocator);
 }
@@ -315,6 +393,7 @@ __device__ __forceinline__ void get(const uint8_t *key, int key_size,
   int pos = 0;
   while (true) {
     if (node == nullptr) {
+      // printf("tid=%d, nullptr\n", threadIdx.x);
       value_hp = nullptr;
       value_size = 0;
       return;
@@ -322,6 +401,7 @@ __device__ __forceinline__ void get(const uint8_t *key, int key_size,
 
     switch (node->type) {
     case Node::Type::VALUE: {
+      // printf("tid=%d, VALUE node\n", threadIdx.x);
       const ValueNode *vnode = static_cast<const ValueNode *>(node);
       value_hp = vnode->h_value;
       value_size = vnode->value_size;
@@ -329,10 +409,14 @@ __device__ __forceinline__ void get(const uint8_t *key, int key_size,
     }
     case Node::Type::SHORT: {
       const ShortNode *snode = static_cast<const ShortNode *>(node);
+      // printf("tid=%d, Short node keysize=%d\n", threadIdx.x,
+      // snode->key_size);
       if (key_size - pos < snode->key_size ||
           !util::bytes_equal(snode->key, snode->key_size, key + pos,
                              snode->key_size)) {
         // key not found in the trie
+        // printf("tid=%d, Short node keysize=%d\n", threadIdx.x,
+        // snode->key_size);
         value_hp = nullptr;
         value_size = 0;
         return;
@@ -346,6 +430,7 @@ __device__ __forceinline__ void get(const uint8_t *key, int key_size,
       assert(pos < key_size);
 
       const FullNode *fnode = static_cast<const FullNode *>(node);
+      // printf("tid=%d, Full node nibble=0x%x\n", threadIdx.x, key[pos]);
 
       node = fnode->childs[key[pos]];
       pos += 1;
