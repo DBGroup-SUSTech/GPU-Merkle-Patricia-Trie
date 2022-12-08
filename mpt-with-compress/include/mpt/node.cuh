@@ -187,6 +187,10 @@ struct FullNode : public Node {
       }
     } 
   }
+
+  __device__ __forceinline__ void print_self() {
+    printf("FullNode %p , its parent %p\n ",this,parent);
+  }
 };
 
 struct ShortNode : public Node {
@@ -226,12 +230,20 @@ struct ShortNode : public Node {
     int val_hash_size = val->hash_size;
     return key_compact_size + val_hash_size;
   }
+
+  __device__ __forceinline__ void print_self() {
+    printf("ShortNode %p , its parent %p\n",this,parent);
+  }
 };
 
 struct ValueNode : public Node {
   const uint8_t *d_value;
   const uint8_t *h_value;
   int value_size;
+
+  __device__ __forceinline__ void print_self() {
+    printf("ValueNode %p , its parent %p\n",this,parent);
+  }
 };
 
 // struct HashNode : public Node {
