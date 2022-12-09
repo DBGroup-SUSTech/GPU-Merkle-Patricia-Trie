@@ -16,7 +16,7 @@
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int *&values_indexs, int &n) {
   // parameters
-  n = 1 << 2;
+  n = 1 << 16;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution<> dist(0, 1 << 8);
@@ -499,7 +499,7 @@ TEST(GpuMpt, HashsOnepassFullTrie) {
                      keys_hexs_indexs);
 
   GpuMPT::Compress::MPT mpt;
-  mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+  mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
                     values_bytes_indexs, n);
   printf("finish puts\n");
   mpt.hash_onepass(keys_hexs, keys_hexs_indexs, n);
@@ -746,10 +746,60 @@ TEST(CpuMpt, LedgerdbHash) {
   delete[] keys_hexs_indexs;
 }
 
-TEST(GpuMPT, Pus2PhaseTest) {
-  const int n = 3;
+TEST(GpuMPT, Pus2PhaseTestBasic) {
+GPUHashMultiThread::load_constants();
+
+    const int n = 3;
   const uint8_t *keys_bytes =
       reinterpret_cast<const uint8_t *>("doedogdogglesworth");
+  int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
+  const uint8_t *values_bytes =
+      reinterpret_cast<const uint8_t *>("reindeerpuppycat");
+  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  const uint8_t *values_ptrs[n]{};
+  int values_sizes[n]{};
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+  cutil::print_hex(keys_hexs, keys_hexs_indexs[2*n-1]);
+  
+  GpuMPT::Compress::MPT mpt;
+  mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
+                    values_bytes_indexs, n);
+  mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+
+  for (int i = 0; i < n; ++i) {
+    EXPECT_TRUE(util::bytes_equal(
+        util::element_start(values_bytes_indexs, i, values_bytes),
+        util::element_size(values_bytes_indexs, i), values_ptrs[i],
+        values_sizes[i]));
+    // printf("Key=");
+    // cutil::println_str(util::element_start(keys_bytes_indexs, i, keys_bytes),
+    //                    util::element_size(keys_bytes_indexs, i));
+    // printf("Hex=");
+    // cutil::println_hex(util::element_start(keys_hexs_indexs, i, keys_hexs),
+    //                    util::element_size(keys_hexs_indexs, i));
+    // printf("Value=");
+    // cutil::println_str(
+    //     util::element_start(values_bytes_indexs, i, values_bytes),
+    //     util::element_size(values_bytes_indexs, i));
+    // printf("Get=");
+    // cutil::println_str(values_ptrs[i], values_sizes[i]);
+  }
+
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
+
+}
+
+TEST(GpuMPT, Pus2PhaseTestOverride) {
+  const int n = 3;
+  const uint8_t *keys_bytes =
+      reinterpret_cast<const uint8_t *>("dogdogdogglesworth");
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
   const uint8_t *values_bytes =
       reinterpret_cast<const uint8_t *>("reindeerpuppycat");
@@ -766,5 +816,72 @@ TEST(GpuMPT, Pus2PhaseTest) {
 
   GpuMPT::Compress::MPT mpt;
   mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
-                    values_bytes_indexs, n); 
+                    values_bytes_indexs, n);
+  mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+
+  ASSERT_TRUE(util::bytes_equal(values_ptrs[0], values_sizes[0],
+                                reinterpret_cast<const uint8_t *>("puppy"),
+                                strlen("puppy")));
+  ASSERT_TRUE(util::bytes_equal(values_ptrs[1], values_sizes[1],
+                                reinterpret_cast<const uint8_t *>("puppy"),
+                                strlen("puppy")));
+  ASSERT_TRUE(util::bytes_equal(values_ptrs[2], values_sizes[2],
+                                reinterpret_cast<const uint8_t *>("cat"),
+                                strlen("cat")));
+
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
 }
+
+TEST(GpuMPT, Pus2PhaseTestFullTrie) {
+  const uint8_t *keys_bytes = nullptr;
+  int *keys_bytes_indexs = nullptr;
+  const uint8_t *values_bytes = nullptr;
+  int *values_bytes_indexs = nullptr;
+  int n;
+
+  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  GpuMPT::Compress::MPT mpt;
+  mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
+                    values_bytes_indexs, n);
+
+  const uint8_t **values_ptrs = new const uint8_t *[n] {};
+  int *values_sizes = new int[n]{};
+  mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+
+  for (int i = 0; i < n; ++i) {
+    ASSERT_TRUE(util::bytes_equal(
+        util::element_start(values_bytes_indexs, i, values_bytes),
+        util::element_size(values_bytes_indexs, i), values_ptrs[i],
+        values_sizes[i]));
+    // printf("Key=");
+    // cutil::println_hex(util::element_start(keys_bytes_indexs, i, keys_bytes),
+    //                    util::element_size(keys_bytes_indexs, i));
+    // printf("Hex=");
+    // cutil::println_hex(util::element_start(keys_hexs_indexs, i, keys_hexs),
+    //                    util::element_size(keys_hexs_indexs, i));
+    // printf("Value=");
+    // cutil::println_hex(
+    //     util::element_start(values_bytes_indexs, i, values_bytes),
+    //     util::element_size(values_bytes_indexs, i));
+    // printf("Get=");
+    // cutil::println_hex(values_ptrs[i], values_sizes[i]);
+  }
+
+  delete[] keys_bytes;
+  delete[] keys_bytes_indexs;
+  delete[] values_bytes;
+  delete[] values_bytes_indexs;
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
+  delete[] values_ptrs;
+  delete[] values_sizes; 
+} 
+

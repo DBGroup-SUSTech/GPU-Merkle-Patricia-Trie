@@ -1,6 +1,7 @@
 
 #pragma once
 #include "mpt/gpu_mpt_kernels.cuh"
+#include "util/hash_util.cuh"
 #include "util/allocator.cuh"
 #include "util/utils.cuh"
 namespace GpuMPT {
@@ -215,6 +216,7 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   uint8_t *d_values_bytes = nullptr;
   int *d_values_indexs = nullptr;
   const uint8_t **d_values_hps = nullptr;
+  int * d_compress_num;
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
@@ -227,6 +229,8 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
   CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
   CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_compress_num, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_compress_num, 0, 1));
 
   CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
   CHECK_ERROR(
@@ -243,7 +247,7 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
     puts_baseline<<<1, 1>>>(d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps, 1,
                                             d_root_p_, allocator_);
   // CHECK_ERROR(cudaDeviceSynchronize());
-    GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
+    // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   // printf("%d\n",util::elements_size_sum(keys_indexs, 1));
   // printf("%d\n",util::elements_size_sum(values_indexs, 1)); 
   // d_keys_hexs += util::elements_size_sum(keys_indexs, 1);
@@ -254,7 +258,6 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   // n -= 1;
 
   // split get
-  int compress_num = 0;
   FullNode ** d_compress_nodes;
   CHECK_ERROR(gutil::DeviceAlloc(d_compress_nodes, 2*n));
   CHECK_ERROR(gutil::DeviceSet(d_compress_nodes, 0, 2*n));
@@ -262,19 +265,29 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   int num_blocks = (n + block_size - 1) / block_size;
   GKernel::
     puts_2phase_get_split_phase<<<num_blocks, block_size>>>(d_keys_hexs, d_keys_indexs, d_compress_nodes, 
-                                      compress_num, n, d_root_p_, allocator_);
-  GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
+                                      d_compress_num, n, d_root_p_, allocator_);
+  
+  Node ** d_print_nodes;
+  CHECK_ERROR(gutil::DeviceAlloc(d_print_nodes, 100));
+  CHECK_ERROR(gutil::DeviceSet(d_print_nodes, 0, 100));
+  // CHECK_ERROR(cudaDeviceSynchronize());
+  // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   // put mark
   // CHECK_ERROR(cudaDeviceSynchronize());
-  // GKernel::
-  //   puts_2phase_put_mark_phase<<<num_blocks, block_size>>>(d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, 
-  //                           d_values_hps, n, compress_num, d_root_p_, d_compress_nodes, allocator_);
-  // CHECK_ERROR(cudaDeviceSynchronize());
+  GKernel::
+    puts_2phase_put_mark_phase<<<num_blocks, block_size>>>(d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, 
+                            d_values_hps, n, d_compress_num, d_root_p_, d_compress_nodes, allocator_);
+  // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
+
+  // CUDA_SAFE_CALL(cudaDeviceSynchronize());
   // // compress
-  // num_blocks = (compress_num + block_size -1)/block_size;
-  // GKernel::
-  //   puts_2phase_compress_phase<<<num_blocks, block_size>>>(d_compress_nodes, compress_num, allocator_);
-  
+  int * compress_num = new int[1];
+  CHECK_ERROR(gutil::CpyDeviceToHost(compress_num, d_compress_num,1));
+
+  num_blocks = (*compress_num + block_size -1)/block_size;
+  GKernel::
+    puts_2phase_compress_phase<<<num_blocks, block_size>>>(d_compress_nodes, *compress_num, d_root_p_,allocator_);
+  // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   // CHECK_ERROR(cudaDeviceSynchronize());
 }
 } // namespace Compress
