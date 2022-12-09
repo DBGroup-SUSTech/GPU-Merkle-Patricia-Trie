@@ -122,6 +122,8 @@ struct Node {
   Node *parent;
   int visit_count;
   int parent_visit_count_added;
+
+  int lock;
 };
 
 struct FullNode : public Node {
