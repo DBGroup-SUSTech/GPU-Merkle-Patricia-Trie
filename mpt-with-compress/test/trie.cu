@@ -688,6 +688,7 @@ TEST(GpuMpt, HashsOnepassFullTrie) {
 }
 
 TEST(Trie, PutBenchmark) {
+  GPUHashMultiThread::load_constants();
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
@@ -721,6 +722,7 @@ TEST(Trie, PutBenchmark) {
                                    values_bytes_indexs, n);
     timer_cpu_put_baseline.stop(); // timer end -----------------------------
 
+    cpu_mpt_baseline.hashs_dirty_flag();
     cpu_mpt_baseline.get_root_hash(hash, hash_size);
     printf("CPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
@@ -729,10 +731,12 @@ TEST(Trie, PutBenchmark) {
   {
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     timer_gpu_put_baseline.start(); // timer start --------------------------
-    gpu_mpt_baseline.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
-                                   values_bytes_indexs, n);
+    gpu_mpt_baseline.puts_baseline_with_valuehp(
+        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+        values_hps, n);
     timer_gpu_put_baseline.stop(); // timer end -----------------------------
 
+    gpu_mpt_baseline.hash_onepass(keys_hexs, keys_hexs_indexs, n);
     gpu_mpt_baseline.get_root_hash(hash, hash_size);
     printf("GPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
@@ -746,6 +750,7 @@ TEST(Trie, PutBenchmark) {
         values_hps, n);
     timer_gpu_put_latching.stop(); // timer start --------------------------
 
+    gpu_mpt_latching.hash_onepass(keys_hexs, keys_hexs_indexs, n);
     gpu_mpt_latching.get_root_hash(hash, hash_size);
     printf("GPU latching hash is: ");
     cutil::println_hex(hash, hash_size);
