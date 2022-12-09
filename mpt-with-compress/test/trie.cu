@@ -711,6 +711,7 @@ TEST(Trie, PutBenchmark) {
   perf::CpuTimer<perf::us> timer_cpu_put_baseline;
   perf::CpuTimer<perf::us> timer_gpu_put_baseline;
   perf::CpuTimer<perf::us> timer_gpu_put_latching;
+  perf::CpuTimer<perf::us> timer_gpu_put_2phase;
 
   const uint8_t *hash = nullptr;
   int hash_size = 0;
@@ -756,6 +757,19 @@ TEST(Trie, PutBenchmark) {
     cutil::println_hex(hash, hash_size);
   }
 
+  {
+    GpuMPT::Compress::MPT gpu_mpt_2phase;
+    timer_gpu_put_2phase.start(); // timer start --------------------------
+    gpu_mpt_2phase.puts_2phase(
+        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,n);
+    timer_gpu_put_2phase.stop(); // timer start --------------------------
+
+    gpu_mpt_2phase.hash_onepass(keys_hexs, keys_hexs_indexs, n);
+    gpu_mpt_2phase.get_root_hash(hash, hash_size);
+    printf("GPU latching hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
   printf("\033[31m"
          "PU put baseline execution time: %d us, throughput %d qps\n"
          "\033[0m",
@@ -771,6 +785,11 @@ TEST(Trie, PutBenchmark) {
          "\033[0m",
          timer_gpu_put_latching.get(),
          (int)(n * 1000.0 / timer_gpu_put_latching.get() * 1000.0));
+  printf("\033[31m"
+        "GPU put 2phase execution time: %d us, throughput %d qps\n"
+        "\033[0m",
+        timer_gpu_put_2phase.get(),
+        (int)(n * 1000.0 / timer_gpu_put_2phase.get() * 1000.0));
 }
 
 TEST(Trie, HashBenchmark) {
