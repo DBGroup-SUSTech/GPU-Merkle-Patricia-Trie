@@ -16,7 +16,7 @@
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int *&values_indexs, int &n) {
   // parameters
-  n = 1 << 16;
+  n = 1 << 2;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution<> dist(0, 1 << 8);
@@ -766,12 +766,12 @@ TEST(Trie, PutBenchmark) {
 
     gpu_mpt_2phase.hash_onepass(keys_hexs, keys_hexs_indexs, n);
     gpu_mpt_2phase.get_root_hash(hash, hash_size);
-    printf("GPU latching hash is: ");
+    printf("GPU 2phase hash is: ");
     cutil::println_hex(hash, hash_size);
   }
 
   printf("\033[31m"
-         "PU put baseline execution time: %d us, throughput %d qps\n"
+         "CPU put baseline execution time: %d us, throughput %d qps\n"
          "\033[0m",
          timer_cpu_put_baseline.get(),
          (int)(n * 1000.0 / timer_cpu_put_baseline.get() * 1000.0));
