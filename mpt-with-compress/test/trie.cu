@@ -642,7 +642,7 @@ TEST(GpuMpt, HashsOnepassFullTrie) {
 
   GpuMPT::Compress::MPT mpt;
   mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
-                    values_bytes_indexs, n);
+                  values_bytes_indexs, n);
   printf("finish puts\n");
   mpt.hash_onepass(keys_hexs, keys_hexs_indexs, n);
 
@@ -760,8 +760,8 @@ TEST(Trie, PutBenchmark) {
   {
     GpuMPT::Compress::MPT gpu_mpt_2phase;
     timer_gpu_put_2phase.start(); // timer start --------------------------
-    gpu_mpt_2phase.puts_2phase(
-        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,n);
+    gpu_mpt_2phase.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
+                               values_bytes_indexs, n);
     timer_gpu_put_2phase.stop(); // timer start --------------------------
 
     gpu_mpt_2phase.hash_onepass(keys_hexs, keys_hexs_indexs, n);
@@ -786,10 +786,10 @@ TEST(Trie, PutBenchmark) {
          timer_gpu_put_latching.get(),
          (int)(n * 1000.0 / timer_gpu_put_latching.get() * 1000.0));
   printf("\033[31m"
-        "GPU put 2phase execution time: %d us, throughput %d qps\n"
-        "\033[0m",
-        timer_gpu_put_2phase.get(),
-        (int)(n * 1000.0 / timer_gpu_put_2phase.get() * 1000.0));
+         "GPU put 2phase execution time: %d us, throughput %d qps\n"
+         "\033[0m",
+         timer_gpu_put_2phase.get(),
+         (int)(n * 1000.0 / timer_gpu_put_2phase.get() * 1000.0));
 }
 
 TEST(Trie, HashBenchmark) {
@@ -993,9 +993,9 @@ TEST(CpuMpt, LedgerdbHash) {
 }
 
 TEST(GpuMPT, Pus2PhaseTestBasic) {
-GPUHashMultiThread::load_constants();
+  GPUHashMultiThread::load_constants();
 
-    const int n = 3;
+  const int n = 3;
   const uint8_t *keys_bytes =
       reinterpret_cast<const uint8_t *>("doedogdogglesworth");
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
@@ -1011,11 +1011,11 @@ GPUHashMultiThread::load_constants();
 
   keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
                      keys_hexs_indexs);
-  cutil::print_hex(keys_hexs, keys_hexs_indexs[2*n-1]);
-  
+  cutil::print_hex(keys_hexs, keys_hexs_indexs[2 * n - 1]);
+
   GpuMPT::Compress::MPT mpt;
   mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
-                    values_bytes_indexs, n);
+                  values_bytes_indexs, n);
   mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
 
   for (int i = 0; i < n; ++i) {
@@ -1039,7 +1039,6 @@ GPUHashMultiThread::load_constants();
 
   delete[] keys_hexs;
   delete[] keys_hexs_indexs;
-
 }
 
 TEST(GpuMPT, Pus2PhaseTestOverride) {
@@ -1062,7 +1061,7 @@ TEST(GpuMPT, Pus2PhaseTestOverride) {
 
   GpuMPT::Compress::MPT mpt;
   mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
-                    values_bytes_indexs, n);
+                  values_bytes_indexs, n);
   mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
 
   ASSERT_TRUE(util::bytes_equal(values_ptrs[0], values_sizes[0],
@@ -1096,7 +1095,7 @@ TEST(GpuMPT, Pus2PhaseTestFullTrie) {
 
   GpuMPT::Compress::MPT mpt;
   mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
-                    values_bytes_indexs, n);
+                  values_bytes_indexs, n);
 
   const uint8_t **values_ptrs = new const uint8_t *[n] {};
   int *values_sizes = new int[n]{};
@@ -1128,6 +1127,5 @@ TEST(GpuMPT, Pus2PhaseTestFullTrie) {
   delete[] keys_hexs;
   delete[] keys_hexs_indexs;
   delete[] values_ptrs;
-  delete[] values_sizes; 
-} 
-
+  delete[] values_sizes;
+}
