@@ -3,6 +3,7 @@
 // basically from https://github.com/monero-project/monero
 
 #include "util/utils.cuh"
+#include "cryptopp/keccak.h"
 
 #define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
 
@@ -125,10 +126,17 @@ namespace CPUHash
         keccak(in, inlen, md, sizeof(state_t));
     }
 
-    void calculate_hash(const uint8_t *input, int input_size, uint8_t *hash)
+    // void calculate_hash(const uint8_t *input, int input_size, uint8_t *hash)
+    // {
+    //     uint8_t hash_state[200];
+    //     keccak1600((const uint8_t *)input, (size_t)input_size, hash_state);
+    //     memcpy(hash, hash_state, HASH_SIZE);
+    // }
+
+    void calculate_hash(const uint8_t *input, int input_size, uint8_t * hash)
     {
-        uint8_t hash_state[200];
-        keccak1600((const uint8_t *)input, (size_t)input_size, hash_state);
-        memcpy(hash, hash_state, HASH_SIZE);
+        CryptoPP::Keccak_256 ckeccak;
+        ckeccak.Update((const CryptoPP::byte*)input, (size_t)input_size);
+        ckeccak.Final((CryptoPP::byte*)hash);
     }
 }

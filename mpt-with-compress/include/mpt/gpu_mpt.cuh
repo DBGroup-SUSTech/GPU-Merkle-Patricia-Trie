@@ -378,12 +378,8 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
 
   // CUDA_SAFE_CALL(cudaDeviceSynchronize());
   // // compress
-  int * compress_num = new int[1];
-  CHECK_ERROR(gutil::CpyDeviceToHost(compress_num, d_compress_num,1));
-
-  num_blocks = (*compress_num + block_size -1)/block_size;
   GKernel::
-    puts_2phase_compress_phase<<<num_blocks, block_size>>>(d_compress_nodes, *compress_num, d_start_, d_root_p_,allocator_);
+    puts_2phase_compress_phase<<<2*num_blocks, block_size>>>(d_compress_nodes, d_compress_num, d_start_, d_root_p_,allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   CHECK_ERROR(cudaDeviceSynchronize());
 }

@@ -24,6 +24,13 @@ find_package(GTest)
 
 include(GoogleTest)
 
+set(CRYPTOPP_INCLUDE_DIR "/usr/local/include/cryptopp/*.h")
+find_path(CRYPTOPP_INCLUDE_DIR cryptopp/*.h PATHS )
+include_directories(${CRYPTOPP_INCLUDE_DIR})
+
+find_library(CRYPTOPP_LIB cryptopp)
+message(STATUS "finding ${CRYPTOPP_LIB}")
+
 set(SRC_PATH ${PROJECT_SOURCE_DIR}/src)
 set(INC_PATH ${PROJECT_SOURCE_DIR}/include)
 set(TEST_PATH ${PROJECT_SOURCE_DIR}/test)
@@ -39,7 +46,9 @@ foreach(test_file IN LISTS TEST_FILES)
         target_link_libraries(${test_name} 
                 PRIVATE cuda 
                 PRIVATE fmt::fmt 
-                PRIVATE GTest::gtest_main) 
+                PRIVATE GTest::gtest_main
+                ${CRYPTOPP_LIB}
+        ) 
 
         gtest_discover_tests(${test_name})
 endforeach()

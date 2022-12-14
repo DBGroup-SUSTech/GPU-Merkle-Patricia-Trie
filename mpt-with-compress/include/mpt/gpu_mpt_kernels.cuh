@@ -9,6 +9,7 @@ namespace GKernel {
 
 __global__ void set_root_ptr(ShortNode *start, Node ***tmp) {
   assert(blockDim.x == 1 && gridDim.x == 1);
+  start->type = Node::Type::SHORT;
   *tmp = &start->val;
 }
 
@@ -737,6 +738,8 @@ __device__ __forceinline__ void split_node(ShortNode * snode, FullNode *& split_
   split_end = parent;
   FullNode * f_node = static_cast<FullNode*>(snode->parent);
   f_node->childs[last_key] = first_f_node;
+  if (snode->parent == *root)
+    *root = first_f_node;
 }
 
 __device__ __forceinline__ void do_put_2phase_get_split_phase(const uint8_t* key, int key_size,
@@ -760,11 +763,13 @@ __device__ __forceinline__ void do_put_2phase_get_split_phase(const uint8_t* key
         }
         return; // short node unmatch -> split 
       }
+      if(match ==0){
+        return;
+      }
       remain_key_size -= match;
       key_router += match;
       node = s_node->val;
-      return;
-      // break;
+      break;
     }
     case Node::Type::FULL: {
       FullNode * f_node = static_cast<FullNode*>(node);
@@ -813,7 +818,7 @@ __global__ void puts_2phase_get_split_phase(const uint8_t *keys_hexs,
 
 __device__ __forceinline__ void do_put_2phase_put_mark_phase(
     const uint8_t *key, int key_size, const uint8_t *value, int value_size,
-    const uint8_t *value_hp, Node *root, FullNode *& compress_node,
+    const uint8_t *value_hp, Node **root_p, FullNode *& compress_node,
     ShortNode * start_node, DynamicAllocator<ALLOC_CAPACITY> &node_allocator){
   ValueNode *vnode = node_allocator.malloc<ValueNode>();
   vnode->type = Node::Type::VALUE;
@@ -838,16 +843,21 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
         s_node->val = vnode;
         return;
       }
-      unsigned long long int old =
-        atomicCAS((unsigned long long int *)&s_node->val, 0,
-                  (unsigned long long int)next_insert_node);
+      unsigned long long int old; 
+      if (s_node == start_node){
+        old = atomicCAS((unsigned long long int *)root_p, 0,
+                    (unsigned long long int)next_insert_node);
+      } else {
+        old = atomicCAS((unsigned long long int *)&s_node->val, 0,
+                    (unsigned long long int)next_insert_node);
+      }
       node = s_node->val;
       node->parent = s_node;
       if (old == 0) {
         next_insert_node = node_allocator.malloc<FullNode>();
         next_insert_node->type = Node::Type::FULL;
       }
-        
+      
       break;
     }
     case Node::Type::FULL: {
@@ -898,7 +908,7 @@ __global__ void puts_2phase_put_mark_phase(const uint8_t *keys_hexs, int *keys_i
   int value_size = util::element_size(values_indexs, tid);
   const uint8_t *value_hp = values_hps[tid];
   FullNode * compress_node = nullptr;
-  do_put_2phase_put_mark_phase(key, key_size, value, value_size, value_hp, *root_p,
+  do_put_2phase_put_mark_phase(key, key_size, value, value_size, value_hp, root_p,
                  compress_node, start_node, node_allocator);
   if(compress_node != nullptr) {
     int compress_place = atomicAdd(compress_num, 1);
@@ -959,7 +969,8 @@ __device__ __forceinline__ void do_put_2phase_compress_phase(FullNode *& compres
     return;
   }
   compress(compressing_node, compress_node, start_node, root_p, allocator);
-  Node * node = compress_node->parent;
+  // Node * node = compress_node->parent;
+  Node * node = compress_node;
   while(node != nullptr) {
     switch (node->type){
     case Node::Type::SHORT: {
@@ -995,10 +1006,10 @@ __device__ __forceinline__ void do_put_2phase_compress_phase(FullNode *& compres
   }
 }
 
-__global__ void puts_2phase_compress_phase(FullNode ** compress_nodes, int compress_num, ShortNode * start_node,
+__global__ void puts_2phase_compress_phase(FullNode ** compress_nodes, int *compress_num, ShortNode * start_node,
                                 Node ** root_p, DynamicAllocator<ALLOC_CAPACITY> allocator){
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if(tid >= compress_num){
+  if(tid >= *compress_num){
     return;
   }
   FullNode * compress_node = compress_nodes[tid];

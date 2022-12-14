@@ -16,7 +16,7 @@
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int *&values_indexs, int &n) {
   // parameters
-  n = 1 << 2;
+  n = 1 << 16;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution<> dist(0, 1 << 8);
