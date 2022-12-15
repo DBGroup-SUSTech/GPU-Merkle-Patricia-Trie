@@ -612,13 +612,13 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
           // TODO: delete aligned
           uint8_t *buffer_global =
               allocator.malloc(util::align_to<8>(encoding_size_0));
-          // memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
+          memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
 
           fnode->encode(buffer_global);
           encoding_0 = buffer_global;
 
         } else { // encode into shared memory
-          // memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
+          memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
 
           fnode->encode(buffer_shared);
           encoding_0 = buffer_shared;
@@ -633,12 +633,12 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
           // TODO: delete aligned
           uint8_t *buffer_global =
               allocator.malloc(util::align_to<8>(encoding_size_0));
-          // memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
+          memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
 
           snode->encode(buffer_global);
           encoding_0 = buffer_global;
         } else { // encode into shared memory
-          // memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
+          memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
 
           snode->encode(buffer_shared);
           encoding_0 = buffer_shared;
