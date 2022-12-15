@@ -507,7 +507,7 @@ __device__ __forceinline__ void do_hash_onepass_mark_phase(const uint8_t *key,
       ValueNode *vnode = static_cast<ValueNode *>(node);
       leaf = vnode;
       // TODO: leaf do not have visit count?
-      atomicAdd(&leaf->visit_count, 1);
+      // atomicAdd(&leaf->visit_count, 1);
       return;
     }
     case Node::Type::SHORT: {
@@ -585,13 +585,13 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
     assert(leaf->type == Node::Type::FULL || leaf->type == Node::Type::SHORT);
 
     // should_visit means all child's hash and my value's hash are ready
-    int should_visit_0 = 0;
+    int should_visit = 0;
     if (lane_id == 0) {
-      should_visit_0 = (1 == atomicSub(&leaf->visit_count, 1));
+      should_visit = (1 == atomicSub(&leaf->visit_count, 1));
     }
 
     // broadcast from 0 to warp
-    int should_visit = __shfl_sync(WARP_FULL_MASK, should_visit_0, 0);
+    should_visit = __shfl_sync(WARP_FULL_MASK, should_visit, 0);
     if (!should_visit) {
       break;
     }
@@ -648,7 +648,6 @@ do_hash_onepass_update_phase(Node *leaf, int lane_id, uint64_t *A, uint64_t *B,
     }
 
     // broadcast encoding size to warp
-    __syncthreads();
     int encoding_size = __shfl_sync(WARP_FULL_MASK, encoding_size_0, 0);
     uint8_t *encoding = reinterpret_cast<uint8_t *>(__shfl_sync(
         WARP_FULL_MASK, reinterpret_cast<unsigned long>(encoding_0), 0));
