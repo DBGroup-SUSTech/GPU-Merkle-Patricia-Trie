@@ -7,3 +7,6 @@
 * 测量PCIe传输开销
 * 优化share memory。
 * 优化hash。
+
+## Dependency
+* crypto++ 8.7
