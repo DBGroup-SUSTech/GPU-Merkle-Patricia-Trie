@@ -49,8 +49,8 @@ foreach(test_file IN LISTS TEST_FILES)
                 PRIVATE cuda 
                 PRIVATE fmt::fmt 
                 PRIVATE GTest::gtest_main
-                ${CRYPTOPP_LIB}
-                ${LIBXML2_LIBRARIES}
+                PRIVATE ${CRYPTOPP_LIB}
+                PRIVATE ${LIBXML2_LIBRARIES}
         ) 
 
         gtest_discover_tests(${test_name})
