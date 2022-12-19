@@ -915,13 +915,14 @@ __global__ void puts_2phase_put_mark_phase(const uint8_t *keys_hexs, int *keys_i
   }
 }
 
-__device__ __forceinline__ void compress(ShortNode *& compressing_node, FullNode *& compress_target,
+__device__ __forceinline__ void compress(ShortNode * compressing_node, FullNode * compress_target,
                                 ShortNode * start_node, Node ** root_p, DynamicAllocator<ALLOC_CAPACITY> &allocator) {
   assert(compress_target->child_num()==1);
   int index = compress_target->find_single_child();
   // printf("thread id: %d,child index: %d\n", threadIdx.x, index);
   int key_size = compressing_node->key_size++;
   if (key_size == 0) {
+    // printf("compressing node address: %p", compressing_node);
     compressing_node->val = compress_target->childs[index];
     compressing_node->val->parent = compressing_node;
     // printf("threadid: %d?\n", threadIdx.x);
@@ -940,6 +941,7 @@ __device__ __forceinline__ void compress(ShortNode *& compressing_node, FullNode
   assert(compress_target->parent->type == Node::Type::FULL);
   FullNode * compress_target_parent = static_cast<FullNode*>(compress_target->parent);
   if (compress_target_parent->child_num()>1) {
+    // assert(false);
 #pragma unroll 17
     for (int i = 0; i<17;i++) {
       atomicCAS((unsigned long long int *)&compress_target_parent->childs[i], 
@@ -951,6 +953,7 @@ __device__ __forceinline__ void compress(ShortNode *& compressing_node, FullNode
 
 __device__ __forceinline__ void do_put_2phase_compress_phase(FullNode *& compress_node,ShortNode * start_node,
                                   Node ** root_p, DynamicAllocator<ALLOC_CAPACITY> &allocator){
+  Node * node = compress_node;
   if (compress_node->child_num()>1){
     // printf("thread:%d return, %p\n", threadIdx.x, compress_node);
     // FullNode *f = static_cast<FullNode*>(compress_node);
@@ -958,18 +961,22 @@ __device__ __forceinline__ void do_put_2phase_compress_phase(FullNode *& compres
     // {
     //   printf("child:%d address:%p\n",i, f->childs[i]);
     // }
-    
-    return;
+    int old = atomicCAS(&compress_node->compressed, 0, 1);
+    if (old) {
+      return;
+    }
+    node = node->parent;
+    // return;
   } 
   ShortNode * compressing_node = allocator.malloc<ShortNode>();
   compressing_node->type = Node::Type::SHORT;
-  int old = atomicCAS(&compress_node->compressed, 0, 1);
-  if (old) {
-    return;
-  }
-  compress(compressing_node, compress_node, start_node, root_p, allocator);
+  // int old = atomicCAS(&compress_node->compressed, 0, 1);
+  // if (old) {
+  //   return;
+  // }
+  // compress(compressing_node, compress_node, start_node, root_p, allocator);
   // Node * node = compress_node->parent;
-  Node * node = compress_node;
+  // Node * node = compress_node;
   while(node != nullptr) {
     switch (node->type){
     case Node::Type::SHORT: {
@@ -992,6 +999,7 @@ __device__ __forceinline__ void do_put_2phase_compress_phase(FullNode *& compres
       break;
     }
     default:{
+      assert(false);
       // if (node != nullptr){
       // printf("assert node: %d, address:%p\n",node->type, node);
       // if (node->type == Node::Type::FULL){
@@ -1038,9 +1046,6 @@ __device__ __forceinline__ void dfs_traverse_trie(Node * root) {
   case Node::Type::SHORT: {
     ShortNode * s = static_cast<ShortNode*>(root);
     s->print_self();
-    for (int i =0 ;i<s->key_size;i++){
-      printf("skey: %d\n",s->key[i]);
-    } 
     dfs_traverse_trie(s->val);
     return;
   }

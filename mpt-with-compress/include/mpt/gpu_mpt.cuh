@@ -381,6 +381,7 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   GKernel::
     puts_2phase_compress_phase<<<2*num_blocks, block_size>>>(d_compress_nodes, d_compress_num, d_start_, d_root_p_,allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
+  
   CHECK_ERROR(cudaDeviceSynchronize());
 }
 } // namespace Compress

@@ -16,7 +16,7 @@
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int *&values_indexs, int &n) {
   // parameters
-  n = 1 << 16;
+  n = 1 << 8;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution<> dist(0, 1 << 8);
@@ -593,7 +593,6 @@ TEST(GpuMpt, PutsLatchingFullTrie) {
   const uint8_t **values_ptrs = new const uint8_t *[n] {};
   int *values_sizes = new int[n]{};
   mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
-
   for (int i = 0; i < n; ++i) {
     ASSERT_TRUE(util::bytes_equal(
         util::element_start(values_bytes_indexs, i, values_bytes),
