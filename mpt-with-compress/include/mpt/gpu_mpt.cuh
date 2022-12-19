@@ -36,7 +36,7 @@ class MPT {
 
   void puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
                             const uint8_t *values_bytes, int *values_indexs,
-                            int n);
+                            const uint8_t **values_hps, int n);
   /// @brief hash according to key value
   // TODO
   void puts_with_hash_baseline();
@@ -85,10 +85,10 @@ class MPT {
   }
   ~MPT() {
     // TODO release all nodes
-    CHECK_ERROR(gutil::DeviceFree(d_start_));
-    CHECK_ERROR(cudaStreamDestroy(stream_cp_));
-    CHECK_ERROR(cudaStreamDestroy(stream_op_));
-    allocator_.free_all();
+    // CHECK_ERROR(gutil::DeviceFree(d_start_));
+    // CHECK_ERROR(cudaStreamDestroy(stream_cp_));
+    // CHECK_ERROR(cudaStreamDestroy(stream_op_));
+    // allocator_.free_all();
   }
 };
 
@@ -241,11 +241,17 @@ void MPT::puts_latching_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_keys_hexs, keys_hexs_size));
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_keys_indexs, keys_indexs_size));
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_values_bytes, values_bytes_size));
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_values_indexs, values_indexs_size));
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_values_hps, values_hps_size));
+  //   CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+  //   CHECK_ERROR(gutil::PinHost(keys_indexs, keys_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+  //   CHECK_ERROR(gutil::PinHost(values_indexs, values_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
 
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_keys_hexs, keys_hexs,
                                           keys_hexs_size, stream_op_));
@@ -255,12 +261,12 @@ void MPT::puts_latching_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
                                           values_indexs_size, stream_op_));
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_hps, values_hps,
                                           values_hps_size, stream_op_));
-
-  CHECK_ERROR(gutil::CpyHostToDeviceAsync(
-      d_values_bytes, values_bytes, values_bytes_size, stream_cp_));  // async
+  CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
+                                          values_bytes_size, stream_cp_));
 
   // perf::CpuTimer<perf::us> timer_gpu_put_latching;
-  // timer_gpu_put_latching.start();  // timer start --------------------------
+  // timer_gpu_put_latching.start();  // timer start
+  // --------------------------
 
   // puts
   const int rpwarp_block_size = 1024;
@@ -271,7 +277,8 @@ void MPT::puts_latching_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
           d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs,
           d_values_hps, n, d_start_, allocator_);
   CHECK_ERROR(cudaDeviceSynchronize());  // synchronize all threads
-
+  //   CHECK_ERROR(cudaStreamSynchronize(stream_op_));
+  //   CHECK_ERROR(cudaStreamSynchronize(stream_cp_));
   // timer_gpu_put_latching.stop();  // timer stop ---------------------------
   // printf(
   //     "\033[31m"
@@ -455,12 +462,7 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
 
 void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
                                const uint8_t *values_bytes, int *values_indexs,
-                               int n) {
-  const uint8_t **values_hps = new const uint8_t *[n];
-  for (int i = 0; i < n; ++i) {
-    values_hps[i] = util::element_start(values_indexs, i, values_bytes);
-  }
-
+                               const uint8_t **values_hps, int n) {
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
@@ -475,13 +477,24 @@ void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_keys_hexs, keys_hexs_size));
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_keys_indexs, keys_indexs_size));
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_values_bytes, values_bytes_size));
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_values_indexs, values_indexs_size));
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_values_hps, values_hps_size));
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_compress_num, 1));
+  //   CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+  //   CHECK_ERROR(gutil::PinHost(keys_indexs, keys_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+  //   CHECK_ERROR(gutil::PinHost(values_indexs, values_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_compress_num, 1));
   CHECK_ERROR(gutil::DeviceSet(d_compress_num, 0, 1));
+
+  FullNode **d_compress_nodes;
+  CHECK_ERROR(gutil::DeviceAlloc(d_compress_nodes, 2 * n));
+  CHECK_ERROR(gutil::DeviceSet(d_compress_nodes, 0, 2 * n));
 
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_keys_hexs, keys_hexs,
                                           keys_hexs_size, stream_op_));
@@ -491,9 +504,8 @@ void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
                                           values_indexs_size, stream_op_));
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_hps, values_hps,
                                           values_hps_size, stream_op_));
-
-  CHECK_ERROR(gutil::CpyHostToDeviceAsync(
-      d_values_bytes, values_bytes, values_bytes_size, stream_cp_));  // async
+  CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
+                                          values_bytes_size, stream_cp_));
   // use put_baseline once in case root is null
   // CHECK_ERROR(cudaDeviceSynchronize());
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
@@ -507,22 +519,19 @@ void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
   // n -= 1;
 
   // split get
-  FullNode **d_compress_nodes;
-  CHECK_ERROR(gutil::DeviceAllocPinned(d_compress_nodes, 2 * n));
-  CHECK_ERROR(gutil::DeviceSet(d_compress_nodes, 0, 2 * n));
   const int block_size = 128;
   int num_blocks = (n + block_size - 1) / block_size;
-  GKernel::
-      puts_2phase_get_split_phase<<<num_blocks, block_size, 0, stream_op_>>>(
-          d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, n,
-          d_root_p_, d_start_, allocator_);
+  GKernel::puts_2phase_get_split_phase<<<2 * num_blocks, block_size, 0,
+                                         stream_op_>>>(
+      d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, n,
+      d_root_p_, d_start_, allocator_);
 
   // CHECK_ERROR(cudaDeviceSynchronize());
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   // put mark
   // CHECK_ERROR(cudaDeviceSynchronize());
   GKernel::
-      puts_2phase_put_mark_phase<<<num_blocks, block_size, 0, stream_op_>>>(
+      puts_2phase_put_mark_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
           d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs,
           d_values_hps, n, d_compress_num, d_root_p_, d_compress_nodes,
           d_start_, allocator_);
@@ -537,5 +546,6 @@ void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
 
   CHECK_ERROR(cudaDeviceSynchronize());
 }
+
 }  // namespace Compress
 }  // namespace GpuMPT

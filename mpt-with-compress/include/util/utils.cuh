@@ -66,13 +66,14 @@ cudaError_t CpyHostToDeviceAsync(T *dst, const T *src, size_t count,
 }
 
 template <typename T>
-cudaError_t DeviceAlloc(T *&data, size_t count) {
-  return cudaMalloc((void **)&data, sizeof(T) * count);
+cudaError_t PinHost(T *src, size_t count) {
+  return cudaHostRegister((void *)src, sizeof(T) * count,
+                          cudaHostRegisterDefault);
 }
 
 template <typename T>
-cudaError_t DeviceAllocPinned(T *&data, size_t count) {
-  return cudaMallocHost((void **)&data, sizeof(T) * count);
+cudaError_t DeviceAlloc(T *&data, size_t count) {
+  return cudaMalloc((void **)&data, sizeof(T) * count);
 }
 
 template <typename T>
