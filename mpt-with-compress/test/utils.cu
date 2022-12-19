@@ -1,5 +1,6 @@
 #include "util/utils.cuh"
 #include <gtest/gtest.h>
+#include "bench/wiki.cuh"
 TEST(Util, BytesEqual) {
   ASSERT_FALSE(util::bytes_equal(reinterpret_cast<const uint8_t *>("12345"), 5,
                                  reinterpret_cast<const uint8_t *>("12"), 2));
@@ -33,4 +34,35 @@ TEST(Util, HexToCompact) {
 // 		}
 // 	}
 // }
+}
+
+TEST(Bench, ReadWiki) {
+  uint8_t * key = (uint8_t*)malloc(1000000000);
+  int * key_index = (int *)malloc(1000000*sizeof(int));
+  int keys_num = read_wiki_data_all_keys("/home/ymx/ccpro/dataset/wiki/index", key, key_index);
+  for (int i = 20; i < 25; i++)
+  {
+    int from = key_index[2*i];
+    int to = key_index[2*i+1];
+    while (from <= to){
+      printf("%c", (char)key[from]);
+      from ++;
+    }
+    printf("\n");
+  }
+  printf("numbers: %d\n", keys_num);
+  uint8_t * value = (uint8_t*)malloc(4000000000);
+  int * value_index = (int *)malloc(10000000*sizeof(int));
+  int value_num = read_wiki_data_all_values("/home/ymx/ccpro/dataset/wiki/value/", value, value_index);
+  for (int i = 20; i < 25; i++)
+  {
+    int from = value_index[2*i];
+    int to = value_index[2*i+1];
+    while (from <= to){
+      printf("%c", (char)value[from]);
+      from ++;
+    }
+    printf("\n");
+  }
+  printf("numbers: %d\n", value_num);
 }

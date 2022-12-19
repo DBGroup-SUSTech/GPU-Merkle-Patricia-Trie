@@ -47,8 +47,8 @@ __device__ __forceinline__ void batch_keccak_device(const uint64_t *data, uint64
         }
         
         B[t] = 0;
-        int _64byte_index = databitlen/64;
-        if(databitlen%64 !=0) {
+        int _64byte_index = databitlen >> 6;
+        if(databitlen - 64*_64byte_index !=0) {
             _64byte_index ++;
         }
         if (t < _64byte_index)
@@ -56,7 +56,7 @@ __device__ __forceinline__ void batch_keccak_device(const uint64_t *data, uint64
             B[t] = data[t];
         }
 
-        int const bytes = databitlen / 8;
+        int const bytes = databitlen >> 3;
         int byte_index = bytes;
         uint8_t *p = (uint8_t *)B;
         if (t == 0)

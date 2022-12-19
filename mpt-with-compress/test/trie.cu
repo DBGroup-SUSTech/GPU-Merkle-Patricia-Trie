@@ -16,7 +16,7 @@
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int *&values_indexs, int &n) {
   // parameters
-  n = 1 << 8;
+  n = 1 << 16;
   std::random_device rd;
   std::mt19937 g(rd());
   std::uniform_int_distribution<> dist(0, 1 << 8);
@@ -30,7 +30,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
   keys_bytes = reinterpret_cast<uint8_t *>(keys);
 
   // generate random values
-  const int value_size = 800;
+  const int value_size = 8000;
   uint8_t *values = new uint8_t[value_size * n]{};
   for (int i = 0; i < value_size * n; ++i) {
     // values[i] = dist(g);
