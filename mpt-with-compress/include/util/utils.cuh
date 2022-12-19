@@ -10,11 +10,11 @@
 #define HASH_SIZE 32
 #define HASH_DATA_AREA 136
 
-#define ALLOC_CAPACITY (uint64_t(1) << 32) // 4GB for node
+#define ALLOC_CAPACITY (uint64_t(1) << 32)  // 4GB for node
 #define MAX_NODES 1 << 18
 #define MAX_REQUEST 1 << 20
 #define MAX_KEY_SIZE 128
-#define MAX_DEPTH (MAX_KEY_SIZE * 2) // TODO: compression would eliminate it
+#define MAX_DEPTH (MAX_KEY_SIZE * 2)  // TODO: compression would eliminate it
 #define MAX_RESULT_BUF 1 << 30
 
 #define WARP_FULL_MASK 0xFFFFFFFF
@@ -37,7 +37,7 @@ inline void print_hex(const uint8_t *str, size_t size) {
     printf("%02x ", str[i]);
   }
 }
-} // namespace cutil
+}  // namespace cutil
 
 namespace gutil {
 
@@ -47,12 +47,32 @@ cudaError_t CpyDeviceToHost(T *dst, const T *src, size_t count) {
 }
 
 template <typename T>
+cudaError_t CpyDeviceToHostAsync(T *dst, const T *src, size_t count,
+                                 cudaStream_t st) {
+  return cudaMemcpyAsync(dst, src, sizeof(T) * count, cudaMemcpyDeviceToHost,
+                         st);
+}
+
+template <typename T>
 cudaError_t CpyHostToDevice(T *dst, const T *src, size_t count) {
   return cudaMemcpy(dst, src, sizeof(T) * count, cudaMemcpyHostToDevice);
 }
 
-template <typename T> cudaError_t DeviceAlloc(T *&data, size_t count) {
+template <typename T>
+cudaError_t CpyHostToDeviceAsync(T *dst, const T *src, size_t count,
+                                 cudaStream_t st) {
+  return cudaMemcpyAsync(dst, src, sizeof(T) * count, cudaMemcpyHostToDevice,
+                         st);
+}
+
+template <typename T>
+cudaError_t DeviceAlloc(T *&data, size_t count) {
   return cudaMalloc((void **)&data, sizeof(T) * count);
+}
+
+template <typename T>
+cudaError_t DeviceAllocPinned(T *&data, size_t count) {
+  return cudaMallocHost((void **)&data, sizeof(T) * count);
 }
 
 template <typename T>
@@ -60,9 +80,12 @@ cudaError_t DeviceSet(T *data, uint8_t value, size_t count) {
   return cudaMemset(data, value, sizeof(T) * count);
 }
 
-template <typename T> cudaError_t DeviceFree(T *data) { return cudaFree(data); }
+template <typename T>
+cudaError_t DeviceFree(T *data) {
+  return cudaFree(data);
+}
 
-} // namespace gutil
+}  // namespace gutil
 
 namespace util {
 
@@ -80,13 +103,13 @@ enum class Device { CPU, GPU };
 __host__ __device__ __forceinline__ int element_size(const int *indexs, int i) {
   return indexs[2 * i + 1] - indexs[2 * i] + 1;
 }
-__host__ __device__ __forceinline__ const uint8_t *
-element_start(const int *indexs, int i, const uint8_t *all_bytes) {
+__host__ __device__ __forceinline__ const uint8_t *element_start(
+    const int *indexs, int i, const uint8_t *all_bytes) {
   return &all_bytes[indexs[2 * i]];
 }
 __host__ __device__ __forceinline__ int elements_size_sum(const int *indexs,
                                                           int n) {
-  int i = n - 1; // i of the last num;
+  int i = n - 1;  // i of the last num;
   return indexs[2 * i + 1] + 1;
 }
 __host__ __device__ __forceinline__ int indexs_size_sum(int n) { return 2 * n; }
@@ -120,9 +143,8 @@ __host__ __device__ __forceinline__ bool bytes_equal(const uint8_t *bytes1,
   return true;
 }
 
-__host__ __device__ __forceinline__ int
-key_bytes_to_hex(const uint8_t *key_bytes, int key_bytes_size,
-                 uint8_t *key_hexs) {
+__host__ __device__ __forceinline__ int key_bytes_to_hex(
+    const uint8_t *key_bytes, int key_bytes_size, uint8_t *key_hexs) {
   int l = key_bytes_size * 2 + 1;
   for (int i = 0; i < key_bytes_size; ++i) {
     key_hexs[i * 2] = key_bytes[i] / 16;
@@ -134,8 +156,9 @@ key_bytes_to_hex(const uint8_t *key_bytes, int key_bytes_size,
 
 /// @brief hex encoding to compact encoding according to ethereum yellow paper
 /// @param bytes should contain len(hex without terminator)/2+1 bytes
-__host__ __device__ __forceinline__ int
-hex_to_compact(const uint8_t *hex, int hex_size, uint8_t *bytes) {
+__host__ __device__ __forceinline__ int hex_to_compact(const uint8_t *hex,
+                                                       int hex_size,
+                                                       uint8_t *bytes) {
   uint8_t terminator = 0x00;
   // delete terminator
   if (hex_size > 0 && hex[hex_size - 1] == 16) {
@@ -146,8 +169,8 @@ hex_to_compact(const uint8_t *hex, int hex_size, uint8_t *bytes) {
   // encoding flags
   bytes[0] = terminator < 5;
   if (hex_size & 1 == 1) {
-    bytes[0] |= (1 << 4); // old flag
-    bytes[0] |= hex[0];   // first nibble
+    bytes[0] |= (1 << 4);  // old flag
+    bytes[0] |= hex[0];    // first nibble
     hex += 1;
     hex_size -= 1;
     bytes += 1;
@@ -158,17 +181,18 @@ hex_to_compact(const uint8_t *hex, int hex_size, uint8_t *bytes) {
   }
   return bytes_size;
 }
-template <int N> __host__ __device__ __forceinline__ int align_to(int n) {
+template <int N>
+__host__ __device__ __forceinline__ int align_to(int n) {
   return n - (n % N) + N;
 }
-} // namespace util
+}  // namespace util
 
-#define CHECK_ERROR(call)                                                      \
-  do {                                                                         \
-    cudaError_t err = call;                                                    \
-    if (err != cudaSuccess) {                                                  \
-      printf("CUDA error at %s %d: %s\n", __FILE__, __LINE__,                  \
-             cudaGetErrorString(err));                                         \
-      exit(EXIT_FAILURE);                                                      \
-    }                                                                          \
+#define CHECK_ERROR(call)                                     \
+  do {                                                        \
+    cudaError_t err = call;                                   \
+    if (err != cudaSuccess) {                                 \
+      printf("CUDA error at %s %d: %s\n", __FILE__, __LINE__, \
+             cudaGetErrorString(err));                        \
+      exit(EXIT_FAILURE);                                     \
+    }                                                         \
   } while (0)
