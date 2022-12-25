@@ -17,8 +17,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 find_package(fmt)
 find_package(GTest)
+find_package(LibXml2 REQUIRED)
 include(GoogleTest)
-
+set(CRYPTOPP_INCLUDE_DIR "/usr/local/include/cryptopp/*.h")
+find_path(CRYPTOPP_INCLUDE_DIR cryptopp/*.h PATHS )
+include_directories(${CRYPTOPP_INCLUDE_DIR}
+                    ${LIBXML2_INCLUDE_DIR})
 find_library(CRYPTOPP_LIB cryptopp)
 message(STATUS "finding ${CRYPTOPP_LIB}")
 
@@ -39,6 +43,7 @@ foreach(test_file IN LISTS TEST_FILES)
                 PRIVATE fmt::fmt 
                 PRIVATE GTest::gtest_main
                 PRIVATE ${CRYPTOPP_LIB}
+                PRIVATE ${LIBXML2_LIBRARIES}
         ) 
 
         gtest_discover_tests(${test_name})
