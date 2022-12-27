@@ -19,7 +19,7 @@ find_package(fmt)
 find_package(GTest)
 find_package(LibXml2 REQUIRED)
 include(GoogleTest)
-set(CRYPTOPP_INCLUDE_DIR "/usr/local/include/cryptopp/*.h")
+set(CRYPTOPP_INCLUDE_DIR "/usr/include/x86_64-linux-gnu/cryptopp/*.h")
 find_path(CRYPTOPP_INCLUDE_DIR cryptopp/*.h PATHS )
 include_directories(${CRYPTOPP_INCLUDE_DIR}
                     ${LIBXML2_INCLUDE_DIR})

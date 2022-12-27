@@ -46,7 +46,7 @@ int read_wiki_data_keys(std::string file_name, uint8_t* out, int * index, int &n
   int length = 0;
   int i = 0;
   while(std::getline(file, line, '\n')) {
-    const char *split = ":";
+    // const char *split = ":";
     
     memcpy(out + length, (uint8_t *)line.c_str(), line.size());
     index[2*i] = length + start_index;

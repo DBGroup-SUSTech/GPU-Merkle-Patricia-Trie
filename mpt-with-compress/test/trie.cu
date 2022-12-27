@@ -1189,9 +1189,15 @@ TEST(GpuMPT, Pus2PhaseTestOverride) {
   mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
 
   ASSERT_TRUE(util::bytes_equal(values_ptrs[0], values_sizes[0],
+                                reinterpret_cast<const uint8_t *>("reindeer"),
+                                strlen("reindeer")) or
+              util::bytes_equal(values_ptrs[0], values_sizes[0],
                                 reinterpret_cast<const uint8_t *>("puppy"),
                                 strlen("puppy")));
-  ASSERT_TRUE(util::bytes_equal(values_ptrs[1], values_sizes[1],
+  ASSERT_TRUE(util::bytes_equal(values_ptrs[0], values_sizes[0],
+                                reinterpret_cast<const uint8_t *>("reindeer"),
+                                strlen("reindeer")) or
+              util::bytes_equal(values_ptrs[1], values_sizes[1],
                                 reinterpret_cast<const uint8_t *>("puppy"),
                                 strlen("puppy")));
   ASSERT_TRUE(util::bytes_equal(values_ptrs[2], values_sizes[2],
@@ -1266,8 +1272,8 @@ TEST(Trie, PutWikiBench) {
   int *keys_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
   uint8_t *value_buffer = (uint8_t*)malloc(2000000000);
   int *values_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
-  int n = read_wiki_data_all_keys("/home/ymx/ccpro/dataset/wiki/index", keys_buffer, keys_bytes_indexs_buffer);
-  int vn = read_wiki_data_all_values("/home/ymx/ccpro/dataset/wiki/value", value_buffer, values_bytes_indexs_buffer);
+  int n = read_wiki_data_all_keys("/root/datasets/wiki/index", keys_buffer, keys_bytes_indexs_buffer);
+  int vn = read_wiki_data_all_values("/root/datasets/wiki/value", value_buffer, values_bytes_indexs_buffer);
 
   ASSERT_EQ(n, vn);
 
@@ -1468,8 +1474,8 @@ TEST(Trie, HashWikiBench) {
   int *keys_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
   uint8_t *value_buffer = (uint8_t*)malloc(2000000000);
   int *values_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
-  int n = read_wiki_data_all_keys("/home/ymx/ccpro/dataset/wiki/index", keys_buffer, keys_bytes_indexs_buffer);
-  int vn = read_wiki_data_all_values("/home/ymx/ccpro/dataset/wiki/value", value_buffer, values_bytes_indexs_buffer);
+  int n = read_wiki_data_all_keys("/root/datasets/wiki/index", keys_buffer, keys_bytes_indexs_buffer);
+  int vn = read_wiki_data_all_values("/root/datasets/wiki/value", value_buffer, values_bytes_indexs_buffer);
 
   ASSERT_EQ(n, vn);
   n= 10000;  
@@ -1549,4 +1555,8 @@ TEST(Trie, HashWikiBench) {
   delete[] values_bytes_indexs_buffer;
   delete[] keys_hexs;
   delete[] keys_hexs_indexs;
+}
+
+TEST(Trie, LookupBench) {
+  
 }
