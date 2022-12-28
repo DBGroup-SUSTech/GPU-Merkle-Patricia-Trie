@@ -47,10 +47,17 @@ int read_wiki_data_keys(std::string file_name, uint8_t* out, int * index, int &n
   int i = 0;
   while(std::getline(file, line, '\n')) {
     // const char *split = ":";
-    
-    memcpy(out + length, (uint8_t *)line.c_str(), line.size());
+    std::string catagory;
+    std::string subcatagory;
+    std::stringstream ss(line);
+    std::getline(ss, catagory, ':');
+    std::getline(ss, subcatagory, ':');
+    std::string out_key = catagory+subcatagory;
+    // printf("%s \n",out_key.c_str());
+    // break;
+    memcpy(out + length, (uint8_t *)out_key.c_str(), out_key.size());
     index[2*i] = length + start_index;
-    length += line.size();
+    length += out_key.size();
     index[2*i+1] = length +start_index - 1;
     i++;
   }
@@ -70,6 +77,47 @@ int read_wiki_data_all_keys(std::string dir_path, uint8_t * out, int * index) {
   for(int i = 0; i<file_names.size();i++){
     int line_num = 0;
     int file_length = read_wiki_data_keys(file_names[i], file_out, file_index, line_num, file_start);
+    file_out += file_length;
+    file_index += line_num*2;
+    file_start += file_length;
+    total_keys +=line_num;
+  }
+  return total_keys;
+}
+
+int read_wiki_data_keys_full(std::string file_name, uint8_t* out, int * index, int &n, int start_index = 0) {
+  std::ifstream file;
+  file.open(file_name, std::ios::in);
+  if (!file){
+    printf("no file\n");
+    assert(false);
+  }
+  std::string line;
+  int length = 0;
+  int i = 0;
+  while(std::getline(file, line, '\n')) {
+    memcpy(out + length, (uint8_t *)line.c_str(), line.size());
+    index[2*i] = length + start_index;
+    length += line.size();
+    index[2*i+1] = length +start_index - 1;
+    i++;
+  }
+  n = i;
+  // Close the file
+  file.close();
+  return length;
+}
+
+int read_wiki_data_all_keys_full(std::string dir_path, uint8_t * out, int * index) {
+  std::vector<std::string> file_names;
+  getFiles(dir_path, file_names);
+  uint8_t * file_out = out;
+  int * file_index = index;
+  int file_start = 0;
+  int total_keys = 0;
+  for(int i = 0; i<file_names.size();i++){
+    int line_num = 0;
+    int file_length = read_wiki_data_keys_full(file_names[i], file_out, file_index, line_num, file_start);
     file_out += file_length;
     file_index += line_num*2;
     file_start += file_length;
