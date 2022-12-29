@@ -15,12 +15,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 #       1. This project do not pass leak-santizer
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 
-find_package(fmt)
 find_package(GTest)
+find_package(LibXml2 REQUIRED)
 include(GoogleTest)
-
 find_library(CRYPTOPP_LIB cryptopp)
-message(STATUS "finding ${CRYPTOPP_LIB}")
 
 set(SRC_PATH ${PROJECT_SOURCE_DIR}/src)
 set(INC_PATH ${PROJECT_SOURCE_DIR}/include)
@@ -33,12 +31,13 @@ foreach(test_file IN LISTS TEST_FILES)
         get_filename_component(test_name ${test_file} NAME_WE)
         add_executable(${test_name} ${test_file} ${SRC_FILES})
         target_include_directories(${test_name}
-                PUBLIC ${INC_PATH})  
+                PUBLIC ${INC_PATH}
+                PUBLIC ${LIBXML2_INCLUDE_DIR})  
         target_link_libraries(${test_name} 
                 PRIVATE cuda 
-                PRIVATE fmt::fmt 
                 PRIVATE GTest::gtest_main
                 PRIVATE ${CRYPTOPP_LIB}
+                PRIVATE ${LIBXML2_LIBRARIES}
         ) 
 
         gtest_discover_tests(${test_name})
