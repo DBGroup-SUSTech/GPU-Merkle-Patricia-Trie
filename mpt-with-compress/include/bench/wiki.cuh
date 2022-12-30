@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "util/utils.cuh"
+
 namespace bench {
 namespace wiki {
 
@@ -152,9 +154,12 @@ int read_wiki_data_values(std::string file_name, uint8_t *out, int *index,
       if (xmlStrcmp(cur->name, (const xmlChar *)"page") == 0) {
         xmlBufferPtr nodeBuffer = xmlBufferCreate();
         if (xmlNodeDump(nodeBuffer, doc, cur, 0, 1) > 0) {
+          int value_size = util::align_to<8>(static_cast<int>(nodeBuffer->use));
+          memset(out + length, 0, value_size);
           memcpy(out + length, (uint8_t *)nodeBuffer->content, nodeBuffer->use);
           index[2 * i] = length + start_index;
-          length += nodeBuffer->use;
+          // length += nodeBuffer->use;
+          length += value_size;
           index[2 * i + 1] = length + start_index - 1;
           i++;
           // printf("%s\n",(char *)nodeBuffer->content);
