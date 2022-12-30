@@ -10,6 +10,7 @@
 #include "util/timer.cuh"
 #include "bench/wiki.cuh"
 
+
 /// @brief generate data for testing
 /// @param keys_bytes   hex encoding
 /// @param keys_bytes_indexs  pointers to keys_bytes
@@ -1279,6 +1280,7 @@ TEST(GpuMPT, Pus2PhaseTestFullTrie) {
 }
 
 TEST(Trie, PutWikiBench) {
+  using namespace bench::wiki;
   // const uint8_t *keys_bytes = nullptr;
   // int *keys_bytes_indexs = nullptr;
   // const uint8_t *values_bytes = nullptr;
@@ -1290,8 +1292,8 @@ TEST(Trie, PutWikiBench) {
   int *keys_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
   uint8_t *value_buffer = (uint8_t*)malloc(2000000000);
   int *values_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
-  int n = read_wiki_data_all_keys("/home/ymx/ccpro/dataset/wiki/index", keys_buffer, keys_bytes_indexs_buffer);
-  int vn = read_wiki_data_all_values("/home/ymx/ccpro/dataset/wiki/value", value_buffer, values_bytes_indexs_buffer);
+  int n = read_wiki_data_all_keys(WIKI_INDEX_PATH, keys_buffer, keys_bytes_indexs_buffer);
+  int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, value_buffer, values_bytes_indexs_buffer);
 
   ASSERT_EQ(n, vn);
 
@@ -1479,6 +1481,7 @@ TEST(Trie, PutWikiBench) {
 }
 
 TEST(Trie, HashWikiBench) {
+  using namespace bench::wiki;
   GPUHashMultiThread::load_constants();
 
   // const uint8_t *keys_bytes = nullptr;
@@ -1492,8 +1495,8 @@ TEST(Trie, HashWikiBench) {
   int *keys_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
   uint8_t *value_buffer = (uint8_t*)malloc(2000000000);
   int *values_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
-  int n = read_wiki_data_all_keys("/home/ymx/ccpro/dataset/wiki/index", keys_buffer, keys_bytes_indexs_buffer);
-  int vn = read_wiki_data_all_values("/home/ymx/ccpro/dataset/wiki/value", value_buffer, values_bytes_indexs_buffer);
+  int n = read_wiki_data_all_keys(WIKI_INDEX_PATH, keys_buffer, keys_bytes_indexs_buffer);
+  int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, value_buffer, values_bytes_indexs_buffer);
 
   ASSERT_EQ(n, vn);
   n= 10000;  
@@ -1639,6 +1642,7 @@ TEST(Trie, LookupBench) {
 }
 
 TEST(GPUMPT, KeyTypeBench) {
+  using namespace bench::wiki;
     // const uint8_t *keys_bytes = nullptr;
   // int *keys_bytes_indexs = nullptr;
   // const uint8_t *values_bytes = nullptr;
@@ -1650,8 +1654,8 @@ TEST(GPUMPT, KeyTypeBench) {
   int *keys_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
   uint8_t *value_buffer = (uint8_t*)malloc(2000000000);
   int *values_bytes_indexs_buffer = (int *)malloc(1000000*sizeof(int));
-  int n = read_wiki_data_all_keys_full("/home/ymx/ccpro/dataset/wiki/index", keys_buffer, keys_bytes_indexs_buffer);
-  int vn = read_wiki_data_all_values("/home/ymx/ccpro/dataset/wiki/value", value_buffer, values_bytes_indexs_buffer);
+  int n = read_wiki_data_all_keys_full(WIKI_INDEX_PATH, keys_buffer, keys_bytes_indexs_buffer);
+  int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, value_buffer, values_bytes_indexs_buffer);
 
   ASSERT_EQ(n, vn);
 

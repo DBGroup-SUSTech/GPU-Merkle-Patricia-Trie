@@ -1,26 +1,32 @@
 #pragma once
-#include <fstream>
-#include <string>
-#include <cstdint>
+#include <dirent.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
-#include <iostream>
 #include <sys/types.h>
-#include <dirent.h>
-#include <vector>
-#include <sstream>
 
-void getFiles(std::string path, std::vector<std::string>& filenames)
-{
-	DIR *pDir;
-  struct dirent* ptr;
-  if(!(pDir = opendir(path.c_str()))){
-      std::cout<<"Folder doesn't Exist!"<<std::endl;
-      assert(false);
+#include <cstdint>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+namespace bench {
+namespace wiki {
+
+constexpr const char *WIKI_INDEX_PATH{"./dataset/wiki/index"};
+constexpr const char *WIKI_VALUE_PATH{"./dataset/wiki/value"};
+
+void getFiles(std::string path, std::vector<std::string> &filenames) {
+  DIR *pDir;
+  struct dirent *ptr;
+  if (!(pDir = opendir(path.c_str()))) {
+    std::cout << "Folder doesn't Exist!" << std::endl;
+    assert(false);
   }
-  while((ptr = readdir(pDir))!=0) {
-      if (strcmp(ptr->d_name, ".") != 0 && strcmp(ptr->d_name, "..") != 0){
-          filenames.push_back(path + "/" + ptr->d_name);
+  while ((ptr = readdir(pDir)) != 0) {
+    if (strcmp(ptr->d_name, ".") != 0 && strcmp(ptr->d_name, "..") != 0) {
+      filenames.push_back(path + "/" + ptr->d_name);
     }
   }
   closedir(pDir);
@@ -35,30 +41,31 @@ void print_elements(xmlNodePtr node) {
   }
 }
 
-int read_wiki_data_keys(std::string file_name, uint8_t* out, int * index, int &n, int start_index = 0) {
+int read_wiki_data_keys(std::string file_name, uint8_t *out, int *index, int &n,
+                        int start_index = 0) {
   std::ifstream file;
   file.open(file_name, std::ios::in);
-  if (!file){
+  if (!file) {
     printf("no file\n");
     assert(false);
   }
   std::string line;
   int length = 0;
   int i = 0;
-  while(std::getline(file, line, '\n')) {
+  while (std::getline(file, line, '\n')) {
     // const char *split = ":";
     std::string catagory;
     std::string subcatagory;
     std::stringstream ss(line);
     std::getline(ss, catagory, ':');
     std::getline(ss, subcatagory, ':');
-    std::string out_key = catagory+subcatagory;
+    std::string out_key = catagory + subcatagory;
     // printf("%s \n",out_key.c_str());
     // break;
     memcpy(out + length, (uint8_t *)out_key.c_str(), out_key.size());
-    index[2*i] = length + start_index;
+    index[2 * i] = length + start_index;
     length += out_key.size();
-    index[2*i+1] = length +start_index - 1;
+    index[2 * i + 1] = length + start_index - 1;
     i++;
   }
   n = i;
@@ -67,39 +74,41 @@ int read_wiki_data_keys(std::string file_name, uint8_t* out, int * index, int &n
   return length;
 }
 
-int read_wiki_data_all_keys(std::string dir_path, uint8_t * out, int * index) {
+int read_wiki_data_all_keys(std::string dir_path, uint8_t *out, int *index) {
   std::vector<std::string> file_names;
   getFiles(dir_path, file_names);
-  uint8_t * file_out = out;
-  int * file_index = index;
+  uint8_t *file_out = out;
+  int *file_index = index;
   int file_start = 0;
   int total_keys = 0;
-  for(int i = 0; i<file_names.size();i++){
+  for (int i = 0; i < file_names.size(); i++) {
     int line_num = 0;
-    int file_length = read_wiki_data_keys(file_names[i], file_out, file_index, line_num, file_start);
+    int file_length = read_wiki_data_keys(file_names[i], file_out, file_index,
+                                          line_num, file_start);
     file_out += file_length;
-    file_index += line_num*2;
+    file_index += line_num * 2;
     file_start += file_length;
-    total_keys +=line_num;
+    total_keys += line_num;
   }
   return total_keys;
 }
 
-int read_wiki_data_keys_full(std::string file_name, uint8_t* out, int * index, int &n, int start_index = 0) {
+int read_wiki_data_keys_full(std::string file_name, uint8_t *out, int *index,
+                             int &n, int start_index = 0) {
   std::ifstream file;
   file.open(file_name, std::ios::in);
-  if (!file){
+  if (!file) {
     printf("no file\n");
     assert(false);
   }
   std::string line;
   int length = 0;
   int i = 0;
-  while(std::getline(file, line, '\n')) {
+  while (std::getline(file, line, '\n')) {
     memcpy(out + length, (uint8_t *)line.c_str(), line.size());
-    index[2*i] = length + start_index;
+    index[2 * i] = length + start_index;
     length += line.size();
-    index[2*i+1] = length +start_index - 1;
+    index[2 * i + 1] = length + start_index - 1;
     i++;
   }
   n = i;
@@ -108,42 +117,45 @@ int read_wiki_data_keys_full(std::string file_name, uint8_t* out, int * index, i
   return length;
 }
 
-int read_wiki_data_all_keys_full(std::string dir_path, uint8_t * out, int * index) {
+int read_wiki_data_all_keys_full(std::string dir_path, uint8_t *out,
+                                 int *index) {
   std::vector<std::string> file_names;
   getFiles(dir_path, file_names);
-  uint8_t * file_out = out;
-  int * file_index = index;
+  uint8_t *file_out = out;
+  int *file_index = index;
   int file_start = 0;
   int total_keys = 0;
-  for(int i = 0; i<file_names.size();i++){
+  for (int i = 0; i < file_names.size(); i++) {
     int line_num = 0;
-    int file_length = read_wiki_data_keys_full(file_names[i], file_out, file_index, line_num, file_start);
+    int file_length = read_wiki_data_keys_full(
+        file_names[i], file_out, file_index, line_num, file_start);
     file_out += file_length;
-    file_index += line_num*2;
+    file_index += line_num * 2;
     file_start += file_length;
-    total_keys +=line_num;
+    total_keys += line_num;
   }
   return total_keys;
 }
 
-int read_wiki_data_values(std::string file_name, uint8_t * out, int * index, int &n, int start_index) {
+int read_wiki_data_values(std::string file_name, uint8_t *out, int *index,
+                          int &n, int start_index) {
   xmlDocPtr doc = xmlReadFile(file_name.c_str(), nullptr, 0);
   if (doc == nullptr) {
     printf("parse error\n");
-    assert(false); 
+    assert(false);
   }
   xmlNodePtr root = xmlDocGetRootElement(doc);
   int length = 0;
   int i = 0;
   for (xmlNodePtr cur = root->children; cur != nullptr; cur = cur->next) {
     if (cur->type == XML_ELEMENT_NODE) {
-      if (xmlStrcmp(cur->name, (const xmlChar*)"page")==0) {
+      if (xmlStrcmp(cur->name, (const xmlChar *)"page") == 0) {
         xmlBufferPtr nodeBuffer = xmlBufferCreate();
-        if(xmlNodeDump(nodeBuffer,doc,cur, 0, 1) > 0){
+        if (xmlNodeDump(nodeBuffer, doc, cur, 0, 1) > 0) {
           memcpy(out + length, (uint8_t *)nodeBuffer->content, nodeBuffer->use);
-          index[2*i] = length + start_index;
-          length +=nodeBuffer->use;
-          index[2*i+1] = length + start_index - 1;
+          index[2 * i] = length + start_index;
+          length += nodeBuffer->use;
+          index[2 * i + 1] = length + start_index - 1;
           i++;
           // printf("%s\n",(char *)nodeBuffer->content);
           // printf("use:%d\nsize:%d\n",nodeBuffer->use,nodeBuffer->size);
@@ -158,20 +170,23 @@ int read_wiki_data_values(std::string file_name, uint8_t * out, int * index, int
   return length;
 }
 
-int read_wiki_data_all_values(std::string dir_path, uint8_t * out, int * index){
+int read_wiki_data_all_values(std::string dir_path, uint8_t *out, int *index) {
   std::vector<std::string> file_names;
   getFiles(dir_path, file_names);
-  uint8_t * file_out = out;
-  int * file_index = index;
+  uint8_t *file_out = out;
+  int *file_index = index;
   int file_start = 0;
   int total_values = 0;
-  for(int i = 0; i<file_names.size();i++){
+  for (int i = 0; i < file_names.size(); i++) {
     int line_num = 0;
-    int file_length = read_wiki_data_values(file_names[i], file_out, file_index, line_num, file_start);
+    int file_length = read_wiki_data_values(file_names[i], file_out, file_index,
+                                            line_num, file_start);
     file_out += file_length;
-    file_index += line_num*2;
+    file_index += line_num * 2;
     file_start += file_length;
-    total_values +=line_num;
+    total_values += line_num;
   }
   return total_values;
 }
+}  // namespace wiki
+}  // namespace bench
