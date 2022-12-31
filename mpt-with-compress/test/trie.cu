@@ -448,7 +448,7 @@ TEST(GpuMpt, PutsBaselineFullTrie) {
 
   GpuMPT::Compress::MPT mpt;
   mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
-                    values_bytes_indexs, n);
+                         values_bytes_indexs, n);
 
   const uint8_t **values_ptrs = new const uint8_t *[n] {};
   int *values_sizes = new int[n]{};
@@ -787,7 +787,7 @@ TEST(Trie, PutBenchmark) {
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     timer_gpu_put_baseline.start();  // timer start
-    gpu_mpt_baseline.puts_baseline_with_valuehp(
+    gpu_mpt_baseline.puts_baseline_loop_with_valuehp(
         keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
         values_hps, n);
     timer_gpu_put_baseline.stop();  // timer end
