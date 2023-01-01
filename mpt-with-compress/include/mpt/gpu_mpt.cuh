@@ -387,9 +387,18 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
 
   const int block_size = 128;
   const int num_blocks = (n + block_size - 1) / block_size;
+  perf::CpuTimer<perf::us> timer_gpu_get_parallel;
+  timer_gpu_get_parallel.start();
   GKernel::gets_parallel<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, n, d_values_hps, d_values_sizes, d_root_p_);
-
+  CHECK_ERROR(cudaDeviceSynchronize());
+  timer_gpu_get_parallel.stop();
+  printf(
+      "\033[31m"
+      "GPU lookup kernel time: %d us, throughput %d qps\n"
+      "\033[0m",
+      timer_gpu_get_parallel.get(),
+      (int)(n * 1000.0 / timer_gpu_get_parallel.get() * 1000.0));
   CHECK_ERROR(gutil::CpyDeviceToHost(values_hps, d_values_hps, n));
   CHECK_ERROR(gutil::CpyDeviceToHost(values_sizes, d_values_sizes, n));
 }
