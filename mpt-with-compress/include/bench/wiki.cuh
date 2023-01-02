@@ -16,8 +16,8 @@
 namespace bench {
 namespace wiki {
 
-constexpr const char *WIKI_INDEX_PATH{"./dataset/wiki/index"};
-constexpr const char *WIKI_VALUE_PATH{"./dataset/wiki/value"};
+constexpr const char *WIKI_INDEX_PATH{PROJECT_SOURCE_DIR "/../dataset/wiki/index"};
+constexpr const char *WIKI_VALUE_PATH{PROJECT_SOURCE_DIR "/../dataset/wiki/value"};
 
 void getFiles(std::string path, std::vector<std::string> &filenames) {
   DIR *pDir;

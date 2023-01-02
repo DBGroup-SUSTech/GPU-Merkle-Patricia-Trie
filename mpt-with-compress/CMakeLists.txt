@@ -20,6 +20,8 @@ find_package(LibXml2 REQUIRED)
 include(GoogleTest)
 find_library(CRYPTOPP_LIB cryptopp)
 
+add_compile_definitions(PROJECT_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\")
+
 set(SRC_PATH ${PROJECT_SOURCE_DIR}/src)
 set(INC_PATH ${PROJECT_SOURCE_DIR}/include)
 set(TEST_PATH ${PROJECT_SOURCE_DIR}/test)
