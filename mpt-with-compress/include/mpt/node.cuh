@@ -1,6 +1,7 @@
 #pragma once
-#include "util/utils.cuh"
 #include <stdint.h>
+
+#include "util/utils.cuh"
 namespace CpuMPT {
 namespace Compress {
 
@@ -18,7 +19,7 @@ struct FullNode : public Node {
   Node *childs[17];
   int dirty;
 
-  uint8_t buffer[32]; // save hash or encoding
+  uint8_t buffer[32];  // save hash or encoding
 
   /// @brief encode current node into bytes, prepare data for hash
   /// @param bytes require at most 17 * 32 bytes
@@ -62,7 +63,7 @@ struct ShortNode : public Node {
   Node *val;
   int dirty;
 
-  uint8_t buffer[32]; // save hash or encoding
+  uint8_t buffer[32];  // save hash or encoding
 
   /// @brief  encode current nodes into bytes, prepare data for hash
   /// @param bytes require at most key_size + 32 bytes
@@ -75,7 +76,8 @@ struct ShortNode : public Node {
     int bytes_size = 0;
 
     int key_compact_size = util::hex_to_compact(key, key_size, bytes);
-    assert((key_size - 1) / 2 + 1 == key_compact_size);
+    // assert((key_size - 1) / 2 + 1 == key_compact_size);
+    // TODO: key may not be ended with 16
 
     bytes += key_compact_size;
     bytes_size += key_compact_size;
@@ -88,7 +90,7 @@ struct ShortNode : public Node {
   }
 
   __host__ __forceinline__ int encode_size() {
-    int key_compact_size = (key_size - 1) / 2 + 1;
+    int key_compact_size = util::hex_to_compact_size(key, key_size);
     int val_hash_size = val->hash_size;
     return key_compact_size + val_hash_size;
   }
@@ -103,8 +105,8 @@ struct ValueNode : public Node {
 //   const uint8_t hash[32];
 // };
 
-} // namespace Compress
-} // namespace CpuMPT
+}  // namespace Compress
+}  // namespace CpuMPT
 
 namespace GpuMPT {
 namespace Compress {
@@ -127,7 +129,7 @@ struct Node {
 };
 
 struct FullNode : public Node {
-  uint8_t buffer[32]; // save hash or encoding 8 aligned
+  uint8_t buffer[32];  // save hash or encoding 8 aligned
 
   Node *childs[17];
   int dirty;
@@ -172,9 +174,9 @@ struct FullNode : public Node {
   __device__ __forceinline__ int child_num() {
     int size = 0;
 #pragma unroll
-    for (int i = 0; i < 17; i++){
+    for (int i = 0; i < 17; i++) {
       if (childs[i]) {
-        size ++;
+        size++;
       }
     }
     return size;
@@ -183,20 +185,20 @@ struct FullNode : public Node {
   __device__ __forceinline__ int find_single_child() {
     // assert(child_num()>1);
 #pragma unroll
-    for (int i = 0; i < 17; i++){
+    for (int i = 0; i < 17; i++) {
       if (childs[i]) {
         return i;
       }
-    } 
+    }
   }
 
   __device__ __forceinline__ void print_self() {
-    printf("FullNode %p , its parent %p\n ",this,parent);
+    printf("FullNode %p , its parent %p\n ", this, parent);
   }
 };
 
 struct ShortNode : public Node {
-  uint8_t buffer[32]; // save hash or encoding, 8 aligned
+  uint8_t buffer[32];  // save hash or encoding, 8 aligned
 
   const uint8_t *key;
   int key_size;
@@ -215,7 +217,7 @@ struct ShortNode : public Node {
     int bytes_size = 0;
 
     int key_compact_size = util::hex_to_compact(key, key_size, bytes);
-    assert((key_size - 1) / 2 + 1 == key_compact_size);
+    // assert((key_size - 1) / 2 + 1 == key_compact_size);
 
     bytes += key_compact_size;
     bytes_size += key_compact_size;
@@ -228,13 +230,13 @@ struct ShortNode : public Node {
   }
 
   __device__ __forceinline__ int encode_size() {
-    int key_compact_size = (key_size - 1) / 2 + 1;
+    int key_compact_size = util::hex_to_compact_size(key, key_size);
     int val_hash_size = val->hash_size;
     return key_compact_size + val_hash_size;
   }
 
   __device__ __forceinline__ void print_self() {
-    printf("ShortNode %p , its parent %p\n",this,parent);
+    printf("ShortNode %p , its parent %p\n", this, parent);
   }
 };
 
@@ -244,7 +246,7 @@ struct ValueNode : public Node {
   int value_size;
 
   __device__ __forceinline__ void print_self() {
-    printf("ValueNode %p , its parent %p\n",this,parent);
+    printf("ValueNode %p , its parent %p\n", this, parent);
   }
 };
 
@@ -252,5 +254,5 @@ struct ValueNode : public Node {
 //   const uint8_t hash[32];
 // };
 
-} // namespace Compress
-} // namespace GpuMPT
+}  // namespace Compress
+}  // namespace GpuMPT

@@ -27,10 +27,18 @@ inline void println_str(const uint8_t *str, size_t size) {
   printf("\n");
 }
 __device__ __host__ inline void println_hex(const uint8_t *str, size_t size) {
+  static const char hex2str[] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                                 '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+  char *buf = new char[size * 2 + 1]{};
   for (size_t i = 0; i < size; ++i) {
-    printf("%02x", str[i]);
+    int h = str[i] / 16;
+    int l = str[i] % 16;
+    buf[i * 2] = hex2str[h];
+    buf[i * 2 + 1] = hex2str[l];
   }
-  printf("\n");
+  buf[size * 2] = '\0';
+  printf("%s\n", buf);
+  delete[] buf;
 }
 inline void print_hex(const uint8_t *str, size_t size) {
   for (size_t i = 0; i < size; ++i) {
@@ -155,6 +163,15 @@ __host__ __device__ __forceinline__ int key_bytes_to_hex(
   return key_bytes_size * 2 + 1;
 }
 
+__host__ __device__ __forceinline__ int hex_to_compact_size(const uint8_t *hex,
+                                                            int hex_size) {
+  if (hex_size > 0 && hex[hex_size - 1] == 16) {
+    hex_size -= 1;
+  }
+  int bytes_size = hex_size / 2 + 1;
+  return bytes_size;
+}
+
 /// @brief hex encoding to compact encoding according to ethereum yellow paper
 /// @param bytes should contain len(hex without terminator)/2+1 bytes
 __host__ __device__ __forceinline__ int hex_to_compact(const uint8_t *hex,
@@ -184,7 +201,7 @@ __host__ __device__ __forceinline__ int hex_to_compact(const uint8_t *hex,
 }
 template <int N>
 __host__ __device__ __forceinline__ int align_to(int n) {
-  return n - (n % N) + N;
+  return n % N == 0 ? n : n - (n % N) + N;
 }
 }  // namespace util
 
