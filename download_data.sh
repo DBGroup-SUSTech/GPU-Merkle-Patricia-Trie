@@ -19,9 +19,12 @@ fi
 cd $PROJECT_DIR
 
 # YCSB
-cd YCSB-C && make
+cd YCSB-C 
+make clean
+make
 cd $PROJECT_DIR
 mkdir -p dataset && cd dataset
 mkdir -p ycsb && cd ycsb
+rm workloada.txt
 $PROJECT_DIR/YCSB-C/ycsbc -db basic -threads 4 -P $PROJECT_DIR/YCSB-C/workloads/workloada.spec > workloada.txt
 
