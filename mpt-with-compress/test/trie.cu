@@ -2093,8 +2093,8 @@ TEST(Trie, ETEYCSBBench) {
 
   {
     GpuMPT::Compress::MPT gpu_mpt_baseline;
-    gpu_mpt_baseline.puts_baseline(key_hexs, key_hexs_indexs, value,
-                                   value_index, data_number);
+    gpu_mpt_baseline.puts_baseline_loop(key_hexs, key_hexs_indexs, value,
+                                        value_index, data_number);
     gpu_mpt_baseline.hash_onepass(key_hexs, key_hexs_indexs, data_number);
     gpu_mpt_baseline.gets_parallel(read_key_hexs, read_key_hexs_indexs,
                                    read_data_number, read_values_hps,
