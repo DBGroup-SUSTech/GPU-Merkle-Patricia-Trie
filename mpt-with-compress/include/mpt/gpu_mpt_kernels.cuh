@@ -1061,13 +1061,15 @@ __device__ __forceinline__ void do_hash_onepass_update_phase(
       // TODO: write to share memory first may be faster?
       // encoding's real memory size should aligned to 8
       // if (lane_id == 0) {
-      // cutil::println_hex(encoding, util::align_to<8>(encoding_size));
+      //   printf("encoding: ");
+      //   cutil::println_hex(encoding, encoding_size);
       // }
       batch_keccak_device(reinterpret_cast<const uint64_t *>(encoding),
                           reinterpret_cast<uint64_t *>(hash), encoding_size * 8,
                           lane_id, A, B, C, D);
       // if (lane_id == 0) {
-      // cutil::println_hex(hash, 32);
+      //   printf("hash: ");
+      //   cutil::println_hex(hash, 32);
       // }
       leaf->hash = hash;
       leaf->hash_size = 32;

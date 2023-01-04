@@ -135,8 +135,12 @@ namespace CPUHash
 
     void calculate_hash(const uint8_t *input, int input_size, uint8_t * hash)
     {
+        // printf("cpu encoding: ");
+        // cutil::println_hex(input, input_size);
         CryptoPP::Keccak_256 ckeccak;
         ckeccak.Update((const CryptoPP::byte*)input, (size_t)input_size);
         ckeccak.Final((CryptoPP::byte*)hash);
+        // printf("cpu hash: ");
+        // cutil::println_hex(hash, 32); 
     }
 }

@@ -77,7 +77,8 @@ struct ShortNode : public Node {
     int bytes_size = 0;
 
     int key_compact_size = util::hex_to_compact(key, key_size, bytes);
-    assert((key_size - 1) / 2 + 1 == key_compact_size);
+    // assert((key_size - 1) / 2 + 1 == key_compact_size);
+    // TODO: key may not be ended with 16
 
     bytes += key_compact_size;
     bytes_size += key_compact_size;
@@ -90,7 +91,7 @@ struct ShortNode : public Node {
   }
 
   __host__ __forceinline__ int encode_size() {
-    int key_compact_size = (key_size - 1) / 2 + 1;
+    int key_compact_size = util::hex_to_compact_size(key, key_size);
     int val_hash_size = val->hash_size;
     return key_compact_size + val_hash_size;
   }
@@ -257,7 +258,7 @@ struct ShortNode : public Node {
     int bytes_size = 0;
 
     int key_compact_size = util::hex_to_compact(key, key_size, bytes);
-    assert((key_size - 1) / 2 + 1 == key_compact_size);
+    // assert((key_size - 1) / 2 + 1 == key_compact_size);
 
     bytes += key_compact_size;
     bytes_size += key_compact_size;
@@ -270,7 +271,7 @@ struct ShortNode : public Node {
   }
 
   __device__ __forceinline__ int encode_size() {
-    int key_compact_size = (key_size - 1) / 2 + 1;
+    int key_compact_size = util::hex_to_compact_size(key, key_size);
     int val_hash_size = val->hash_size;
     return key_compact_size + val_hash_size;
   }
