@@ -81,6 +81,7 @@ class MPT {
   ShortNode *d_start_;
   Node **d_root_p_;  // &root = *d_root_ptr
   DynamicAllocator<ALLOC_CAPACITY> allocator_;
+  KeyDynamicAllocator<KEY_ALLOC_CAPACITY> key_allocator_;
   cudaStream_t stream_op_, stream_cp_;  // stream for operation and memcpy
  public:
   MPT() {
@@ -539,7 +540,7 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   // CUDA_SAFE_CALL(cudaDeviceSynchronize());
   // // compress
   GKernel::puts_2phase_compress_phase<<<2 * num_blocks, block_size>>>(
-      d_compress_nodes, d_compress_num, d_start_, d_root_p_, allocator_);
+      d_compress_nodes, d_compress_num, d_start_, d_root_p_, allocator_, key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   CHECK_ERROR(cudaDeviceSynchronize());
@@ -626,7 +627,7 @@ void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
   // // compress
   GKernel::
       puts_2phase_compress_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
-          d_compress_nodes, d_compress_num, d_start_, d_root_p_, allocator_);
+          d_compress_nodes, d_compress_num, d_start_, d_root_p_, allocator_, key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   CHECK_ERROR(cudaDeviceSynchronize());

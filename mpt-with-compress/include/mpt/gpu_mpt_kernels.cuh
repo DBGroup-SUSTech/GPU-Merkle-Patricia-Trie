@@ -1172,58 +1172,152 @@ __device__ __forceinline__ void do_put_2phase_compress_phase(
   }
 }
 
-__global__ void puts_2phase_compress_phase(
-    FullNode **compress_nodes, int *compress_num, ShortNode *start_node,
-    Node **root_p, DynamicAllocator<ALLOC_CAPACITY> allocator) {
-  int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid >= *compress_num) {
+__device__ __forceinline__ void late_compress(ShortNode * compressing_node, uint8_t * cached_keys, Node * compress_parent,
+                                FullNode * compress_target, ShortNode * start_node, Node ** root_p, int container_size){
+  compressing_node->key = &cached_keys[container_size - compressing_node->key_size];
+  if (compress_parent == start_node) {
+    *root_p = compressing_node;
+    start_node->val = compressing_node;
     return;
   }
-  FullNode *compress_node = compress_nodes[tid];
-  // printf("%p\n", compress_node);
-  // printf("%d\n", compress_node->childs[16]);
-  do_put_2phase_compress_phase(compress_node, start_node, root_p, allocator);
+  FullNode * f_compress_parent = static_cast<FullNode*>(compress_parent);
+  assert(f_compress_parent->child_num()>1);
+#pragma unroll 17
+    for (int i = 0; i<17;i++) {
+      atomicCAS((unsigned long long int *)&f_compress_parent->childs[i], 
+      (unsigned long long int)compress_target, (unsigned long long int)compressing_node);
+    }
+  compressing_node->parent = f_compress_parent;
 }
 
-__device__ __forceinline__ void dfs_traverse_trie(Node *root) {
-  if (root == nullptr) {
-    return;
-  }
-  if (root->parent != nullptr) {
-    if (root->parent->type == Node::Type::VALUE) {
-      assert(false);
-    }
-  }
-  switch (root->type) {
-    case Node::Type::VALUE: {
-      ValueNode *v = static_cast<ValueNode *>(root);
-      v->print_self();
+__device__ __forceinline__ void new_do_put_2phase_compress_phase(FullNode *& compress_node,ShortNode * start_node,
+                                  Node ** root_p, DynamicAllocator<ALLOC_CAPACITY> &allocator,
+                                  KeyDynamicAllocator<KEY_ALLOC_CAPACITY> & key_allocator) {
+  Node * node = compress_node;
+  if (compress_node->child_num()>1){
+    int old = atomicCAS(&compress_node->compressed, 0, 1);
+    if (old) {
       return;
     }
+    node = node->parent;
+  } 
+  ShortNode * compressing_node = allocator.malloc<ShortNode>();
+  compressing_node->type = Node::Type::SHORT;
+  uint8_t * cached_keys = key_allocator.key_malloc(0);
+  FullNode * cached_f_node;
+  int container_size = 8;
+  while(node != nullptr) {
+    switch (node->type){
     case Node::Type::SHORT: {
-      ShortNode *s = static_cast<ShortNode *>(root);
-      s->print_self();
-      dfs_traverse_trie(s->val);
+      assert(node == start_node);
+      if (compressing_node->key_size > 0){
+          late_compress(compressing_node, cached_keys, node, cached_f_node, start_node, root_p, container_size);
+        }
       return;
     }
     case Node::Type::FULL: {
-      FullNode *f = static_cast<FullNode *>(root);
-      f->print_self();
-      for (int i = 0; i < 17; i++) {
-        if (f->childs[i] != nullptr) {
-          printf("f child %d", i);
-          dfs_traverse_trie(f->childs[i]);
+      FullNode * f_node = static_cast<FullNode*>(node);
+      int old = atomicCAS(&f_node->compressed, 0, 1);
+      if (old) {
+        if (compressing_node->key_size > 0){
+          late_compress(compressing_node, cached_keys, f_node, cached_f_node, start_node, root_p, container_size);
         }
+        return;
       }
-      return;
+      if(f_node->child_num()==1) {
+        cached_f_node = f_node;
+        int index = f_node->find_single_child();
+        int key_size = compressing_node->key_size++;
+        if (key_size == 0) {
+          Node * child = f_node->childs[index];
+          compressing_node->val = child;
+          child->parent = compressing_node;
+        }
+        if (key_size == 8) {
+          const uint8_t *old_keys = cached_keys;
+          cached_keys = key_allocator.key_malloc(8);
+          memcpy(cached_keys + 24, old_keys, 8);
+          container_size = 32;
+        }
+        if (key_size == 32) {
+          const uint8_t *old_keys = cached_keys;
+          cached_keys = key_allocator.key_malloc(32);
+          memcpy(cached_keys + 224, old_keys, 32);
+          container_size = 256;
+        } 
+        int new_key_pos = container_size - key_size - 1; //position of new key in cached keys
+        cached_keys[new_key_pos] = index;
+      } else {
+        if (compressing_node->key_size > 0){
+          late_compress(compressing_node, cached_keys, f_node, cached_f_node, start_node, root_p, container_size);
+        }
+        compressing_node = allocator.malloc<ShortNode>();
+        compressing_node->type = Node::Type::SHORT;
+        cached_keys = key_allocator.key_malloc(0);
+        container_size = 8;
+      }
+      node = f_node->parent;
+      break;
     }
-    default:
+    default:{
       assert(false);
       return;
+    }
+    }
   }
 }
 
-__global__ void traverse_trie(Node **root) { dfs_traverse_trie(*root); }
+__global__ void puts_2phase_compress_phase(FullNode ** compress_nodes, int *compress_num, ShortNode * start_node,
+                                Node ** root_p, DynamicAllocator<ALLOC_CAPACITY> allocator, KeyDynamicAllocator<KEY_ALLOC_CAPACITY> key_allocator){
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if(tid >= *compress_num){
+    return;
+  }
+  FullNode * compress_node = compress_nodes[tid];
+  // printf("%p\n", compress_node);
+  // printf("%d\n", compress_node->childs[16]);
+  new_do_put_2phase_compress_phase(compress_node, start_node, root_p, allocator, key_allocator);
+}
+
+// __device__ __forceinline__ void dfs_traverse_trie(Node *root) {
+//   if (root == nullptr) {
+//     return;
+//   }
+//   if (root->parent != nullptr) {
+//     if (root->parent->type == Node::Type::VALUE) {
+//       assert(false);
+//     }
+//   }
+//   switch (root->type) {
+//     case Node::Type::VALUE: {
+//       ValueNode *v = static_cast<ValueNode *>(root);
+//       v->print_self();
+//       return;
+//     }
+//     case Node::Type::SHORT: {
+//       ShortNode *s = static_cast<ShortNode *>(root);
+//       s->print_self();
+//       dfs_traverse_trie(s->val);
+//       return;
+//     }
+//     case Node::Type::FULL: {
+//       FullNode *f = static_cast<FullNode *>(root);
+//       f->print_self();
+//       for (int i = 0; i < 17; i++) {
+//         if (f->childs[i] != nullptr) {
+//           printf("f child %d", i);
+//           dfs_traverse_trie(f->childs[i]);
+//         }
+//       }
+//       return;
+//     }
+//     default:
+//       assert(false);
+//       return;
+//   }
+// }
+
+// __global__ void traverse_trie(Node **root) { dfs_traverse_trie(*root); }
 }  // namespace GKernel
 }  // namespace Compress
 }  // namespace GpuMPT
