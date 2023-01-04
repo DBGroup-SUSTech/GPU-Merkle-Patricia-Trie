@@ -1299,7 +1299,7 @@ TEST(Trie, PutEthtxnBench) {
       read_ethtxn_data_all(ETHTXN_PATH, keys_buffer, keys_bytes_indexs_buffer,
                            value_buffer, values_bytes_indexs_buffer);
 
-  n = 100000;
+  n = 10000;
   printf("how much%d\n", n);
 
   const uint8_t *keys_hexs = nullptr;

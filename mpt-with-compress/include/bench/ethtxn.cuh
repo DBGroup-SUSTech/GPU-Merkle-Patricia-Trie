@@ -76,8 +76,9 @@ void read_ethtxn_data(std::string file_name, uint8_t *out_key, int *key_index,
     key_length += key.size();
     key_index[2 * i + 1] = key_length + key_start_index - 1;
 
-    int value_size = util::align_to<8>(static_cast<int>(value.size()));
-    memset(out_value + value_length, 0, value_size);
+    // int value_size = util::align_to<8>(static_cast<int>(value.size()));
+    // memset(out_value + value_length, 0, value_size);
+    int value_size = value.size();
     memcpy(out_value + value_length, (uint8_t *)value.c_str(), value_size);
     value_index[2 * i] = value_length + value_start_index;
     value_length += value_size;
