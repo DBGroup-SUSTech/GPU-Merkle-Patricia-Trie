@@ -532,7 +532,8 @@ restart:  // TODO: replace goto with while
   Node *parent = start_node;
   Node **curr = &start_node->val;
 
-  // printf("[line:%d] thread %d try read lock parent\n", __LINE__, threadIdx.x);
+  // printf("[line:%d] thread %d try read lock parent\n", __LINE__,
+  // threadIdx.x);
   gutil::ull_t parent_v = parent->read_lock_or_restart(need_restart);
   if (need_restart) goto restart;
   // printf("[line:%d] thread %d success read lock parent: %ld\n", __LINE__,
@@ -711,7 +712,8 @@ restart:  // TODO: replace goto with while
         parent = fnode;
         curr = &fnode->childs[nibble];
 
-        // printf("[line:%d] thread %d check or restart\n", __LINE__, threadIdx.x);
+        // printf("[line:%d] thread %d check or restart\n", __LINE__,
+        // threadIdx.x);
         node->check_or_restart(v, need_restart);
         if (need_restart) goto restart;
 
@@ -728,29 +730,32 @@ restart:  // TODO: replace goto with while
 
   // curr = NULL, try to insert a leaf
 
-  assert(key_size > 0);
   // printf("[line:%d] thread %d nil node\n", __LINE__, threadIdx.x);
 
   // printf("[line:%d] thread %d try wlock parent %p\n", __LINE__, threadIdx.x,
   //        &parent);
   parent->upgrade_to_write_lock_or_restart(parent_v, need_restart);
   if (need_restart) goto restart;
-  // printf("[line:%d] thread %d success wlock parent %p\n", __LINE__, threadIdx.x,
+  // printf("[line:%d] thread %d success wlock parent %p\n", __LINE__,
+  // threadIdx.x,
   //        &parent);
+  if (key_size == 0) {
+    // leaf->parent = parent;
+    *curr = leaf;
+  } else {
+    ShortNode *snode = node_allocator.malloc<ShortNode>();
+    snode->type = Node::Type::SHORT;
+    snode->key = key;
+    snode->key_size = key_size;
 
-  ShortNode *snode = node_allocator.malloc<ShortNode>();
-  snode->type = Node::Type::SHORT;
-  snode->key = key;
-  snode->key_size = key_size;
+    // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, snode,
+    //        snode->key_size);
+    snode->val = leaf;
+    // leaf->parent = snode;
+    // snode->parent = parent;
 
-  // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, snode,
-  //        snode->key_size);
-  snode->val = leaf;
-  // leaf->parent = snode;
-  // snode->parent = parent;
-
-  *curr = snode;
-
+    *curr = snode;
+  }
   parent->write_unlock();
   // printf("tid=%d finish insert, release lock node %p\n", threadIdx.x,
   // parent);
