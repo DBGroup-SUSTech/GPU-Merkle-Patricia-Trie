@@ -113,7 +113,6 @@ int read_ethtxn_data_all(std::string dir_path, uint8_t *out_key, int *key_index,
                      file_value_length);
     printf("keylength: %d, valuelength: %d\n", file_key_length,
            file_value_length);
-    break;
     file_out_key += file_key_length, file_out_value += file_value_length;
     file_index_key += line_num * 2, file_index_value += line_num * 2;
     file_start_key += file_key_length, file_start_value += file_value_length;
