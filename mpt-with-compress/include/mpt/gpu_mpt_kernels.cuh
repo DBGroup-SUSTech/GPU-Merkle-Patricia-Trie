@@ -514,7 +514,7 @@ __device__ __forceinline__ void put_olc(
     const uint8_t *const key_in, const int key_size_in, const uint8_t *value,
     int value_size, const uint8_t *value_hp, ShortNode *start_node,
     DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
-  assert(threadIdx.x % 32 == 0);
+  // assert(threadIdx.x % 32 == 0);
 
   ValueNode *leaf = node_allocator.malloc<ValueNode>();
   leaf->type = Node::Type::VALUE;
@@ -767,15 +767,21 @@ __global__ void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
                               const uint8_t *const *values_hps, int n,
                               ShortNode *start_node,
                               DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
-  int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
+  // int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
 
-  if (wid >= n) {
+  // if (wid >= n) {
+  //   return;
+  // }
+  // int lid_w = threadIdx.x % 32;
+  // if (lid_w > 0) {  // TODO: warp sharing
+  //   return;
+  // }
+
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
     return;
   }
-  int lid_w = threadIdx.x % 32;
-  if (lid_w > 0) {  // TODO: warp sharing
-    return;
-  }
+  int wid = tid;
   const uint8_t *key = util::element_start(keys_indexs, wid, keys_hexs);
   int key_size = util::element_size(keys_indexs, wid);
   const uint8_t *value = util::element_start(values_indexs, wid, values_bytes);

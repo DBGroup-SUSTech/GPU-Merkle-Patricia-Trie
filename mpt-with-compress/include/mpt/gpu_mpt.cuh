@@ -284,12 +284,20 @@ void MPT::puts_latching_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
   timer_gpu_put_latching.start();  // timer start --------------------------
 
   // puts
-  const int rpwarp_block_size = 1024;
-  const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
-                                rpwarp_block_size;  // one warp per request
-  GKernel::puts_latching<<<rpwarp_num_blocks, rpwarp_block_size>>>(
+  //   const int rpwarp_block_size = 1024;
+  //   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
+  //                                 rpwarp_block_size;  // one warp per request
+  //   GKernel::puts_latching<<<rpwarp_num_blocks, rpwarp_block_size>>>(
+  //       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs,
+  //       d_values_hps, n, d_start_, allocator_);
+
+  // puts
+  const int block_size = 128;
+  const int num_blocks = (n + block_size - 1) / block_size;
+  GKernel::puts_latching<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
       n, d_start_, allocator_);
+
   CHECK_ERROR(cudaDeviceSynchronize());
 
   timer_gpu_put_latching.stop();  // timer stop ---------------------------
@@ -540,7 +548,8 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   // CUDA_SAFE_CALL(cudaDeviceSynchronize());
   // // compress
   GKernel::puts_2phase_compress_phase<<<2 * num_blocks, block_size>>>(
-      d_compress_nodes, d_compress_num, d_start_, d_root_p_, allocator_, key_allocator_);
+      d_compress_nodes, d_compress_num, d_start_, d_root_p_, allocator_,
+      key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   CHECK_ERROR(cudaDeviceSynchronize());
@@ -627,7 +636,8 @@ void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
   // // compress
   GKernel::
       puts_2phase_compress_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
-          d_compress_nodes, d_compress_num, d_start_, d_root_p_, allocator_, key_allocator_);
+          d_compress_nodes, d_compress_num, d_start_, d_root_p_, allocator_,
+          key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   CHECK_ERROR(cudaDeviceSynchronize());
