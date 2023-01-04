@@ -151,7 +151,7 @@ __global__ void keccak_kernel(uint64_t *data, uint64_t *out, uint64_t databitlen
         if (t == 0)
         {
             p[byte_index++] = 1;
-            p[BITRATE / 8 - 1] = 0x80;
+            p[BITRATE / 8 - 1] |= 0x80;
         }
 
         if (t < 17)

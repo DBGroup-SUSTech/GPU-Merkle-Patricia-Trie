@@ -62,7 +62,7 @@ __device__ __forceinline__ void batch_keccak_device(const uint64_t *data, uint64
         if (t == 0)
         {
             p[byte_index++] = 1;
-            p[BITRATE / 8 - 1] = 0x80;
+            p[BITRATE / 8 - 1] |= 0x80;
         }
 
         if (t < 17)

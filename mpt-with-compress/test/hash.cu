@@ -168,8 +168,8 @@ TEST(Basic, GPUBatchBasic) {
   uint8_t *d_value, *d_hash;
   CHECK_ERROR(gutil::DeviceAlloc(d_value, valuesize));
   CHECK_ERROR(gutil::CpyHostToDevice(d_value, values, valuesize));
-  CHECK_ERROR(gutil::DeviceAlloc(d_hash, valuesize));
-  CHECK_ERROR(gutil::DeviceSet(d_hash, 0x00, valuesize));
+  CHECK_ERROR(gutil::DeviceAlloc(d_hash, 32));
+  CHECK_ERROR(gutil::DeviceSet(d_hash, 0x00, 32));
 
   calculate_one_hash<<<1, 32>>>(d_value, valuesize, d_hash);
 
@@ -195,7 +195,10 @@ TEST(Basic, GPUBatchBasic) {
   // }
   printf("gpu hash is ");
   cutil::println_hex(h_hash, 32);
-
+  memset(h_hash, 0, 32);
+  CPUHash::calculate_hash(values, valuesize, h_hash);
+    printf("cpu hash is ");
+  cutil::println_hex(h_hash, 32);
   CryptoPP::Keccak_256 ckeccak;
   ckeccak.Update((const CryptoPP::byte *)values, (size_t)valuesize);
   ckeccak.Final((CryptoPP::byte *)h_hash);
