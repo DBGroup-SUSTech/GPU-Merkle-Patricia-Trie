@@ -18,7 +18,7 @@ from bigquery-public-data.crypto_ethereum.transactions
 where 
   EXTRACT(date FROM block_timestamp) between "2022-11-15" and "2022-12-29"
 ```
-The results need to be exported to one or multiple csv files and saved in `/tmp/ethereum/transactions/` folder.
+The results need to be exported to one or multiple csv files and saved in `/ethereum/transactions/` folder.
 ### Run
 * Compile [mpt-with-compress](./mpt-with-compress/) project and run tests.
 * Ethereum experients in [go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go)

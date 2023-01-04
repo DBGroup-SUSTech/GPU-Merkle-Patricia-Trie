@@ -13,7 +13,7 @@
 
 namespace bench {
 namespace ethtxn {
-constexpr const char *ETHTXN_PATH{"/tmp/ethereum/transactions/"};
+constexpr const char *ETHTXN_PATH{"/ethereum/transactions/"};
 void getFiles(std::string path, std::vector<std::string> &filenames) {
   DIR *pDir;
   struct dirent *ptr;
