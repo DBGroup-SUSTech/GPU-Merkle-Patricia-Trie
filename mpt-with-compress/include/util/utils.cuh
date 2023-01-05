@@ -11,7 +11,7 @@
 #define HASH_DATA_AREA 136
 
 #define ALLOC_CAPACITY (uint64_t(1) << 33)  // 4GB for node
-#define KEY_ALLOC_CAPACITY (3*(uint64_t(1) << 30)) //48 MB
+#define KEY_ALLOC_CAPACITY (3*(uint64_t(1) << 28)) //48 MB
 
 #define MAX_NODES 1 << 18
 #define MAX_REQUEST 1 << 20
