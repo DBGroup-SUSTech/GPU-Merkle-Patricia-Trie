@@ -2378,13 +2378,13 @@ TEST(Trie, ETEBench) {
 TEST(Trie, ETEYCSBBench) {
   using namespace bench::ycsb;
   uint8_t *key = (uint8_t *)malloc(1000000000);
-  int *key_index = (int *)malloc(1000000 * sizeof(int));
+  int *key_index = (int *)malloc(10000000 * sizeof(int));
   uint8_t *value = (uint8_t *)malloc(2000000000);
-  int *value_index = (int *)malloc(1000000 * sizeof(int));
+  int *value_index = (int *)malloc(10000000 * sizeof(int));
   int data_number;
 
   uint8_t *read_key = (uint8_t *)malloc(2000000000);
-  int *read_key_index = (int *)malloc(1000000 * sizeof(int));
+  int *read_key_index = (int *)malloc(10000000 * sizeof(int));
   int read_data_number;
 
   read_ycsb_data_insert(WIKI_INDEX_PATH, key, key_index, value, value_index,
@@ -2423,8 +2423,20 @@ TEST(Trie, ETEYCSBBench) {
   const uint8_t *hash = nullptr;
   int hash_size = 0;
 
+  int keys_hexs_size = util::elements_size_sum(key_hexs_indexs, data_number);
+  int keys_indexs_size = util::indexs_size_sum(data_number);
+  int values_bytes_size = util::elements_size_sum(value_index, data_number);
+  int values_indexs_size = util::indexs_size_sum(data_number);
+  int values_hps_size = data_number;
+
   {
     GPUHashMultiThread::load_constants();
+
+    CHECK_ERROR(gutil::PinHost(key_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(key_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(value, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(value_index, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
 
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     timer_gpu_baseline.start();
@@ -2444,6 +2456,12 @@ TEST(Trie, ETEYCSBBench) {
   {
     GPUHashMultiThread::load_constants();
 
+    CHECK_ERROR(gutil::PinHost(key_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(key_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(value, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(value_index, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+
     GpuMPT::Compress::MPT gpu_mpt_latch;
     timer_gpu_lc.start();
     gpu_mpt_latch.puts_latching_with_valuehp(key_hexs, key_hexs_indexs, value, value_index,
@@ -2461,6 +2479,12 @@ TEST(Trie, ETEYCSBBench) {
 
   {
     GPUHashMultiThread::load_constants();
+
+    CHECK_ERROR(gutil::PinHost(key_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(key_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(value, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(value_index, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
 
     GpuMPT::Compress::MPT gpu_mpt_2phase;
     timer_gpu_2phase.start();
@@ -2480,6 +2504,12 @@ TEST(Trie, ETEYCSBBench) {
     {
     GPUHashMultiThread::load_constants();
 
+    CHECK_ERROR(gutil::PinHost(key_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(key_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(value, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(value_index, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+
     GpuMPT::Compress::MPT gpu_mpt_latch_pipeline;
     timer_gpu_lc_pipeline.start();
     gpu_mpt_latch_pipeline.puts_latching_pipeline(key_hexs, key_hexs_indexs, value, value_index,
@@ -2497,6 +2527,12 @@ TEST(Trie, ETEYCSBBench) {
 
   {
     GPUHashMultiThread::load_constants();
+
+    CHECK_ERROR(gutil::PinHost(key_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(key_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(value, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(value_index, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
 
     GpuMPT::Compress::MPT gpu_mpt_2phase_pipeline;
     timer_gpu_2phase_pipeline.start();
