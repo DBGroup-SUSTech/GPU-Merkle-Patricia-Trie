@@ -102,7 +102,7 @@ int read_ethtxn_data_all(std::string dir_path, uint8_t *out_key, int *key_index,
   int file_start_key = 0, file_start_value = 0;
   int total_kvs = 0;
 
-  int limit_files = 1;  // TODO: not reading all files
+  int limit_files = 2;  // TODO: not reading all files
 
   for (int i = 0; i < file_names.size() && i < limit_files; i++) {
     int line_num = 0;
@@ -118,6 +118,8 @@ int read_ethtxn_data_all(std::string dir_path, uint8_t *out_key, int *key_index,
     file_index_key += line_num * 2, file_index_value += line_num * 2;
     file_start_key += file_key_length, file_start_value += file_value_length;
     total_kvs += line_num;
+    printf("all keylength: %d, all valuelength: %d\n", file_start_key,
+           file_start_value);
   }
   return total_kvs;
 }
