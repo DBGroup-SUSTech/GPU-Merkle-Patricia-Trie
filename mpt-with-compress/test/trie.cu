@@ -1299,7 +1299,7 @@ TEST(Trie, PutEthtxnBench) {
       read_ethtxn_data_all(ETHTXN_PATH, keys_buffer, keys_bytes_indexs_buffer,
                            value_buffer, values_bytes_indexs_buffer);
 
-  n = 10000;
+  // n = 100000;
   printf("how much%d\n", n);
 
   const uint8_t *keys_hexs = nullptr;
@@ -2245,6 +2245,136 @@ TEST(Trie, ETEBench) {
 
 // TEST(Trie, ETEWikiBenchKernel) {}
 
+// TEST(Trie, ETEYCSBBench) {
+//   using namespace bench::ycsb;
+//   uint8_t *key = (uint8_t *)malloc(1000000000);
+//   int *key_index = (int *)malloc(1000000 * sizeof(int));
+//   uint8_t *value = (uint8_t *)malloc(2000000000);
+//   int *value_index = (int *)malloc(1000000 * sizeof(int));
+//   int data_number;
+
+//   uint8_t *read_key = (uint8_t *)malloc(2000000000);
+//   int *read_key_index = (int *)malloc(1000000 * sizeof(int));
+//   int read_data_number;
+
+//   read_ycsb_data_insert(WIKI_INDEX_PATH, key, key_index, value, value_index,
+//                         data_number);
+//   read_ycsb_data_read(WIKI_INDEX_PATH, read_key, read_key_index,
+//                       read_data_number);
+//   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", data_number,
+//          read_data_number);
+
+//   // data_number = 50000;
+
+//   const uint8_t *key_hexs;
+//   int *key_hexs_indexs;
+//   keys_bytes_to_hexs(key, key_index, data_number, key_hexs, key_hexs_indexs);
+
+//   const uint8_t *read_key_hexs;
+//   int *read_key_hexs_indexs;
+//   keys_bytes_to_hexs(read_key, read_key_index, read_data_number, read_key_hexs,
+//                      read_key_hexs_indexs);
+
+//   perf::CpuTimer<perf::us> timer_cpu_put;
+//   perf::CpuTimer<perf::us> timer_cpu_hash;
+//   perf::CpuTimer<perf::us> timer_cpu_get;
+
+//   const uint8_t **values_hps = new const uint8_t *[data_number];
+//   for (int i = 0; i < data_number; ++i) {
+//     values_hps[i] = util::element_start(value_index, i, value);
+//   }
+
+//   const uint8_t **read_values_hps = new const uint8_t *[read_data_number];
+//   int *read_value_size = new int[read_data_number];
+
+//   const uint8_t *hash = nullptr;
+//   int hash_size = 0;
+
+//   {
+//     GPUHashMultiThread::load_constants();
+
+//     GpuMPT::Compress::MPT gpu_mpt_baseline;
+//     gpu_mpt_baseline.puts_baseline_loop(key_hexs, key_hexs_indexs, value,
+//                                         value_index, data_number);
+//     gpu_mpt_baseline.hash_onepass(key_hexs, key_hexs_indexs, data_number);
+//     gpu_mpt_baseline.gets_parallel(read_key_hexs, read_key_hexs_indexs,
+//                                    read_data_number, read_values_hps,
+//                                    read_value_size);
+//     gpu_mpt_baseline.get_root_hash(hash, hash_size);
+//     printf("GPU baseline hash is: ");
+//     cutil::println_hex(hash, hash_size);
+//     CHECK_ERROR(cudaDeviceReset());
+//   }
+
+//   {
+//     GPUHashMultiThread::load_constants();
+
+//     GpuMPT::Compress::MPT gpu_mpt_latch;
+
+//     gpu_mpt_latch.puts_latching(key_hexs, key_hexs_indexs, value, value_index,
+//                                 data_number);
+//     gpu_mpt_latch.hash_onepass(key_hexs, key_hexs_indexs, data_number);
+//     gpu_mpt_latch.gets_parallel(read_key_hexs, read_key_hexs_indexs,
+//                                 read_data_number, read_values_hps,
+//                                 read_value_size);
+//     CHECK_ERROR(cudaDeviceReset());
+//   }
+
+//   {
+//     GPUHashMultiThread::load_constants();
+
+//     GpuMPT::Compress::MPT gpu_mpt_latch;
+//     gpu_mpt_latch.puts_2phase(key_hexs, key_hexs_indexs, value, value_index,
+//                               data_number);
+//     gpu_mpt_latch.hash_onepass(key_hexs, key_hexs_indexs, data_number);
+//     gpu_mpt_latch.gets_parallel(read_key_hexs, read_key_hexs_indexs,
+//                                 read_data_number, read_values_hps,
+//                                 read_value_size);
+//     CHECK_ERROR(cudaDeviceReset());
+//   }
+
+//   {
+//     GPUHashMultiThread::load_constants();
+
+//     CpuMPT::Compress::MPT cpu_mpt_baseline;
+//     timer_cpu_put.start();  // timer start
+//     cpu_mpt_baseline.puts_baseline(key_hexs, key_hexs_indexs, value,
+//                                    value_index, data_number);
+//     timer_cpu_put.stop();
+//     timer_cpu_hash.start();
+//     cpu_mpt_baseline.hashs_dirty_flag();
+//     timer_cpu_hash.stop();
+//     timer_cpu_get.start();
+//     cpu_mpt_baseline.gets_baseline(read_key_hexs, read_key_hexs_indexs,
+//                                    read_data_number, read_values_hps,
+//                                    read_value_size);
+//     timer_cpu_get.stop();
+//     cpu_mpt_baseline.get_root_hash(hash, hash_size);
+//     printf("CPU baseline hash is: ");
+//     cutil::println_hex(hash, hash_size);
+//     CHECK_ERROR(cudaDeviceReset());
+//   }
+
+//   printf(
+//       "\033[31m"
+//       "CPU put execution time: %d us, throughput %d qps\n"
+//       "\033[0m",
+//       timer_cpu_put.get(),
+//       (int)(data_number * 1000.0 / timer_cpu_put.get() * 1000.0));
+//   printf(
+//       "\033[31m"
+//       "CPU hash execution time: %d us, throughput %d qps\n"
+//       "\033[0m",
+//       timer_cpu_hash.get(),
+//       (int)(data_number * 1000.0 / timer_cpu_hash.get() * 1000.0));
+//   printf(
+//       "\033[31m"
+//       "CPU get execution time: %d us, throughput %d qps\n"
+//       "\033[0m",
+//       timer_cpu_get.get(),
+//       (int)(read_data_number * 1000.0 / timer_cpu_get.get() * 1000.0));
+// }
+
 TEST(Trie, ETEYCSBBench) {
   using namespace bench::ycsb;
   uint8_t *key = (uint8_t *)malloc(1000000000);
@@ -2264,7 +2394,7 @@ TEST(Trie, ETEYCSBBench) {
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", data_number,
          read_data_number);
 
-  data_number = 50000;
+  // data_number = 50000;
 
   const uint8_t *key_hexs;
   int *key_hexs_indexs;
@@ -2275,9 +2405,12 @@ TEST(Trie, ETEYCSBBench) {
   keys_bytes_to_hexs(read_key, read_key_index, read_data_number, read_key_hexs,
                      read_key_hexs_indexs);
 
-  perf::CpuTimer<perf::us> timer_cpu_put;
-  perf::CpuTimer<perf::us> timer_cpu_hash;
-  perf::CpuTimer<perf::us> timer_cpu_get;
+  perf::CpuTimer<perf::us> timer_cpu;
+  perf::CpuTimer<perf::us> timer_gpu_baseline;
+  perf::CpuTimer<perf::us> timer_gpu_lc;
+  perf::CpuTimer<perf::us> timer_gpu_2phase;
+  perf::CpuTimer<perf::us> timer_gpu_lc_pipeline;
+  perf::CpuTimer<perf::us> timer_gpu_2phase_pipeline;
 
   const uint8_t **values_hps = new const uint8_t *[data_number];
   for (int i = 0; i < data_number; ++i) {
@@ -2294,12 +2427,14 @@ TEST(Trie, ETEYCSBBench) {
     GPUHashMultiThread::load_constants();
 
     GpuMPT::Compress::MPT gpu_mpt_baseline;
-    gpu_mpt_baseline.puts_baseline_loop(key_hexs, key_hexs_indexs, value,
-                                        value_index, data_number);
+    timer_gpu_baseline.start();
+    gpu_mpt_baseline.puts_baseline_loop_with_valuehp(key_hexs, key_hexs_indexs, value,
+                                        value_index, values_hps, data_number);
     gpu_mpt_baseline.hash_onepass(key_hexs, key_hexs_indexs, data_number);
     gpu_mpt_baseline.gets_parallel(read_key_hexs, read_key_hexs_indexs,
                                    read_data_number, read_values_hps,
                                    read_value_size);
+    timer_gpu_baseline.stop();
     gpu_mpt_baseline.get_root_hash(hash, hash_size);
     printf("GPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
@@ -2310,26 +2445,71 @@ TEST(Trie, ETEYCSBBench) {
     GPUHashMultiThread::load_constants();
 
     GpuMPT::Compress::MPT gpu_mpt_latch;
-
-    gpu_mpt_latch.puts_latching(key_hexs, key_hexs_indexs, value, value_index,
-                                data_number);
+    timer_gpu_lc.start();
+    gpu_mpt_latch.puts_latching_with_valuehp(key_hexs, key_hexs_indexs, value, value_index,
+                                values_hps, data_number);
     gpu_mpt_latch.hash_onepass(key_hexs, key_hexs_indexs, data_number);
     gpu_mpt_latch.gets_parallel(read_key_hexs, read_key_hexs_indexs,
                                 read_data_number, read_values_hps,
                                 read_value_size);
+    timer_gpu_lc.stop();
+    gpu_mpt_latch.get_root_hash(hash, hash_size);
+    printf("GPU lc hash is: ");
+    cutil::println_hex(hash, hash_size);
     CHECK_ERROR(cudaDeviceReset());
   }
 
   {
     GPUHashMultiThread::load_constants();
 
-    GpuMPT::Compress::MPT gpu_mpt_latch;
-    gpu_mpt_latch.puts_2phase(key_hexs, key_hexs_indexs, value, value_index,
+    GpuMPT::Compress::MPT gpu_mpt_2phase;
+    timer_gpu_2phase.start();
+    gpu_mpt_2phase.puts_2phase_with_valuehp(key_hexs, key_hexs_indexs, value, value_index, values_hps,
                               data_number);
-    gpu_mpt_latch.hash_onepass(key_hexs, key_hexs_indexs, data_number);
-    gpu_mpt_latch.gets_parallel(read_key_hexs, read_key_hexs_indexs,
+    gpu_mpt_2phase.hash_onepass(key_hexs, key_hexs_indexs, data_number);
+    gpu_mpt_2phase.gets_parallel(read_key_hexs, read_key_hexs_indexs,
                                 read_data_number, read_values_hps,
                                 read_value_size);
+    timer_gpu_2phase.stop();
+    gpu_mpt_2phase.get_root_hash(hash, hash_size);
+    printf("GPU 2phase hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+    {
+    GPUHashMultiThread::load_constants();
+
+    GpuMPT::Compress::MPT gpu_mpt_latch_pipeline;
+    timer_gpu_lc_pipeline.start();
+    gpu_mpt_latch_pipeline.puts_latching_pipeline(key_hexs, key_hexs_indexs, value, value_index,
+                                values_hps, data_number);
+    gpu_mpt_latch_pipeline.hash_onepass(key_hexs, key_hexs_indexs, data_number);
+    gpu_mpt_latch_pipeline.gets_parallel(read_key_hexs, read_key_hexs_indexs,
+                                read_data_number, read_values_hps,
+                                read_value_size);
+    timer_gpu_lc_pipeline.stop();
+    gpu_mpt_latch_pipeline.get_root_hash(hash, hash_size);
+    printf("GPU lc pipeline hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    GPUHashMultiThread::load_constants();
+
+    GpuMPT::Compress::MPT gpu_mpt_2phase_pipeline;
+    timer_gpu_2phase_pipeline.start();
+    gpu_mpt_2phase_pipeline.puts_2phase_pipeline(key_hexs, key_hexs_indexs, value, value_index, values_hps,
+                              data_number);
+    gpu_mpt_2phase_pipeline.hash_onepass(key_hexs, key_hexs_indexs, data_number);
+    gpu_mpt_2phase_pipeline.gets_parallel(read_key_hexs, read_key_hexs_indexs,
+                                read_data_number, read_values_hps,
+                                read_value_size);
+    timer_gpu_2phase_pipeline.stop();
+    gpu_mpt_2phase_pipeline.get_root_hash(hash, hash_size);
+    printf("GPU 2phase pipeline hash is: ");
+    cutil::println_hex(hash, hash_size);
     CHECK_ERROR(cudaDeviceReset());
   }
 
@@ -2337,18 +2517,14 @@ TEST(Trie, ETEYCSBBench) {
     GPUHashMultiThread::load_constants();
 
     CpuMPT::Compress::MPT cpu_mpt_baseline;
-    timer_cpu_put.start();  // timer start
+    timer_cpu.start();  // timer start
     cpu_mpt_baseline.puts_baseline(key_hexs, key_hexs_indexs, value,
                                    value_index, data_number);
-    timer_cpu_put.stop();
-    timer_cpu_hash.start();
     cpu_mpt_baseline.hashs_dirty_flag();
-    timer_cpu_hash.stop();
-    timer_cpu_get.start();
     cpu_mpt_baseline.gets_baseline(read_key_hexs, read_key_hexs_indexs,
                                    read_data_number, read_values_hps,
                                    read_value_size);
-    timer_cpu_get.stop();
+    timer_cpu.stop();
     cpu_mpt_baseline.get_root_hash(hash, hash_size);
     printf("CPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
@@ -2357,20 +2533,38 @@ TEST(Trie, ETEYCSBBench) {
 
   printf(
       "\033[31m"
-      "CPU put execution time: %d us, throughput %d qps\n"
+      "CPU execution time: %d us, throughput %d qps\n"
       "\033[0m",
-      timer_cpu_put.get(),
-      (int)(data_number * 1000.0 / timer_cpu_put.get() * 1000.0));
+      timer_cpu.get(),
+      (int)((data_number+read_data_number) * 1000.0 / timer_cpu.get() * 1000.0));
   printf(
       "\033[31m"
-      "CPU hash execution time: %d us, throughput %d qps\n"
+      "GPU baseline execution time: %d us, throughput %d qps\n"
       "\033[0m",
-      timer_cpu_hash.get(),
-      (int)(data_number * 1000.0 / timer_cpu_hash.get() * 1000.0));
+      timer_gpu_baseline.get(),
+      (int)((data_number+read_data_number) * 1000.0 / timer_gpu_baseline.get() * 1000.0));
   printf(
       "\033[31m"
-      "CPU get execution time: %d us, throughput %d qps\n"
+      "GPU lc execution time: %d us, throughput %d qps\n"
       "\033[0m",
-      timer_cpu_get.get(),
-      (int)(read_data_number * 1000.0 / timer_cpu_get.get() * 1000.0));
+      timer_gpu_lc.get(),
+      (int)((data_number+read_data_number) * 1000.0 / timer_gpu_lc.get() * 1000.0));
+  printf(
+      "\033[31m"
+      "GPU 2phase execution time: %d us, throughput %d qps\n"
+      "\033[0m",
+      timer_gpu_2phase.get(),
+      (int)((data_number+read_data_number) * 1000.0 / timer_gpu_2phase.get() * 1000.0));
+  printf(
+      "\033[31m"
+      "GPU lc pipeline execution time: %d us, throughput %d qps\n"
+      "\033[0m",
+      timer_gpu_lc_pipeline.get(),
+      (int)((data_number+read_data_number) * 1000.0 / timer_gpu_lc_pipeline.get() * 1000.0));
+  printf(
+      "\033[31m"
+      "GPU 2phase pipeline execution time: %d us, throughput %d qps\n"
+      "\033[0m",
+      timer_gpu_2phase_pipeline.get(),
+      (int)((data_number+read_data_number) * 1000.0 / timer_gpu_2phase_pipeline.get() * 1000.0));
 }

@@ -45,6 +45,8 @@ class MPT {
   /// @brief parallel puts, including split phase and compress phase
   void puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
                    const uint8_t *values_bytes, int *values_indexs, int n);
+  void puts_2phase_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
+                   const uint8_t *values_bytes, int *values_indexs, const uint8_t **values_hps, int n);
 
   void puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
                             const uint8_t *values_bytes, int *values_indexs,
@@ -280,8 +282,8 @@ void MPT::puts_latching_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
   CHECK_ERROR(
       gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
 
-  perf::CpuTimer<perf::us> timer_gpu_put_latching;
-  timer_gpu_put_latching.start();  // timer start --------------------------
+//   perf::CpuTimer<perf::us> timer_gpu_put_latching;
+//   timer_gpu_put_latching.start();  // timer start --------------------------
 
   // puts
   const int rpwarp_block_size = 1024;
@@ -292,13 +294,13 @@ void MPT::puts_latching_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
       n, d_start_, allocator_);
   CHECK_ERROR(cudaDeviceSynchronize());
 
-  timer_gpu_put_latching.stop();  // timer stop ---------------------------
-  printf(
-      "\033[31m"
-      "GPU put latching kernel time: %d us, throughput %d qps\n"
-      "\033[0m",
-      timer_gpu_put_latching.get(),
-      (int)(n * 1000.0 / timer_gpu_put_latching.get() * 1000.0));
+//   timer_gpu_put_latching.stop();  // timer stop ---------------------------
+//   printf(
+//       "\033[31m"
+//       "GPU put latching kernel time: %d us, throughput %d qps\n"
+//       "\033[0m",
+//       timer_gpu_put_latching.get(),
+//       (int)(n * 1000.0 / timer_gpu_put_latching.get() * 1000.0));
 }
 
 void MPT::puts_latching_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
@@ -388,18 +390,18 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
 
   const int block_size = 128;
   const int num_blocks = (n + block_size - 1) / block_size;
-  perf::CpuTimer<perf::us> timer_gpu_get_parallel;
-  timer_gpu_get_parallel.start();
+//   perf::CpuTimer<perf::us> timer_gpu_get_parallel;
+//   timer_gpu_get_parallel.start();
   GKernel::gets_parallel<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, n, d_values_hps, d_values_sizes, d_root_p_);
   CHECK_ERROR(cudaDeviceSynchronize());
-  timer_gpu_get_parallel.stop();
-  printf(
-      "\033[31m"
-      "GPU lookup kernel time: %d us, throughput %d qps\n"
-      "\033[0m",
-      timer_gpu_get_parallel.get(),
-      (int)(n * 1000.0 / timer_gpu_get_parallel.get() * 1000.0));
+//   timer_gpu_get_parallel.stop();
+//   printf(
+//       "\033[31m"
+//       "GPU lookup kernel time: %d us, throughput %d qps\n"
+//       "\033[0m",
+//       timer_gpu_get_parallel.get(),
+//       (int)(n * 1000.0 / timer_gpu_get_parallel.get() * 1000.0));
   CHECK_ERROR(gutil::CpyDeviceToHost(values_hps, d_values_hps, n));
   CHECK_ERROR(gutil::CpyDeviceToHost(values_sizes, d_values_sizes, n));
 }
@@ -473,6 +475,16 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
   for (int i = 0; i < n; ++i) {
     values_hps[i] = util::element_start(values_indexs, i, values_bytes);
   }
+
+  puts_2phase_with_valuehp(keys_hexs, keys_indexs, values_bytes, values_indexs, values_hps, n);
+}
+
+void MPT::puts_2phase_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
+                      const uint8_t *values_bytes, int *values_indexs, const uint8_t **values_hps, int n) {
+//   const uint8_t **values_hps = new const uint8_t *[n];
+//   for (int i = 0; i < n; ++i) {
+//     values_hps[i] = util::element_start(values_indexs, i, values_bytes);
+//   }
 
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
@@ -590,8 +602,6 @@ void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
                                           values_indexs_size, stream_op_));
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_hps, values_hps,
                                           values_hps_size, stream_op_));
-  CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
-                                          values_bytes_size, stream_cp_));
   // use put_baseline once in case root is null
   // CHECK_ERROR(cudaDeviceSynchronize());
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
@@ -625,6 +635,8 @@ void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
 
   // CUDA_SAFE_CALL(cudaDeviceSynchronize());
   // // compress
+  CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
+                                          values_bytes_size, stream_cp_));
   GKernel::
       puts_2phase_compress_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
           d_compress_nodes, d_compress_num, d_start_, d_root_p_, allocator_, key_allocator_);

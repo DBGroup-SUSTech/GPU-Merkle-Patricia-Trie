@@ -111,12 +111,12 @@ public:
       return reinterpret_cast<uint8_t *>(d_small_pool_aligned8_ + old_count);
     }
     if (key_size < 32) {
-      assert(*d_medium_count_aligned8_ < CAPACITY / 3);
+      assert(*d_medium_count_aligned8_*4 < CAPACITY / 3);
       uint32_t old_count = atomicAdd(d_medium_count_aligned8_, 1);
       return reinterpret_cast<uint8_t *>(d_medium_pool_aligned8_ + 4*old_count);
     }
     if (key_size < 256) {
-      assert(*d_large_count_aligned8_ < CAPACITY / 3);
+      assert(*d_large_count_aligned8_*32 < CAPACITY / 3);
       uint32_t old_count = atomicAdd(d_large_count_aligned8_, 1);
       return reinterpret_cast<uint8_t *>(d_large_pool_aligned8_ + 32*old_count);
     }
