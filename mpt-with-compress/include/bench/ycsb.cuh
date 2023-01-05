@@ -30,7 +30,7 @@ void getFiles(std::string path, std::vector<std::string> &filenames) {
 }
 
 void read_ycsb_data_insert(std::string file_name, uint8_t *out_key,
-                           int *key_index, uint8_t *out_value, int *value_index,
+                           int *key_index, uint8_t *out_value, int64_t *value_index,
                            int &n) {
   std::string match_operation = "INSERT";
   std::ifstream file;

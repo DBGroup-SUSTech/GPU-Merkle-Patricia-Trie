@@ -169,7 +169,7 @@ __device__ __forceinline__ void put_baseline(
 
 /// @brief single thread baseline, adaptive from ethereum
 __global__ void puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
-                              const uint8_t *values_bytes, int *values_indexs,
+                              const uint8_t *values_bytes, int64_t *values_indexs,
                               const uint8_t *const *values_hps, int n,
                               Node **root_p,
                               DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
@@ -319,7 +319,7 @@ __device__ __forceinline__ void put_baseline_loop(
 
 __global__ void puts_baseline_loop(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
-    int *values_indexs, const uint8_t *const *values_hps, int n, Node **root_p,
+    int64_t *values_indexs, const uint8_t *const *values_hps, int n, Node **root_p,
     DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
   assert(blockDim.x == 1 && gridDim.x == 1);
   for (int i = 0; i < n; ++i) {
@@ -763,7 +763,7 @@ restart:  // TODO: replace goto with while
 
 /// @brief per request per warp
 __global__ void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
-                              const uint8_t *values_bytes, int *values_indexs,
+                              const uint8_t *values_bytes, int64_t *values_indexs,
                               const uint8_t *const *values_hps, int n,
                               ShortNode *start_node,
                               DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
@@ -1297,7 +1297,7 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
 
 __global__ void puts_2phase_put_mark_phase(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
-    int *values_indexs, const uint8_t *const *values_hps, int n,
+    int64_t *values_indexs, const uint8_t *const *values_hps, int n,
     int *compress_num, Node **root_p, FullNode **compress_nodes,
     ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;

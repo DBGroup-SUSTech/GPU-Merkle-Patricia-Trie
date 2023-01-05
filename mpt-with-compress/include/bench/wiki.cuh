@@ -139,15 +139,15 @@ int read_wiki_data_all_keys_full(std::string dir_path, uint8_t *out,
   return total_keys;
 }
 
-int read_wiki_data_values(std::string file_name, uint8_t *out, int *index,
-                          int &n, int start_index) {
+int64_t read_wiki_data_values(std::string file_name, uint8_t *out, int64_t *index,
+                          int &n, int64_t start_index) {
   xmlDocPtr doc = xmlReadFile(file_name.c_str(), nullptr, 0);
   if (doc == nullptr) {
     printf("parse error\n");
     assert(false);
   }
   xmlNodePtr root = xmlDocGetRootElement(doc);
-  int length = 0;
+  int64_t length = 0;
   int i = 0;
   for (xmlNodePtr cur = root->children; cur != nullptr; cur = cur->next) {
     if (cur->type == XML_ELEMENT_NODE) {
@@ -175,16 +175,16 @@ int read_wiki_data_values(std::string file_name, uint8_t *out, int *index,
   return length;
 }
 
-int read_wiki_data_all_values(std::string dir_path, uint8_t *out, int *index) {
+int read_wiki_data_all_values(std::string dir_path, uint8_t *out, int64_t *index) {
   std::vector<std::string> file_names;
   getFiles(dir_path, file_names);
   uint8_t *file_out = out;
-  int *file_index = index;
-  int file_start = 0;
+  int64_t *file_index = index;
+  int64_t file_start = 0;
   int total_values = 0;
   for (int i = 0; i < file_names.size(); i++) {
     int line_num = 0;
-    int file_length = read_wiki_data_values(file_names[i], file_out, file_index,
+    int64_t file_length = read_wiki_data_values(file_names[i], file_out, file_index,
                                             line_num, file_start);
     file_out += file_length;
     file_index += line_num * 2;
