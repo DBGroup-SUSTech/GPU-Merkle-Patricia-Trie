@@ -2678,7 +2678,7 @@ TEST(Trie, ETEYCSBBench) {
   uint8_t *key = (uint8_t *)malloc(1000000000);
   int *key_index = (int *)malloc(10000000 * sizeof(int));
   uint8_t *value = (uint8_t *)malloc(2000000000);
-  int *value_index = (int *)malloc(10000000 * sizeof(int));
+  int64_t *value_index = (int64_t *)malloc(10000000 * sizeof(int));
   int data_number;
 
   uint8_t *read_key = (uint8_t *)malloc(2000000000);
