@@ -41,9 +41,9 @@ std::string hex_to_string(std::string hex) {
 }
 
 void read_ethtxn_data(std::string file_name, uint8_t *out_key, int *key_index,
-                      uint8_t *out_value, int *value_index, int key_start_index,
-                      int value_start_index, int &n, int &keys_length,
-                      int &values_length) {
+                      uint8_t *out_value, int64_t *value_index, int key_start_index,
+                      int64_t value_start_index, int &n, int &keys_length,
+                      int64_t &values_length) {
   std::ifstream file;
   file.open(file_name, std::ios::in);
   if (!file) {
@@ -94,12 +94,14 @@ void read_ethtxn_data(std::string file_name, uint8_t *out_key, int *key_index,
 }
 
 int read_ethtxn_data_all(std::string dir_path, uint8_t *out_key, int *key_index,
-                         uint8_t *out_value, int *value_index) {
+                         uint8_t *out_value, int64_t *value_index) {
   std::vector<std::string> file_names;
   getFiles(dir_path, file_names);
   uint8_t *file_out_key = out_key, *file_out_value = out_value;
-  int *file_index_key = key_index, *file_index_value = value_index;
-  int file_start_key = 0, file_start_value = 0;
+  int *file_index_key = key_index;
+  int64_t *file_index_value = value_index;
+  int file_start_key = 0;
+  int64_t file_start_value = 0;
   int total_kvs = 0;
 
   int limit_files = 1;  // TODO: not reading all files
@@ -107,7 +109,7 @@ int read_ethtxn_data_all(std::string dir_path, uint8_t *out_key, int *key_index,
   for (int i = 0; i < file_names.size() && i < limit_files; i++) {
     int line_num = 0;
     int file_key_length = 0;
-    int file_value_length = 0;
+    int64_t file_value_length = 0;
     read_ethtxn_data(file_names[i], file_out_key, file_index_key,
                      file_out_value, file_index_value, file_start_key,
                      file_start_value, line_num, file_key_length,

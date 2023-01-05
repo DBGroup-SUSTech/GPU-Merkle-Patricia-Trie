@@ -114,15 +114,33 @@ enum class Device { CPU, GPU };
 __host__ __device__ __forceinline__ int element_size(const int *indexs, int i) {
   return indexs[2 * i + 1] - indexs[2 * i] + 1;
 }
+
+__host__ __device__ __forceinline__ int element_size(const int64_t *indexs, int i) {
+  return int(indexs[2 * i + 1] - indexs[2 * i] + 1);
+}
+
 __host__ __device__ __forceinline__ const uint8_t *element_start(
     const int *indexs, int i, const uint8_t *all_bytes) {
   return &all_bytes[indexs[2 * i]];
 }
+
+__host__ __device__ __forceinline__ const uint8_t *element_start(
+    const int64_t *indexs, int i, const uint8_t *all_bytes) {
+  return &all_bytes[indexs[2 * i]];
+}
+
 __host__ __device__ __forceinline__ int elements_size_sum(const int *indexs,
                                                           int n) {
   int i = n - 1;  // i of the last num;
   return indexs[2 * i + 1] + 1;
 }
+
+__host__ __device__ __forceinline__ int64_t elements_size_sum(const int64_t *indexs,
+                                                          int n) {
+  int i = n - 1;  // i of the last num;
+  return indexs[2 * i + 1] + 1;
+}
+
 __host__ __device__ __forceinline__ int indexs_size_sum(int n) { return 2 * n; }
 
 __host__ __device__ __forceinline__ int prefix_len(const uint8_t *bytes1,
