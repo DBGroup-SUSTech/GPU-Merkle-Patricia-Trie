@@ -12,44 +12,44 @@ class MPT {
  public:
   /// @brief puts baseline, adaptive from ethereum
   void puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
-                     const uint8_t *values_bytes, int *values_indexs, int n);
+                     const uint8_t *values_bytes, int64_t *values_indexs, int n);
   void puts_baseline_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
                                   const uint8_t *values_bytes,
-                                  int *values_indexs, const uint8_t **value_hps,
+                                  int64_t *values_indexs, const uint8_t **value_hps,
                                   int n);
 
   /// @brief puts baseline loop version, ethereum adaptive
   // TODO
   void puts_baseline_loop(const uint8_t *keys_hexs, int *keys_indexs,
-                          const uint8_t *values_bytes, int *values_indexs,
+                          const uint8_t *values_bytes, int64_t *values_indexs,
                           int n);
   // TODO
   void puts_baseline_loop_with_valuehp(const uint8_t *keys_hexs,
                                        int *keys_indexs,
                                        const uint8_t *values_bytes,
-                                       int *values_indexs,
+                                       int64_t *values_indexs,
                                        const uint8_t **value_hps, int n);
 
   /// @brief parallel puts, based on latching
   void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
-                     const uint8_t *values_bytes, int *values_indexs, int n);
+                     const uint8_t *values_bytes, int64_t *values_indexs, int n);
   void puts_latching_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
                                   const uint8_t *values_bytes,
-                                  int *values_indexs,
+                                  int64_t *values_indexs,
                                   const uint8_t **values_hps, int n);
 
   void puts_latching_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
-                              const uint8_t *values_bytes, int *values_indexs,
+                              const uint8_t *values_bytes, int64_t *values_indexs,
                               const uint8_t **values_hps, int n);
 
   /// @brief parallel puts, including split phase and compress phase
   void puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
-                   const uint8_t *values_bytes, int *values_indexs, int n);
+                   const uint8_t *values_bytes, int64_t *values_indexs, int n);
   void puts_2phase_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
-                   const uint8_t *values_bytes, int *values_indexs, const uint8_t **values_hps, int n);
+                   const uint8_t *values_bytes, int64_t *values_indexs, const uint8_t **values_hps, int n);
 
   void puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
-                            const uint8_t *values_bytes, int *values_indexs,
+                            const uint8_t *values_bytes, int64_t *values_indexs,
                             const uint8_t **values_hps, int n);
   /// @brief hash according to key value
   // TODO
@@ -108,7 +108,7 @@ class MPT {
 };
 
 void MPT::puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
-                        const uint8_t *values_bytes, int *values_indexs,
+                        const uint8_t *values_bytes, int64_t *values_indexs,
                         int n) {
   // create host side value ptrs
   const uint8_t **values_hps = new const uint8_t *[n];
@@ -121,13 +121,13 @@ void MPT::puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
 
 void MPT::puts_baseline_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
                                      const uint8_t *values_bytes,
-                                     int *values_indexs,
+                                     int64_t *values_indexs,
                                      const uint8_t **values_hps, int n) {
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
   uint8_t *d_values_bytes = nullptr;
-  int *d_values_indexs = nullptr;
+  int64_t *d_values_indexs = nullptr;
   const uint8_t **d_values_hps = nullptr;
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
@@ -171,7 +171,7 @@ void MPT::puts_baseline_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
 }
 
 void MPT::puts_baseline_loop(const uint8_t *keys_hexs, int *keys_indexs,
-                             const uint8_t *values_bytes, int *values_indexs,
+                             const uint8_t *values_bytes, int64_t *values_indexs,
                              int n) {
   // create host side value ptrs
   const uint8_t **values_hps = new const uint8_t *[n];
@@ -185,13 +185,13 @@ void MPT::puts_baseline_loop(const uint8_t *keys_hexs, int *keys_indexs,
 void MPT::puts_baseline_loop_with_valuehp(const uint8_t *keys_hexs,
                                           int *keys_indexs,
                                           const uint8_t *values_bytes,
-                                          int *values_indexs,
+                                          int64_t *values_indexs,
                                           const uint8_t **values_hps, int n) {
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
   uint8_t *d_values_bytes = nullptr;
-  int *d_values_indexs = nullptr;
+  int64_t *d_values_indexs = nullptr;
   const uint8_t **d_values_hps = nullptr;
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
@@ -235,7 +235,7 @@ void MPT::puts_baseline_loop_with_valuehp(const uint8_t *keys_hexs,
 }
 
 void MPT::puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
-                        const uint8_t *values_bytes, int *values_indexs,
+                        const uint8_t *values_bytes, int64_t *values_indexs,
                         int n) {
   // TODO delete these time
   // create host side value ptrs
@@ -251,13 +251,13 @@ void MPT::puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
 
 void MPT::puts_latching_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
                                      const uint8_t *values_bytes,
-                                     int *values_indexs,
+                                     int64_t *values_indexs,
                                      const uint8_t **values_hps, int n) {
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
   uint8_t *d_values_bytes = nullptr;
-  int *d_values_indexs = nullptr;
+  int64_t *d_values_indexs = nullptr;
   const uint8_t **d_values_hps = nullptr;
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
@@ -305,13 +305,13 @@ void MPT::puts_latching_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
 
 void MPT::puts_latching_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
                                  const uint8_t *values_bytes,
-                                 int *values_indexs, const uint8_t **values_hps,
+                                 int64_t *values_indexs, const uint8_t **values_hps,
                                  int n) {
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
   uint8_t *d_values_bytes = nullptr;
-  int *d_values_indexs = nullptr;
+  int64_t *d_values_indexs = nullptr;
   const uint8_t **d_values_hps = nullptr;
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
@@ -470,7 +470,7 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
 }
 
 void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
-                      const uint8_t *values_bytes, int *values_indexs, int n) {
+                      const uint8_t *values_bytes, int64_t *values_indexs, int n) {
   const uint8_t **values_hps = new const uint8_t *[n];
   for (int i = 0; i < n; ++i) {
     values_hps[i] = util::element_start(values_indexs, i, values_bytes);
@@ -480,7 +480,7 @@ void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
 }
 
 void MPT::puts_2phase_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
-                      const uint8_t *values_bytes, int *values_indexs, const uint8_t **values_hps, int n) {
+                      const uint8_t *values_bytes, int64_t *values_indexs, const uint8_t **values_hps, int n) {
 //   const uint8_t **values_hps = new const uint8_t *[n];
 //   for (int i = 0; i < n; ++i) {
 //     values_hps[i] = util::element_start(values_indexs, i, values_bytes);
@@ -490,7 +490,7 @@ void MPT::puts_2phase_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
   uint8_t *d_values_bytes = nullptr;
-  int *d_values_indexs = nullptr;
+  int64_t *d_values_indexs = nullptr;
   const uint8_t **d_values_hps = nullptr;
   int *d_compress_num;
 
@@ -559,13 +559,13 @@ void MPT::puts_2phase_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
 }
 
 void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
-                               const uint8_t *values_bytes, int *values_indexs,
+                               const uint8_t *values_bytes, int64_t *values_indexs,
                                const uint8_t **values_hps, int n) {
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
   uint8_t *d_values_bytes = nullptr;
-  int *d_values_indexs = nullptr;
+  int64_t *d_values_indexs = nullptr;
   const uint8_t **d_values_hps = nullptr;
   int *d_compress_num;
 

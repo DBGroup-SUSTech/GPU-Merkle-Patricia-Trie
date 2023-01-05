@@ -14,11 +14,11 @@ public:
   /// @brief puts baseline, according to ethereum
   /// @note only support hex encoding keys_bytes
   void puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
-                     const uint8_t *values_bytes, const int *values_indexs,
+                     const uint8_t *values_bytes, const int64_t *values_indexs,
                      int n);
   
   void puts_ledgerdb(const uint8_t *keys_hexs, const int *keys_indexs,
-                     const uint8_t *values_bytes, const int *values_indexs,
+                     const uint8_t *values_bytes, const int64_t *values_indexs,
                      int n);
 
   /// @brief hash according to key value
@@ -209,7 +209,7 @@ void MPT::put_baseline(const uint8_t *key, int key_size, const uint8_t *value,
 }
 
 void MPT::puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
-                        const uint8_t *values_bytes, const int *values_indexs,
+                        const uint8_t *values_bytes, const int64_t *values_indexs,
                         int n) {
   for (int i = 0; i < n; ++i) {
     const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
@@ -556,7 +556,7 @@ void MPT::put_ledgerdb(const uint8_t *key, int key_size, const uint8_t *value,
 }
 
 void MPT::puts_ledgerdb(const uint8_t *keys_hexs, const int *keys_indexs,
-                        const uint8_t *values_bytes, const int *values_indexs,
+                        const uint8_t *values_bytes, const int64_t *values_indexs,
                         int n){
   for (int i = 0; i < n; ++i) {
     const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);

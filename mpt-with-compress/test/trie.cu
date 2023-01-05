@@ -19,7 +19,7 @@
 /// @param value_indexs pointers to value_indexs
 /// @param n            n kvs
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
-              const uint8_t *&values_bytes, int *&values_indexs, int &n) {
+              const uint8_t *&values_bytes, int64_t *&values_indexs, int &n) {
   // parameters
   n = 1 << 16;
   std::random_device rd;
@@ -45,7 +45,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
 
   // indexs
   keys_bytes_indexs = new int[n * 2]{};
-  values_indexs = new int[n * 2]{};
+  values_indexs = new int64_t[n * 2]{};
   for (int i = 0; i < n; ++i) {
     keys_bytes_indexs[2 * i] = 2 * i;
     keys_bytes_indexs[2 * i + 1] = 2 * i + 1;
@@ -109,7 +109,7 @@ TEST(Trie, GenerateFullTrieData) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_indexs = nullptr;
+  int64_t *values_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_indexs, n);
@@ -141,7 +141,7 @@ TEST(CpuMpt, PutsBaselineBasic) {
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
   const uint8_t *values_bytes =
       reinterpret_cast<const uint8_t *>("reindeerpuppycat");
-  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -187,7 +187,7 @@ TEST(CpuMpt, PutsBaselineOverride) {
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
   const uint8_t *values_bytes =
       reinterpret_cast<const uint8_t *>("reindeerpuppycat");
-  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -221,7 +221,7 @@ TEST(CpuMpt, PutsBaselineFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -273,7 +273,7 @@ TEST(CpuMpt, GetsBaselineNodesFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -312,7 +312,7 @@ TEST(CpuMpt, HashsDirtyFlagFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -377,7 +377,7 @@ TEST(GpuMpt, PutsBaselineBasic) {
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
   const uint8_t *values_bytes =
       reinterpret_cast<const uint8_t *>("reindeerpuppycat");
-  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -423,7 +423,7 @@ TEST(GpuMpt, PutsBaselineOverride) {
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
   const uint8_t *values_bytes =
       reinterpret_cast<const uint8_t *>("reindeerpuppycat");
-  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -456,7 +456,7 @@ TEST(GpuMpt, PutsBaselineFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -511,7 +511,7 @@ TEST(GpuMpt, PutsLatchingBasic) {
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
   const uint8_t *values_bytes =
       reinterpret_cast<const uint8_t *>("reindeerpuppycat");
-  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -557,7 +557,7 @@ TEST(GpuMpt, PutsLatchingOverride) {
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
   const uint8_t *values_bytes =
       reinterpret_cast<const uint8_t *>("reindeerpuppycat");
-  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -598,7 +598,7 @@ TEST(GpuMpt, PutsLatchingFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -649,7 +649,7 @@ TEST(GpuMpt, PutsLatchingPipelineFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -694,7 +694,7 @@ TEST(GpuMpt, HashsOnepassFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -757,7 +757,7 @@ TEST(Trie, PutBenchmark) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -786,7 +786,7 @@ TEST(Trie, PutBenchmark) {
   // pre-pinned
   int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_bytes_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_bytes_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
@@ -940,7 +940,7 @@ TEST(Trie, HashBenchmark) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -1026,7 +1026,7 @@ TEST(CpuMpt, PutsLedgerFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -1105,7 +1105,7 @@ TEST(CpuMpt, LedgerdbHash) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -1145,7 +1145,7 @@ TEST(GpuMPT, Pus2PhaseTestBasic) {
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
   const uint8_t *values_bytes =
       reinterpret_cast<const uint8_t *>("reindeerpuppycat");
-  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -1192,7 +1192,7 @@ TEST(GpuMPT, Pus2PhaseTestOverride) {
   int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
   const uint8_t *values_bytes =
       reinterpret_cast<const uint8_t *>("reindeerpuppycat");
-  int values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -1232,7 +1232,7 @@ TEST(GpuMPT, Pus2PhaseTestFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -1296,15 +1296,15 @@ TEST(Trie, ETEEthtxnBench) {
   // const uint8_t *keys_bytes = nullptr;
   // int *keys_bytes_indexs = nullptr;
   // const uint8_t *values_bytes = nullptr;
-  // int *values_bytes_indexs = nullptr;
+  // int64_t *values_bytes_indexs = nullptr;
   // int n;
 
   // data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs,
   // n);
   uint8_t *keys_buffer = (uint8_t *)malloc(100000000);
-  int *keys_bytes_indexs_buffer = (int *)malloc(1000000 * sizeof(int));
+  int *keys_bytes_indexs_buffer = (int *)malloc(100000000 * sizeof(int));
   uint8_t *value_buffer = (uint8_t *)malloc(2000000000);
-  int *values_bytes_indexs_buffer = (int *)malloc(1000000 * sizeof(int));
+  int64_t *values_bytes_indexs_buffer = (int64_t *)malloc(100000000 * sizeof(int));
 
   int n =
       read_ethtxn_data_all(ETHTXN_PATH, keys_buffer, keys_bytes_indexs_buffer,
@@ -1318,7 +1318,7 @@ TEST(Trie, ETEEthtxnBench) {
   keys_bytes_to_hexs(keys_buffer, keys_bytes_indexs_buffer, n, keys_hexs,
                      keys_hexs_indexs);
 
-  printf("how much%d\n, key size %d, value size %d\n", n,
+  printf("how much%d\n, key size %d, value size %ld\n", n,
          util::elements_size_sum(keys_hexs_indexs, n),
          util::elements_size_sum(values_bytes_indexs_buffer, n));
 
@@ -1564,7 +1564,7 @@ TEST(Trie, PutEthtxnBench) {
   uint8_t *keys_buffer = (uint8_t *)malloc(100000000);
   int *keys_bytes_indexs_buffer = (int *)malloc(10000000 * sizeof(int));
   uint8_t *value_buffer = (uint8_t *)malloc(2000000000);
-  int *values_bytes_indexs_buffer = (int *)malloc(10000000 * sizeof(int));
+  int64_t *values_bytes_indexs_buffer = (int64_t *)malloc(10000000 * sizeof(int64_t));
 
   // printf("%p + %d = %p\n", keys_buffer, 100000000, keys_buffer + 100000000);
   // printf("%p + %ld = %p\n", keys_bytes_indexs_buffer, 1000000 * sizeof(int),
@@ -1608,7 +1608,7 @@ TEST(Trie, PutEthtxnBench) {
   // pre-pinned
   int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size =
+  int64_t values_bytes_size =
       util::elements_size_sum(values_bytes_indexs_buffer, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
@@ -1655,7 +1655,7 @@ TEST(Trie, PutEthtxnBench) {
 
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
 
-    printf("%p + %d = %p\n", value_buffer, values_bytes_size,
+    printf("%p + %ld = %p\n", value_buffer, values_bytes_size,
            value_buffer + values_bytes_size);
     CHECK_ERROR(gutil::PinHost(value_buffer, values_bytes_size));
 
@@ -1777,7 +1777,7 @@ TEST(Trie, PutWikiBench) {
   // const uint8_t *keys_bytes = nullptr;
   // int *keys_bytes_indexs = nullptr;
   // const uint8_t *values_bytes = nullptr;
-  // int *values_bytes_indexs = nullptr;
+  // int64_t *values_bytes_indexs = nullptr;
   // int n;
 
   // data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs,
@@ -1785,7 +1785,7 @@ TEST(Trie, PutWikiBench) {
   uint8_t *keys_buffer = (uint8_t *)malloc(100000000);
   int *keys_bytes_indexs_buffer = (int *)malloc(1000000 * sizeof(int));
   uint8_t *value_buffer = (uint8_t *)malloc(2000000000);
-  int *values_bytes_indexs_buffer = (int *)malloc(1000000 * sizeof(int));
+  int64_t *values_bytes_indexs_buffer = (int64_t *)malloc(1000000 * sizeof(int));
   int n = read_wiki_data_all_keys(WIKI_INDEX_PATH, keys_buffer,
                                   keys_bytes_indexs_buffer);
   int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, value_buffer,
@@ -1830,7 +1830,7 @@ TEST(Trie, PutWikiBench) {
   // pre-pinned
   int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size =
+  int64_t values_bytes_size =
       util::elements_size_sum(values_bytes_indexs_buffer, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
@@ -1986,7 +1986,7 @@ TEST(Trie, HashWikiBench) {
   // const uint8_t *keys_bytes = nullptr;
   // int *keys_bytes_indexs = nullptr;
   // const uint8_t *values_bytes = nullptr;
-  // int *values_bytes_indexs = nullptr;
+  // int64_t *values_bytes_indexs = nullptr;
   // int n;
 
   // data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs,
@@ -1994,7 +1994,7 @@ TEST(Trie, HashWikiBench) {
   uint8_t *keys_buffer = (uint8_t *)malloc(100000000);
   int *keys_bytes_indexs_buffer = (int *)malloc(1000000 * sizeof(int));
   uint8_t *value_buffer = (uint8_t *)malloc(2000000000);
-  int *values_bytes_indexs_buffer = (int *)malloc(1000000 * sizeof(int));
+  int64_t *values_bytes_indexs_buffer = (int64_t *)malloc(1000000 * sizeof(int));
   int n = read_wiki_data_all_keys(WIKI_INDEX_PATH, keys_buffer,
                                   keys_bytes_indexs_buffer);
   int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, value_buffer,
@@ -2084,7 +2084,7 @@ TEST(Trie, LookupBench) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -2150,7 +2150,7 @@ TEST(GPUMPT, KeyTypeBench) {
   // const uint8_t *keys_bytes = nullptr;
   // int *keys_bytes_indexs = nullptr;
   // const uint8_t *values_bytes = nullptr;
-  // int *values_bytes_indexs = nullptr;
+  // int64_t *values_bytes_indexs = nullptr;
   // int n;
 
   // data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs,
@@ -2158,7 +2158,7 @@ TEST(GPUMPT, KeyTypeBench) {
   uint8_t *keys_buffer = (uint8_t *)malloc(100000000);
   int *keys_bytes_indexs_buffer = (int *)malloc(1000000 * sizeof(int));
   uint8_t *value_buffer = (uint8_t *)malloc(2000000000);
-  int *values_bytes_indexs_buffer = (int *)malloc(1000000 * sizeof(int));
+  int64_t *values_bytes_indexs_buffer = (int64_t *)malloc(1000000 * sizeof(int));
   int n = read_wiki_data_all_keys_full(WIKI_INDEX_PATH, keys_buffer,
                                        keys_bytes_indexs_buffer);
   int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, value_buffer,
@@ -2203,7 +2203,7 @@ TEST(GPUMPT, KeyTypeBench) {
   // pre-pinned
   int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size =
+  int64_t values_bytes_size =
       util::elements_size_sum(values_bytes_indexs_buffer, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
@@ -2357,7 +2357,7 @@ TEST(Trie, ETEBench) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
-  int *values_bytes_indexs = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
   int n;
 
   data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
@@ -2386,7 +2386,7 @@ TEST(Trie, ETEBench) {
   // pre-pinned
   int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_bytes_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_bytes_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
@@ -2546,7 +2546,7 @@ TEST(Trie, ETEBench) {
 //   uint8_t *key = (uint8_t *)malloc(1000000000);
 //   int *key_index = (int *)malloc(1000000 * sizeof(int));
 //   uint8_t *value = (uint8_t *)malloc(2000000000);
-//   int *value_index = (int *)malloc(1000000 * sizeof(int));
+//   int64_t *value_index = (int *)malloc(1000000 * sizeof(int));
 //   int data_number;
 
 //   uint8_t *read_key = (uint8_t *)malloc(2000000000);
@@ -2678,7 +2678,7 @@ TEST(Trie, ETEYCSBBench) {
   uint8_t *key = (uint8_t *)malloc(1000000000);
   int *key_index = (int *)malloc(1000000 * sizeof(int));
   uint8_t *value = (uint8_t *)malloc(2000000000);
-  int *value_index = (int *)malloc(1000000 * sizeof(int));
+  int64_t *value_index = (int64_t *)malloc(1000000 * sizeof(int));
   int data_number;
 
   uint8_t *read_key = (uint8_t *)malloc(2000000000);
