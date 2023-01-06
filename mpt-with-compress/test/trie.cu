@@ -1310,7 +1310,7 @@ TEST(Trie, ETEEthtxnBench) {
       read_ethtxn_data_all(ETHTXN_PATH, keys_buffer, keys_bytes_indexs_buffer,
                            value_buffer, values_bytes_indexs_buffer);
 
-  // n = 100000;
+  n = 10000;
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -1318,7 +1318,7 @@ TEST(Trie, ETEEthtxnBench) {
   keys_bytes_to_hexs(keys_buffer, keys_bytes_indexs_buffer, n, keys_hexs,
                      keys_hexs_indexs);
 
-  printf("how much%d\n, key size %d, value size %ld\n", n,
+  printf("how much%d key size %d, value size %ld\n", n,
          util::elements_size_sum(keys_hexs_indexs, n),
          util::elements_size_sum(values_bytes_indexs_buffer, n));
 
@@ -1646,25 +1646,10 @@ TEST(Trie, PutEthtxnBench) {
   {
     GPUHashMultiThread::load_constants();
 
-    printf("%p + %d = %p\n", keys_hexs, keys_hexs_size,
-           keys_hexs + keys_hexs_size);
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
-
-    printf("%p + %d = %p\n", keys_hexs_indexs, keys_indexs_size,
-           keys_hexs_indexs + keys_indexs_size);
-
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
-
-    printf("%p + %ld = %p\n", value_buffer, values_bytes_size,
-           value_buffer + values_bytes_size);
     CHECK_ERROR(gutil::PinHost(value_buffer, values_bytes_size));
-
-    printf("%p + %d = %p\n", values_bytes_indexs_buffer, values_indexs_size,
-           values_bytes_indexs_buffer + values_indexs_size);
     CHECK_ERROR(gutil::PinHost(values_bytes_indexs_buffer, values_indexs_size));
-
-    printf("%p + %d = %p\n", values_hps, values_hps_size,
-           values_hps + values_hps_size);
     CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
 
     GpuMPT::Compress::MPT gpu_mpt_latching_pipeline;
