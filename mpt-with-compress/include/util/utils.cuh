@@ -47,6 +47,66 @@ inline void print_hex(const uint8_t *str, size_t size) {
     printf("%02x ", str[i]);
   }
 }
+
+struct Segment {
+  const uint8_t *key_hex_;
+  int *key_hex_index_;
+  const uint8_t *value_;
+  int64_t *value_index_;
+  const uint8_t **value_hp_;
+  int n_;
+
+  std::vector<Segment> split_into_size(int seg_size) {
+    int seg_number = (n_ + seg_size - 1) / seg_size;
+    int n_remain = n_;
+
+    std::vector<Segment> segments(seg_number);
+
+    const uint8_t *next_key_hex = key_hex_;
+    int *next_key_hex_index = key_hex_index_;
+    const uint8_t *next_value = value_;
+    int64_t *next_value_index = value_index_;
+    const uint8_t **next_value_hp = value_hp_;
+
+    int offset_key_hex = 0;
+    int64_t offset_value = 0;
+
+    for (int i = 0; i < seg_number; ++i) {
+      int n_i = std::min(n_remain, seg_size);
+
+      Segment seg_i = {
+          .key_hex_ = next_key_hex,
+          .key_hex_index_ = next_key_hex_index,
+          .value_ = next_value,
+          .value_index_ = next_value_index,
+          .value_hp_ = next_value_hp,
+          .n_ = n_i,
+      };
+
+      // remove offset
+      for (int j = 0; j < util::indexs_size_sum(n_i); ++j) {
+        seg_i.key_hex_index_[j] -= offset_key_hex;
+        seg_i.value_index_[j] -= offset_value;
+      }
+
+      segments.at(i) = seg_i;
+
+      // advanced
+      offset_key_hex += util::elements_size_sum(seg_i.key_hex_index_, seg_i.n_);
+      offset_value += util::elements_size_sum(seg_i.value_index_, seg_i.n_);
+
+      next_key_hex += util::elements_size_sum(next_key_hex_index, seg_i.n_);
+      next_key_hex_index += util::indexs_size_sum(seg_i.n_);
+      next_value += util::elements_size_sum(next_value_index, seg_i.n_);
+      next_value_index += util::indexs_size_sum(seg_i.n_);
+      next_value_hp += seg_i.n_;
+
+      n_remain -= seg_i.n_;
+    }
+    return segments;
+  }
+};
+
 }  // namespace cutil
 
 namespace gutil {
