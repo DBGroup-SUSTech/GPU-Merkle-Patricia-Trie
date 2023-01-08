@@ -1180,8 +1180,13 @@ TEST(GpuMPT, Pus2PhaseTestBasic) {
   GpuMPT::Compress::MPT mpt;
   mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
                   values_bytes_indexs, n);
+  mpt.hash_onepass(keys_hexs, keys_hexs_indexs, n);
   mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
-
+  const uint8_t * hash;
+  int hash_size = 0;
+  mpt.get_root_hash(hash, hash_size);
+  printf("GPU 2phase hash is: ");
+  cutil::println_hex(hash, hash_size);
   for (int i = 0; i < n; ++i) {
     EXPECT_TRUE(util::bytes_equal(
         util::element_start(values_bytes_indexs, i, values_bytes),
@@ -1244,13 +1249,21 @@ TEST(GpuMPT, Put2PhaseTestInsertTwice) {
   GpuMPT::Compress::MPT mpt;
   mpt.puts_2phase(keys_hexs1, keys_hexs_indexs1, values_bytes1,
                   values_bytes_indexs1, n1);
+  mpt.hash_onepass(keys_hexs1, keys_hexs_indexs1, n1);
   mpt.gets_parallel(keys_hexs1, keys_hexs_indexs1, n1, values_ptrs1,
                     values_sizes1);
 
   mpt.puts_2phase(keys_hexs2, keys_hexs_indexs2, values_bytes2,
                   values_bytes_indexs2, n2);
+  mpt.hash_onepass(keys_hexs2, keys_hexs_indexs2, n2);
   mpt.gets_parallel(keys_hexs2, keys_hexs_indexs2, n2, values_ptrs2,
                     values_sizes2);
+
+  const uint8_t * hash;
+  int hash_size = 0;
+  mpt.get_root_hash(hash, hash_size);
+  printf("GPU 2phase hash is: ");
+  cutil::println_hex(hash, hash_size);
   for (int i = 0; i < n1; ++i) {
     EXPECT_TRUE(util::bytes_equal(
         util::element_start(values_bytes_indexs1, i, values_bytes1),

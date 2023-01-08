@@ -1152,20 +1152,21 @@ __device__ __forceinline__ void do_put_2phase_get_split_phase(
     switch (node->type) {
       case Node::Type::SHORT: {
         ShortNode *s_node = static_cast<ShortNode *>(node);
-        // printf("%d\n",s_node->val->type);
+        // s_node->print_self();
         int match = util::prefix_len(s_node->key, s_node->key_size, key_router,
                                      remain_key_size);
         if (match < s_node->key_size) {
           int to_split = atomicCAS(&s_node->to_split, 0, 1);
           if (to_split == 0) {
-            //   printf("once\n");
             split_node(s_node, split_end, start_node, root, last_key,
                        allocator);
           }
           return;  // short node unmatch -> split
         }
         if (match == 0) {
-          return;
+          if (s_node != start_node) {
+            return;
+          }
         }
         remain_key_size -= match;
         key_router += match;
@@ -1174,6 +1175,7 @@ __device__ __forceinline__ void do_put_2phase_get_split_phase(
       }
       case Node::Type::FULL: {
         FullNode *f_node = static_cast<FullNode *>(node);
+        // f_node->print_self();
         remain_key_size--;
         last_key = static_cast<int>(*key_router);
         key_router++;
@@ -1446,16 +1448,18 @@ __device__ __forceinline__ void late_compress(
 
 __device__ __forceinline__ void new_do_put_2phase_compress_phase(
     FullNode *&compress_node, ShortNode *start_node, Node **root_p,
-    DynamicAllocator<ALLOC_CAPACITY> &allocator,
+    Node *& hash_target_node, DynamicAllocator<ALLOC_CAPACITY> &allocator,
     KeyDynamicAllocator<KEY_ALLOC_CAPACITY> &key_allocator) {
   Node *node = compress_node;
   if (compress_node->child_num() > 1) {
     int old = atomicCAS(&compress_node->compressed, 0, 1);
     if (old) {
+      hash_target_node = compress_node->childs[16];
       return;
     }
     node = node->parent;
   }
+  bool updated = false;
   ShortNode *compressing_node = allocator.malloc<ShortNode>();
   compressing_node->type = Node::Type::SHORT;
   uint8_t *cached_keys = key_allocator.key_malloc(0);
@@ -1468,6 +1472,10 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
         if (compressing_node->key_size > 0) {
           late_compress(compressing_node, cached_keys, node, cached_f_node,
                         start_node, root_p, container_size);
+          if (!updated) {
+            hash_target_node = compressing_node->val;
+            updated = true;
+          }
         }
         return;
       }
@@ -1478,6 +1486,10 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
           if (compressing_node->key_size > 0) {
             late_compress(compressing_node, cached_keys, f_node, cached_f_node,
                           start_node, root_p, container_size);
+            if (!updated) {
+              hash_target_node = compressing_node->val;
+              updated = true;
+            }
           }
           return;
         }
@@ -1509,6 +1521,10 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
           if (compressing_node->key_size > 0) {
             late_compress(compressing_node, cached_keys, f_node, cached_f_node,
                           start_node, root_p, container_size);
+            if (!updated) {
+              hash_target_node = compressing_node->val;
+              updated = true;
+            }
           }
           compressing_node = allocator.malloc<ShortNode>();
           compressing_node->type = Node::Type::SHORT;
@@ -1528,7 +1544,8 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
 
 __global__ void puts_2phase_compress_phase(
     FullNode **compress_nodes, int *compress_num, ShortNode *start_node,
-    Node **root_p, DynamicAllocator<ALLOC_CAPACITY> allocator,
+    Node **root_p, Node ** hash_target_nodes, int *hash_target_number, 
+    DynamicAllocator<ALLOC_CAPACITY> allocator,
     KeyDynamicAllocator<KEY_ALLOC_CAPACITY> key_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= *compress_num) {
@@ -1537,8 +1554,13 @@ __global__ void puts_2phase_compress_phase(
   FullNode *compress_node = compress_nodes[tid];
   // printf("%p\n", compress_node);
   // printf("%d\n", compress_node->childs[16]);
-  new_do_put_2phase_compress_phase(compress_node, start_node, root_p, allocator,
-                                   key_allocator);
+  Node * hash_target_node = nullptr;
+  new_do_put_2phase_compress_phase(compress_node, start_node, root_p, hash_target_node, 
+                                   allocator, key_allocator);
+  if (hash_target_node != nullptr) {
+    int place = atomicAdd(hash_target_number, 1);
+    hash_target_nodes[place] = hash_target_node;
+  }
 }
 
 // __device__ __forceinline__ void dfs_traverse_trie(Node *root) {
@@ -1579,7 +1601,10 @@ __global__ void puts_2phase_compress_phase(
 //   }
 // }
 
-// __global__ void traverse_trie(Node **root) { dfs_traverse_trie(*root); }
+// __global__ void traverse_trie(Node **root) {
+//   printf("one traverse\n");
+//   dfs_traverse_trie(*root); 
+// }
 }  // namespace GKernel
 }  // namespace Compress
 }  // namespace GpuMPT
