@@ -169,7 +169,8 @@ __device__ __forceinline__ void put_baseline(
 
 /// @brief single thread baseline, adaptive from ethereum
 __global__ void puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
-                              const uint8_t *values_bytes, int64_t *values_indexs,
+                              const uint8_t *values_bytes,
+                              int64_t *values_indexs,
                               const uint8_t *const *values_hps, int n,
                               Node **root_p,
                               DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
@@ -319,8 +320,8 @@ __device__ __forceinline__ void put_baseline_loop(
 
 __global__ void puts_baseline_loop(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
-    int64_t *values_indexs, const uint8_t *const *values_hps, int n, Node **root_p,
-    DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
+    int64_t *values_indexs, const uint8_t *const *values_hps, int n,
+    Node **root_p, DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
   assert(blockDim.x == 1 && gridDim.x == 1);
   for (int i = 0; i < n; ++i) {
     const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
@@ -763,7 +764,8 @@ restart:  // TODO: replace goto with while
 
 /// @brief per request per warp
 __global__ void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
-                              const uint8_t *values_bytes, int64_t *values_indexs,
+                              const uint8_t *values_bytes,
+                              int64_t *values_indexs,
                               const uint8_t *const *values_hps, int n,
                               ShortNode *start_node,
                               DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
@@ -946,7 +948,6 @@ __device__ __forceinline__ void do_hash_onepass_mark_phase(const uint8_t *key,
     return;
   }
 }
-
 /**
  * @brief get leaf nodes, set visit count and set parent
  * @param key
@@ -966,6 +967,41 @@ __global__ void hash_onepass_mark_phase(const uint8_t *keys_hexs,
   Node *&leaf = leafs[tid];
 
   do_hash_onepass_mark_phase(key, key_size, leaf, *root_p);
+}
+
+// hash_node might set to null
+__device__ __forceinline__ void do_hash_onepass_mark_phase_v2(
+    Node *&hash_node, const Node *root) {
+  assert(hash_node != nullptr);
+  atomicAdd(&hash_node->visit_count, 1);
+  Node *node = hash_node;
+  Node *prev = nullptr;
+  // TODO: is root node's parent pointed to start node?
+  while (node) {
+    if (node->parent != nullptr) {
+      int old = atomicCAS(&node->parent_visit_count_added, 0, 1);
+      if (0 == old) {
+        atomicAdd(&node->parent->visit_count, 1);
+      }
+    }
+    prev = node;
+    node = node->parent;
+  }
+
+  // deleted node
+  if (prev != root) {
+    hash_node = nullptr;
+  }
+}
+
+// set deleted hash node to NULL
+__global__ void hash_onepass_mark_phase_v2(Node **hash_nodes, int n,
+                                           const Node *const *root_p) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+  do_hash_onepass_mark_phase_v2(hash_nodes[tid], *root_p);
 }
 
 __device__ __forceinline__ void do_hash_onepass_update_phase(
@@ -1110,6 +1146,170 @@ __global__ void hash_onepass_update_phase(
                                B + wid_block * 25, C + wid_block * 25,
                                D + wid_block * 25,
                                buffer + wid_block * (17 * 32), allocator);
+}
+
+__device__ __forceinline__ void do_hash_onepass_update_phase_v2(
+    Node *hash_node, int lane_id, uint64_t *A, uint64_t *B, uint64_t *C,
+    uint64_t *D, uint8_t *buffer_shared /*17 * 32 bytes*/,
+    DynamicAllocator<ALLOC_CAPACITY> &allocator) {
+  // prepare node's value's hash
+  assert(hash_node != nullptr);
+  if (hash_node->type == Node::Type::VALUE) {
+    int should_visit = 0;
+    if (lane_id == 0) {
+      should_visit = (1 == atomicSub(&hash_node->visit_count, 1));
+    }
+    // broadcast from 0 to warp
+    should_visit = __shfl_sync(WARP_FULL_MASK, should_visit, 0);
+    if (!should_visit) {
+      return;
+    }
+
+    ValueNode *vnode = static_cast<ValueNode *>(hash_node);
+    vnode->hash = vnode->d_value;
+    vnode->hash_size = vnode->value_size;
+    hash_node = hash_node->parent;
+  }
+
+  __threadfence();  // make sure the new hash can be seen by other threads
+
+  while (hash_node) {
+    assert(hash_node->type == Node::Type::FULL ||
+           hash_node->type == Node::Type::SHORT);
+
+    // should_visit means all child's hash and my value's hash are ready
+    int should_visit = 0;
+    if (lane_id == 0) {
+      should_visit = (1 == atomicSub(&hash_node->visit_count, 1));
+    }
+
+    // broadcast from 0 to warp
+    should_visit = __shfl_sync(WARP_FULL_MASK, should_visit, 0);
+    if (!should_visit) {
+      break;
+    }
+
+    // encode data into buffer
+    int encoding_size_0 = 0;
+    uint8_t *encoding_0 = nullptr;
+    uint8_t *hash_0 = nullptr;
+
+    if (lane_id == 0) {
+      // TODO: may encode be parallel?
+      // TODO: is global buffer enc faster or share-memory enc-hash faster?
+      if (hash_node->type == Node::Type::FULL) {
+        FullNode *fnode = static_cast<FullNode *>(hash_node);
+        encoding_size_0 = fnode->encode_size();
+        if (encoding_size_0 > 17 * 32) {  // encode into global memory
+
+          // TODO: delete aligned
+          uint8_t *buffer_global =
+              allocator.malloc(util::align_to<8>(encoding_size_0));
+          memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
+
+          fnode->encode(buffer_global);
+          encoding_0 = buffer_global;
+
+        } else {  // encode into shared memory
+          memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
+
+          fnode->encode(buffer_shared);
+          encoding_0 = buffer_shared;
+        }
+        hash_0 = fnode->buffer;
+
+      } else {
+        ShortNode *snode = static_cast<ShortNode *>(hash_node);
+        encoding_size_0 = snode->encode_size();
+        if (encoding_size_0 > 17 * 32) {  // encode into global memory
+
+          // TODO: delete aligned
+          uint8_t *buffer_global =
+              allocator.malloc(util::align_to<8>(encoding_size_0));
+          memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
+
+          snode->encode(buffer_global);
+          encoding_0 = buffer_global;
+        } else {  // encode into shared memory
+          memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
+
+          snode->encode(buffer_shared);
+          encoding_0 = buffer_shared;
+        }
+        hash_0 = snode->buffer;
+      }
+    }
+
+    // broadcast encoding size to warp
+    int encoding_size = __shfl_sync(WARP_FULL_MASK, encoding_size_0, 0);
+    uint8_t *encoding = reinterpret_cast<uint8_t *>(__shfl_sync(
+        WARP_FULL_MASK, reinterpret_cast<unsigned long>(encoding_0), 0));
+    uint8_t *hash = reinterpret_cast<uint8_t *>(__shfl_sync(
+        WARP_FULL_MASK, reinterpret_cast<unsigned long>(hash_0), 0));
+
+    if (encoding_size < 32) {
+      // if too short, no hash, only copy
+      if (lane_id < encoding_size) {
+        hash[lane_id] = encoding[lane_id];
+      }
+      hash_node->hash = hash;
+      hash_node->hash_size = encoding_size;
+    } else {
+      // else calculate hash
+      // TODO: write to share memory first may be faster?
+      // encoding's real memory size should aligned to 8
+      // if (lane_id == 0) {
+      //   printf("encoding: ");
+      //   cutil::println_hex(encoding, encoding_size);
+      // }
+      batch_keccak_device(reinterpret_cast<const uint64_t *>(encoding),
+                          reinterpret_cast<uint64_t *>(hash), encoding_size * 8,
+                          lane_id, A, B, C, D);
+      // if (lane_id == 0) {
+      //   printf("hash: ");
+      //   cutil::println_hex(hash, 32);
+      // }
+      hash_node->hash = hash;
+      hash_node->hash_size = 32;
+    }
+
+    __threadfence();  // make sure the new hash can be seen by other threads
+
+    hash_node = hash_node->parent;
+  }
+}
+
+__global__ void hash_onepass_update_phase_v2(
+    Node *const *hash_nodes, int n,
+    DynamicAllocator<ALLOC_CAPACITY> allocator) {
+  int tid_global = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
+  int wid_global = tid_global / 32;                        // global warp id
+  int tid_warp = tid_global % 32;                          // lane id
+  int tid_block = threadIdx.x;
+  int wid_block = tid_block / 32;
+  if (wid_global >= n) {
+    return;
+  }
+
+  assert(blockDim.x == 128);
+  __shared__ uint64_t A[128 / 32 * 25];
+  __shared__ uint64_t B[128 / 32 * 25];
+  __shared__ uint64_t C[128 / 32 * 25];
+  __shared__ uint64_t D[128 / 32 * 25];
+
+  __shared__ uint8_t buffer[(128 / 32) * (17 * 32)];  // 17 * 32 per node
+
+  Node *hash_node = hash_nodes[wid_global];
+
+  // deleted node
+  if (hash_node == nullptr) {
+    return;
+  }
+
+  do_hash_onepass_update_phase_v2(hash_node, tid_warp, A + wid_block * 25,
+                                  B + wid_block * 25, C + wid_block * 25,
+                                  D + wid_block * 25,
+                                  buffer + wid_block * (17 * 32), allocator);
 }
 
 __device__ __forceinline__ void split_node(
@@ -1448,7 +1648,7 @@ __device__ __forceinline__ void late_compress(
 
 __device__ __forceinline__ void new_do_put_2phase_compress_phase(
     FullNode *&compress_node, ShortNode *start_node, Node **root_p,
-    Node *& hash_target_node, DynamicAllocator<ALLOC_CAPACITY> &allocator,
+    Node *&hash_target_node, DynamicAllocator<ALLOC_CAPACITY> &allocator,
     KeyDynamicAllocator<KEY_ALLOC_CAPACITY> &key_allocator) {
   Node *node = compress_node;
   if (compress_node->child_num() > 1) {
@@ -1544,7 +1744,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
 
 __global__ void puts_2phase_compress_phase(
     FullNode **compress_nodes, int *compress_num, ShortNode *start_node,
-    Node **root_p, Node ** hash_target_nodes, int *hash_target_number, 
+    Node **root_p, Node **hash_target_nodes, int *hash_target_number,
     DynamicAllocator<ALLOC_CAPACITY> allocator,
     KeyDynamicAllocator<KEY_ALLOC_CAPACITY> key_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1554,9 +1754,9 @@ __global__ void puts_2phase_compress_phase(
   FullNode *compress_node = compress_nodes[tid];
   // printf("%p\n", compress_node);
   // printf("%d\n", compress_node->childs[16]);
-  Node * hash_target_node = nullptr;
-  new_do_put_2phase_compress_phase(compress_node, start_node, root_p, hash_target_node, 
-                                   allocator, key_allocator);
+  Node *hash_target_node = nullptr;
+  new_do_put_2phase_compress_phase(compress_node, start_node, root_p,
+                                   hash_target_node, allocator, key_allocator);
   if (hash_target_node != nullptr) {
     int place = atomicAdd(hash_target_number, 1);
     hash_target_nodes[place] = hash_target_node;
@@ -1603,7 +1803,7 @@ __global__ void puts_2phase_compress_phase(
 
 // __global__ void traverse_trie(Node **root) {
 //   printf("one traverse\n");
-//   dfs_traverse_trie(*root); 
+//   dfs_traverse_trie(*root);
 // }
 }  // namespace GKernel
 }  // namespace Compress
