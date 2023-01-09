@@ -129,7 +129,7 @@ TEST(Batch, BatchHashBench){
 
   perf::CpuTimer<perf::ns> batch_timer;
   call_keccak_batch_kernel(h_data, indexs, hash, batch_timer, GEN_DATA_MUL * GEN_DATA_NUM);
-  uint8_t *hash8 = (uint8_t *)hash;
+  // uint8_t *hash8 = (uint8_t *)hash;
   // for (size_t i = 0; i < GEN_DATA_MUL * GEN_DATA_NUM; i++)
   // {
   //   for (int j = 0; j < 32; j++)
