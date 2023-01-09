@@ -1182,7 +1182,7 @@ TEST(GpuMPT, Pus2PhaseTestBasic) {
                   values_bytes_indexs, n);
   mpt.hash_onepass(keys_hexs, keys_hexs_indexs, n);
   mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
-  const uint8_t * hash;
+  const uint8_t *hash;
   int hash_size = 0;
   mpt.get_root_hash(hash, hash_size);
   printf("GPU 2phase hash is: ");
@@ -1259,7 +1259,7 @@ TEST(GpuMPT, Put2PhaseTestInsertTwice) {
   mpt.gets_parallel(keys_hexs2, keys_hexs_indexs2, n2, values_ptrs2,
                     values_sizes2);
 
-  const uint8_t * hash;
+  const uint8_t *hash;
   int hash_size = 0;
   mpt.get_root_hash(hash, hash_size);
   printf("GPU 2phase hash is: ");
@@ -3272,6 +3272,69 @@ TEST(Trie, YCSBHaveDataInsert) {
   }
 }
 
+TEST(TrieV2, BasicPutLatchingHash) {
+  GPUHashMultiThread::load_constants();
+
+  const uint8_t *keys_bytes = nullptr;
+  int *keys_bytes_indexs = nullptr;
+  const uint8_t *values_bytes = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
+  int n;
+
+  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  GpuMPT::Compress::MPT mpt;
+  auto [d_hash_nodes, hash_nodes_num] = mpt.puts_latching_v2(
+      keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, n);
+  printf("finish puts\n");
+  mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+
+  // test if trie is still right
+  const uint8_t **values_ptrs = new const uint8_t *[n] {};
+  int *values_sizes = new int[n]{};
+  mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+
+  for (int i = 0; i < n; ++i) {
+    ASSERT_TRUE(util::bytes_equal(
+        util::element_start(values_bytes_indexs, i, values_bytes),
+        util::element_size(values_bytes_indexs, i), values_ptrs[i],
+        values_sizes[i]));
+    // printf("Key=");
+    // cutil::println_hex(util::element_start(keys_bytes_indexs, i, keys_bytes),
+    //                    util::element_size(keys_bytes_indexs, i));
+    // printf("Hex=");
+    // cutil::println_hex(util::element_start(keys_hexs_indexs, i, keys_hexs),
+    //                    util::element_size(keys_hexs_indexs, i));
+    // printf("Value=");
+    // cutil::println_hex(
+    //     util::element_start(values_bytes_indexs, i, values_bytes),
+    //     util::element_size(values_bytes_indexs, i));
+    // printf("Get=");
+    // cutil::println_hex(values_ptrs[i], values_sizes[i]);
+  }
+
+  // check hash
+  const uint8_t *hash = nullptr;
+  int hash_size = 0;
+  mpt.get_root_hash(hash, hash_size);
+  printf("Root Hash is: ");
+  cutil::println_hex(hash, hash_size);
+
+  delete[] keys_bytes;
+  delete[] keys_bytes_indexs;
+  delete[] values_bytes;
+  delete[] values_bytes_indexs;
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
+  delete[] values_ptrs;
+  delete[] values_sizes;
+}
 // TEST(Trie, YCSBHaveDataInsertTest) {
 //   using namespace bench::ycsb;
 //   int seg_number = 2;
