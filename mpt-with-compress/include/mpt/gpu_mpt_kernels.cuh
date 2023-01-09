@@ -1463,9 +1463,13 @@ __device__ __forceinline__ void do_hash_onepass_update_phase_v2(
       return;
     }
 
+    // clear on visit
+    hash_node->parent_visit_count_added = 0;
+
     ValueNode *vnode = static_cast<ValueNode *>(hash_node);
     vnode->hash = vnode->d_value;
     vnode->hash_size = vnode->value_size;
+
     hash_node = hash_node->parent;
   }
 
@@ -1473,6 +1477,9 @@ __device__ __forceinline__ void do_hash_onepass_update_phase_v2(
 
   // do not calculate start node
   while (hash_node != start_node) {
+    // if (lane_id == 0)
+    // printf("hash node = %p, start node = %p\n", hash_node, start_node);
+
     assert(hash_node != nullptr);
 
     assert(hash_node->type == Node::Type::FULL ||
@@ -1481,14 +1488,21 @@ __device__ __forceinline__ void do_hash_onepass_update_phase_v2(
     // should_visit means all child's hash and my value's hash are ready
     int should_visit = 0;
     if (lane_id == 0) {
+      // int old = atomicSub(&hash_node->visit_count, 1);
+      // printf("old = %d\n", old);
+      // should_visit = (1 == old);
       should_visit = (1 == atomicSub(&hash_node->visit_count, 1));
     }
 
     // broadcast from 0 to warp
     should_visit = __shfl_sync(WARP_FULL_MASK, should_visit, 0);
     if (!should_visit) {
+      // printf("not should visit\n");
       break;
     }
+
+    // clear on visit
+    hash_node->parent_visit_count_added = 0;
 
     // encode data into buffer
     int encoding_size_0 = 0;

@@ -3152,7 +3152,7 @@ void create_hp(const uint8_t **&values_hps, int n, uint8_t *values,
   }
 }
 
-TEST(Trie, HaveDataInsert) {
+TEST(TrieV2, HaveDataInsertLatching) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
   const uint8_t *values_bytes = nullptr;
@@ -3172,8 +3172,21 @@ TEST(Trie, HaveDataInsert) {
     values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
   }
 
+  {
+    CpuMPT::Compress::MPT cpu_mpt_dirty_flag;
+    cpu_mpt_dirty_flag.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                                     values_bytes_indexs, n);
+    cpu_mpt_dirty_flag.hashs_dirty_flag();
+    // check hash
+    const uint8_t *hash = nullptr;
+    int hash_size = 0;
+    cpu_mpt_dirty_flag.get_root_hash(hash, hash_size);
+    printf("CPU dirty flag root hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
   // segment data
-  const int seg_size = 1;
+  const int seg_size = 12345;
   cutil::Segment data_all{
       .key_hex_ = keys_hexs,
       .key_hex_index_ = keys_hexs_indexs,
@@ -3186,21 +3199,29 @@ TEST(Trie, HaveDataInsert) {
 
   {
     GPUHashMultiThread::load_constants();
-    GpuMPT::Compress::MPT gpu_mpt_baseline;
+    GpuMPT::Compress::MPT gpu_mpt_latching_v2;
     for (const cutil::Segment &segment : segments) {
       printf("segment size = %d\n", segment.n_);
-      cutil::println_hex(
-          util::element_start(segment.key_hex_index_, 0, segment.key_hex_),
-          util::element_size(segment.key_hex_index_, 0));
+      // cutil::println_hex(
+      //     util::element_start(segment.key_hex_index_, 0, segment.key_hex_),
+      //     util::element_size(segment.key_hex_index_, 0));
       // cutil::println_str(
       //     util::element_start(segment.value_index_, 0, segment.value_),
       //     util::element_size(segment.value_index_, 0));
 
-      gpu_mpt_baseline.puts_baseline_loop_with_valuehp(
-          segment.key_hex_, segment.key_hex_index_, segment.value_,
-          segment.value_index_, segment.value_hp_, segment.n_);
-      gpu_mpt_baseline.hash_onepass(segment.key_hex_, segment.key_hex_index_,
-                                    segment.n_);
+      auto [d_hash_nodes, hash_nodes_num] =
+          gpu_mpt_latching_v2.puts_latching_with_valuehp_v2(
+              segment.key_hex_, segment.key_hex_index_, segment.value_,
+              segment.value_index_, segment.value_hp_, segment.n_);
+      // printf("hash node num =%d\n", hash_nodes_num);
+      gpu_mpt_latching_v2.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+
+      // check hash
+      const uint8_t *hash = nullptr;
+      int hash_size = 0;
+      gpu_mpt_latching_v2.get_root_hash(hash, hash_size);
+      printf("GPU latching + onepass V2 Hash is: ");
+      cutil::println_hex(hash, hash_size);
     }
   }
 }
@@ -3334,6 +3355,95 @@ TEST(TrieV2, BasicPutLatchingHash) {
   delete[] keys_hexs_indexs;
   delete[] values_ptrs;
   delete[] values_sizes;
+}
+
+TEST(TrieV2, HashBenchmark) {
+  GPUHashMultiThread::load_constants();
+
+  const uint8_t *keys_bytes = nullptr;
+  int *keys_bytes_indexs = nullptr;
+  const uint8_t *values_bytes = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
+  int n;
+
+  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  CpuMPT::Compress::MPT cpu_mpt_dirty_flag;
+  cpu_mpt_dirty_flag.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                                   values_bytes_indexs, n);
+
+  // CpuMPT::Compress::MPT cpu_mpt_ledgerdb;
+  // cpu_mpt_ledgerdb.puts_ledgerdb(keys_hexs, keys_hexs_indexs, values_bytes,
+  //                                values_bytes_indexs, n);
+
+  GpuMPT::Compress::MPT gpu_mpt_onepass;
+  auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_onepass.puts_latching_v2(
+      keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, n);
+  printf("finish puts\n");
+
+  perf::CpuTimer<perf::us> timer_cpu_hash_dirty_flag;  // timer start --
+  timer_cpu_hash_dirty_flag.start();
+  cpu_mpt_dirty_flag.hashs_dirty_flag();
+  timer_cpu_hash_dirty_flag.stop();  // timer end ----------------------
+
+  printf(
+      "\033[31m"
+      "CPU hash dirty flag execution time: %d us, throughput %d qps\n"
+      "\033[0m",
+      timer_cpu_hash_dirty_flag.get(),
+      (int)(n * 1000.0 / timer_cpu_hash_dirty_flag.get() * 1000.0));
+
+  // perf::CpuTimer<perf::ms> timer_cpu_hash_ledgerdb; // timer start --
+  // timer_cpu_hash_ledgerdb.start();
+  // cpu_mpt_ledgerdb.hashs_ledgerdb();
+  // timer_cpu_hash_ledgerdb.stop(); // timer end ----------------------
+
+  // printf("\033[31m"
+  //        "CPU hash ledgerdb execution time: %d ms, throughput %d qps\n"
+  //        "\033[0m",
+  //        timer_cpu_hash_dirty_flag.get(),
+  //        n * 1000 / timer_cpu_hash_dirty_flag.get());
+
+  perf::CpuTimer<perf::us> timer_gpu_hash_onepass;
+  timer_gpu_hash_onepass.start();
+  gpu_mpt_onepass.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+  timer_gpu_hash_onepass.stop();
+
+  printf(
+      "\033[31m"
+      "GPU hash onepass execution time: %d us, throughput %d qps\n"
+      "\033[0m",
+      timer_gpu_hash_onepass.get(),
+      (int)(n * 1000.0 / timer_gpu_hash_onepass.get() * 1000.0));
+
+  // check hash
+  const uint8_t *hash = nullptr;
+  int hash_size = 0;
+  cpu_mpt_dirty_flag.get_root_hash(hash, hash_size);
+  printf("CPU dirty flag root hash is: %p\n", hash);
+  cutil::println_hex(hash, hash_size);
+  std::vector<uint8_t> hash_cpu_mpt_dirty_flag(hash, hash + 32);
+  // cpu_mpt_ledgerdb.get_root_hash(hash, hash_size)
+  // printf("CPU ledgerdb root hash is: ");
+  gpu_mpt_onepass.get_root_hash(hash, hash_size);
+  printf("GPU onepass root Hash is: %p\n", hash);
+  cutil::println_hex(hash, hash_size);
+  std::vector<uint8_t> hash_gpu_mpt_onepass(hash, hash + 32);
+
+  ASSERT_EQ(hash_cpu_mpt_dirty_flag, hash_gpu_mpt_onepass);
+
+  delete[] keys_bytes;
+  delete[] keys_bytes_indexs;
+  delete[] values_bytes;
+  delete[] values_bytes_indexs;
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
 }
 // TEST(Trie, YCSBHaveDataInsertTest) {
 //   using namespace bench::ycsb;
