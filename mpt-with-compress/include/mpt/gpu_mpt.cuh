@@ -46,16 +46,18 @@ class MPT {
                               const uint8_t **values_hps, int n);
 
   /// @brief parallel puts, including split phase and compress phase
-  void puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
-                   const uint8_t *values_bytes, int64_t *values_indexs, int n);
-  void puts_2phase_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
-                                const uint8_t *values_bytes,
-                                int64_t *values_indexs,
-                                const uint8_t **values_hps, int n);
+  std::tuple<Node **, int> puts_2phase(const uint8_t *keys_hexs,
+                                       int *keys_indexs,
+                                       const uint8_t *values_bytes,
+                                       int64_t *values_indexs, int n);
+  std::tuple<Node **, int> puts_2phase_with_valuehp(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n);
 
-  void puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
-                            const uint8_t *values_bytes, int64_t *values_indexs,
-                            const uint8_t **values_hps, int n);
+  std::tuple<Node **, int> puts_2phase_pipeline(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n);
+
   /// @brief hash according to key value
   // TODO
   void puts_with_hash_baseline();
@@ -495,22 +497,22 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   // TODO free h_hash if not passed out
 }
 
-void MPT::puts_2phase(const uint8_t *keys_hexs, int *keys_indexs,
-                      const uint8_t *values_bytes, int64_t *values_indexs,
-                      int n) {
+std::tuple<Node **, int> MPT::puts_2phase(const uint8_t *keys_hexs,
+                                          int *keys_indexs,
+                                          const uint8_t *values_bytes,
+                                          int64_t *values_indexs, int n) {
   const uint8_t **values_hps = new const uint8_t *[n];
   for (int i = 0; i < n; ++i) {
     values_hps[i] = util::element_start(values_indexs, i, values_bytes);
   }
 
-  puts_2phase_with_valuehp(keys_hexs, keys_indexs, values_bytes, values_indexs,
-                           values_hps, n);
+  return puts_2phase_with_valuehp(keys_hexs, keys_indexs, values_bytes,
+                                  values_indexs, values_hps, n);
 }
 
-void MPT::puts_2phase_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
-                                   const uint8_t *values_bytes,
-                                   int64_t *values_indexs,
-                                   const uint8_t **values_hps, int n) {
+std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t **values_hps, int n) {
   //   const uint8_t **values_hps = new const uint8_t *[n];
   //   for (int i = 0; i < n; ++i) {
   //     values_hps[i] = util::element_start(values_indexs, i, values_bytes);
@@ -594,13 +596,17 @@ void MPT::puts_2phase_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
       d_hash_target_nodes, d_hash_target_num, allocator_, key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
+  int h_hash_target_num;
+  CHECK_ERROR(gutil::CpyDeviceToHostAsync(&h_hash_target_num, d_hash_target_num,
+                                          1, stream_op_));
   CHECK_ERROR(cudaDeviceSynchronize());
+
+  return {d_hash_target_nodes, h_hash_target_num};
 }
 
-void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
-                               const uint8_t *values_bytes,
-                               int64_t *values_indexs,
-                               const uint8_t **values_hps, int n) {
+std::tuple<Node **, int> MPT::puts_2phase_pipeline(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t **values_hps, int n) {
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
@@ -691,7 +697,12 @@ void MPT::puts_2phase_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
           d_hash_target_nodes, d_hash_target_num, allocator_, key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
+  int h_hash_target_num;
+  CHECK_ERROR(gutil::CpyDeviceToHostAsync(&h_hash_target_num, d_hash_target_num,
+                                          1, stream_op_));
   CHECK_ERROR(cudaDeviceSynchronize());
+
+  return {d_hash_target_nodes, h_hash_target_num};
 }
 
 }  // namespace Compress
