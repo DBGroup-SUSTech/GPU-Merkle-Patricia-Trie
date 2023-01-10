@@ -78,6 +78,19 @@ void lookup_data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
   }
 }
 
+void random_select_read_data(uint8_t * keys, int * keys_indexs, int trie_size,
+                             uint8_t *& read_keys, int *&read_keys_indexs, int &n) {
+  n = 1 << 8;
+  for (int i = 0; i < n; i++) {
+    int rand_key_idx = rand() % trie_size;
+    const uint8_t *rand_key = util::element_start(keys_indexs, rand_key_idx, keys);
+    int rand_key_size = util::element_size(keys_indexs, rand_key_idx);
+    read_keys_indexs[2*i] = util::elements_size_sum(read_keys_indexs, i);
+    read_keys_indexs[2*i + 1] += rand_key_size -1;
+    memcpy(keys + read_keys_indexs[2*i], rand_key, rand_key_size);
+  }
+}
+
 void keys_bytes_to_hexs(const uint8_t *keys_bytes, int *keys_bytes_indexs,
                         int n, const uint8_t *&keys_hexs,
                         int *&keys_hexs_indexs) {
@@ -3583,118 +3596,203 @@ TEST(TrieV2, HashBenchmark) {
   delete[] keys_hexs;
   delete[] keys_hexs_indexs;
 }
-// TEST(Trie, YCSBHaveDataInsertTest) {
-//   using namespace bench::ycsb;
-//   int seg_number = 2;
-//   uint8_t **keys_segs = new uint8_t*[seg_number];
-//   int ** keys_indexs_segs = new int*[seg_number];
-//   uint8_t **values_segs = new uint8_t*[seg_number];
-//   int64_t **values_indexs_segs = new int64_t*[seg_number];
-//   for (int i = 0; i < seg_number; i++) {
-//     auto keys_bytes_seg = (uint8_t *)malloc(100000000);
-//     auto keys_indexs_seg = (int *)malloc(1000000 * sizeof(int));
-//     auto values_seg = (uint8_t *)malloc(1000000000);
-//     auto values_indexs_seg = (int64_t *)malloc(1000000 * sizeof(int64_t));
-//     keys_segs[i] = keys_bytes_seg;
-//     keys_indexs_segs[i] =keys_indexs_seg;
-//     values_segs[i] = values_seg;
-//     values_indexs_segs[i] = values_indexs_seg;
-//   }
 
-//   int one_seg_data_number = 50000;
-//   int last_seg_data_number;
+TEST(TrieV2, LookupYCSBBench) {
+  using namespace bench::ycsb;
+  GPUHashMultiThread::load_constants();
 
-//   uint8_t *read_key = (uint8_t *)malloc(2000000000);
-//   int *read_key_index = (int *)malloc(10000000 * sizeof(int));
-//   int read_data_number;
+  uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
+  int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
+  int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
+  int record_num;
+  uint8_t *read_keys_bytes = (uint8_t *)malloc(2000000000);
+  int *read_keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  int lookup_num;
 
-//   read_ycsb_data_insert_segmented(WIKI_INDEX_PATH, keys_segs,
-//   keys_indexs_segs,
-//           values_segs, values_indexs_segs, last_seg_data_number, seg_number,
-//           one_seg_data_number);
-//   read_ycsb_data_read(WIKI_INDEX_PATH, read_key, read_key_index,
-//                       read_data_number);
-//   printf("Inserting %d * %d + %d = %d k-v pairs, then Reading %d k-v pairs
-//   \n", seg_number-1,
-//          one_seg_data_number, last_seg_data_number,
-//          (seg_number-1)*one_seg_data_number + last_seg_data_number,
-//          read_data_number);
+  //load data
+  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs,
+                        record_num);
+  read_ycsb_data_read(WIKI_INDEX_PATH, read_keys_bytes, read_keys_bytes_indexs, lookup_num);
+  printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num, lookup_num);
 
-//   // const uint8_t *key_hexs;
-//   // int *key_hexs_indexs;
-//   // keys_bytes_to_hexs(key, key_index, data_number, key_hexs,
-//   key_hexs_indexs); keys_bytes_to_hexs_segs(keys_segs, keys_indexs_segs,
-//   seg_number, one_seg_data_number, last_seg_data_number);
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
 
-//   const uint8_t *read_key_hexs;
-//   int *read_key_hexs_indexs;
-//   keys_bytes_to_hexs(read_key, read_key_index, read_data_number,
-//   read_key_hexs,
-//                      read_key_hexs_indexs);
+  const uint8_t *read_keys_hexs = nullptr;
+  int *read_keys_hexs_indexs = nullptr;
 
-//   perf::CpuMultiTimer<perf::us> timer_cpu;
-//   perf::CpuMultiTimer<perf::us> timer_gpu_baseline;
-//   perf::CpuMultiTimer<perf::us> timer_gpu_lc;
-//   perf::CpuMultiTimer<perf::us> timer_gpu_2phase;
-//   perf::CpuMultiTimer<perf::us> timer_gpu_lc_pipeline;
-//   perf::CpuMultiTimer<perf::us> timer_gpu_2phase_pipeline;
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, record_num, keys_hexs,
+                     keys_hexs_indexs);
+  keys_bytes_to_hexs(read_keys_bytes, read_keys_bytes_indexs, lookup_num, 
+                    read_keys_hexs, read_keys_hexs_indexs);
+  
+  perf::CpuTimer<perf::us> gpu_gets;
 
-//   const uint8_t **values_hps0 = new const uint8_t *[one_seg_data_number];
-//   create_hp(values_hps0, one_seg_data_number, values_segs[0],
-//   values_indexs_segs[0]);
+  const uint8_t **values_hps = new const uint8_t *[record_num];
+  for (int i = 0; i < record_num; ++i) {
+    values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
+  }
 
-//   const uint8_t **values_hps1 = new const uint8_t *[last_seg_data_number];
-//   create_hp(values_hps0, one_seg_data_number, values_segs[1],
-//   values_indexs_segs[1]);
+  const uint8_t **read_values_hps = new const uint8_t *[lookup_num];
+  int *read_value_size = new int[lookup_num];
 
-//   const uint8_t **read_values_hps = new const uint8_t *[read_data_number];
-//   int *read_value_size = new int[read_data_number];
+  const uint8_t *hash = nullptr;
+  int hash_size = 0; 
 
-//   const uint8_t *hash = nullptr;
-//   int hash_size = 0;
+  {
+    GPUHashMultiThread::load_constants();
 
-//   int keys_hexs_size0 = util::elements_size_sum(keys_indexs_segs[0],
-//   one_seg_data_number); int keys_indexs_size0 =
-//   util::indexs_size_sum(one_seg_data_number); int values_bytes_size0 =
-//   util::elements_size_sum(values_indexs_segs[0], one_seg_data_number); int
-//   values_indexs_size0 = util::indexs_size_sum(one_seg_data_number); int
-//   values_hps_size0 = one_seg_data_number;
+    GpuMPT::Compress::MPT gpu_mpt;
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_latching_v2(
+      keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
+    gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    gpu_gets.start();
+    gpu_mpt.gets_parallel(read_keys_hexs, read_keys_hexs_indexs, lookup_num,
+                          read_values_hps, read_value_size);
+    gpu_gets.stop();
+    gpu_mpt.get_root_hash(hash, hash_size);
+    printf("GPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  } 
 
-//   int keys_hexs_size1 = util::elements_size_sum(keys_indexs_segs[1],
-//   last_seg_data_number); int keys_indexs_size1 =
-//   util::indexs_size_sum(last_seg_data_number); int values_bytes_size1 =
-//   util::elements_size_sum(values_indexs_segs[1], last_seg_data_number); int
-//   values_indexs_size1 = util::indexs_size_sum(last_seg_data_number); int
-//   values_hps_size1 = last_seg_data_number;
+  printf("GPU parallel lookup response time: %d us for %d operations and trie with %d records \n",
+          gpu_gets.get(), lookup_num, record_num);
+}
 
-//   {
-//     GPUHashMultiThread::load_constants();
+TEST(TrieV2, LookupWikiBench) {
+  using namespace bench::wiki;
+  GPUHashMultiThread::load_constants();
 
-//     // CHECK_ERROR(gutil::PinHost(key_hexs, keys_hexs_size));
-//     // CHECK_ERROR(gutil::PinHost(key_hexs_indexs, keys_indexs_size));
-//     // CHECK_ERROR(gutil::PinHost(value, values_bytes_size));
-//     // CHECK_ERROR(gutil::PinHost(value_index, values_indexs_size));
-//     // CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+  uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
+  int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
+  int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
+  int record_num;
+  uint8_t *read_keys_bytes = (uint8_t *)malloc(2000000000);
+  int *read_keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  int lookup_num;
 
-//     GpuMPT::Compress::MPT gpu_mpt_baseline;
-//     gpu_mpt_baseline.puts_baseline_loop_with_valuehp(keys_segs[0],
-//     keys_indexs_segs[0], values_segs[0], values_indexs_segs[0], values_hps0,
-//     one_seg_data_number); gpu_mpt_baseline.hash_onepass(keys_segs[0],
-//     keys_indexs_segs[0], one_seg_data_number); timer_gpu_baseline.start();
-//     gpu_mpt_baseline.puts_baseline_loop_with_valuehp(
-//         keys_segs[1], keys_indexs_segs[1], values_segs[1],
-//         values_indexs_segs[1],
-//     values_hps1, last_seg_data_number);
-//     timer_gpu_baseline.stop();
-//     gpu_mpt_baseline.hash_onepass(keys_segs[1], keys_indexs_segs[1],
-//     last_seg_data_number); timer_gpu_baseline.stop();
-//     gpu_mpt_baseline.gets_parallel(read_key_hexs, read_key_hexs_indexs,
-//                                    read_data_number, read_values_hps,
-//                                    read_value_size);
-//     timer_gpu_baseline.stop();
-//     gpu_mpt_baseline.get_root_hash(hash, hash_size);
-//     printf("GPU baseline hash is: ");
-//     cutil::println_hex(hash, hash_size);
-//     CHECK_ERROR(cudaDeviceReset());
-//   }
-// }
+  int n = read_wiki_data_all_keys(WIKI_INDEX_PATH, keys_bytes,
+                                  keys_bytes_indexs);
+  int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, values_bytes,
+                                     values_bytes_indexs);
+
+  ASSERT_EQ(n, vn);
+  record_num = n;
+  random_select_read_data(keys_bytes, keys_bytes_indexs, record_num, 
+                read_keys_bytes, read_keys_bytes_indexs, lookup_num);
+
+  printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num, lookup_num);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  const uint8_t *read_keys_hexs = nullptr;
+  int *read_keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, record_num, keys_hexs,
+                     keys_hexs_indexs);
+  keys_bytes_to_hexs(read_keys_bytes, read_keys_bytes_indexs, lookup_num, 
+                    read_keys_hexs, read_keys_hexs_indexs);
+  
+  perf::CpuTimer<perf::us> gpu_gets;
+
+  const uint8_t **values_hps = new const uint8_t *[record_num];
+  for (int i = 0; i < record_num; ++i) {
+    values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
+  }
+
+  const uint8_t **read_values_hps = new const uint8_t *[lookup_num];
+  int *read_value_size = new int[lookup_num];
+
+  const uint8_t *hash = nullptr;
+  int hash_size = 0; 
+
+  {
+    GPUHashMultiThread::load_constants();
+
+    GpuMPT::Compress::MPT gpu_mpt;
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_latching_v2(
+      keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
+    gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    gpu_gets.start();
+    gpu_mpt.gets_parallel(read_keys_hexs, read_keys_hexs_indexs, lookup_num,
+                          read_values_hps, read_value_size);
+    gpu_gets.stop();
+    gpu_mpt.get_root_hash(hash, hash_size);
+    printf("GPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  } 
+
+  printf("GPU parallel lookup response time: %d us for %d operations and trie with %d records \n",
+          gpu_gets.get(), lookup_num, record_num);
+}
+
+TEST(TrieV2, LookupEthtxnBench) {
+  using namespace bench::ethtxn;
+  GPUHashMultiThread::load_constants();
+
+  uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
+  int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
+  int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
+  int record_num;
+  uint8_t *read_keys_bytes = (uint8_t *)malloc(2000000000);
+  int *read_keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  int lookup_num;
+
+  record_num =
+      read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
+                           values_bytes, values_bytes_indexs);
+  random_select_read_data(keys_bytes, keys_bytes_indexs, record_num, 
+                read_keys_bytes, read_keys_bytes_indexs, lookup_num);
+
+  printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num, lookup_num);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  const uint8_t *read_keys_hexs = nullptr;
+  int *read_keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, record_num, keys_hexs,
+                     keys_hexs_indexs);
+  keys_bytes_to_hexs(read_keys_bytes, read_keys_bytes_indexs, lookup_num, 
+                    read_keys_hexs, read_keys_hexs_indexs);
+  
+  perf::CpuTimer<perf::us> gpu_gets;
+
+  const uint8_t **values_hps = new const uint8_t *[record_num];
+  for (int i = 0; i < record_num; ++i) {
+    values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
+  }
+
+  const uint8_t **read_values_hps = new const uint8_t *[lookup_num];
+  int *read_value_size = new int[lookup_num];
+
+  const uint8_t *hash = nullptr;
+  int hash_size = 0; 
+
+  {
+    GPUHashMultiThread::load_constants();
+
+    GpuMPT::Compress::MPT gpu_mpt;
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_latching_v2(
+      keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
+    gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    gpu_gets.start();
+    gpu_mpt.gets_parallel(read_keys_hexs, read_keys_hexs_indexs, lookup_num,
+                          read_values_hps, read_value_size);
+    gpu_gets.stop();
+    gpu_mpt.get_root_hash(hash, hash_size);
+    printf("GPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  } 
+
+  printf("GPU parallel lookup response time: %d us for %d operations and trie with %d records \n",
+          gpu_gets.get(), lookup_num, record_num);
+}

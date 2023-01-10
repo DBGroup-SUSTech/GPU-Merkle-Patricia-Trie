@@ -55,6 +55,9 @@ __host__ __device__ __forceinline__ const uint8_t *element_start(
 
 __host__ __device__ __forceinline__ int elements_size_sum(const int *indexs,
                                                           int n) {
+  if (n == 0) {
+    return 0;
+  }
   int i = n - 1;  // i of the last num;
   return indexs[2 * i + 1] + 1;
 }
