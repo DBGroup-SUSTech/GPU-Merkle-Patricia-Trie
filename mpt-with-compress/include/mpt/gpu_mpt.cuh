@@ -419,7 +419,8 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
   int values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
-
+  perf::CpuMultiTimer<perf::us> trans_timer;
+  trans_timer.start();
   CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
   CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
   CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
@@ -429,12 +430,17 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
   CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
   CHECK_ERROR(
       gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+  trans_timer.stop();
   CHECK_ERROR(
       gutil::CpyHostToDevice(d_values_bytes, values_bytes, values_bytes_size));
   CHECK_ERROR(gutil::CpyHostToDevice(d_values_indexs, values_indexs,
                                      values_indexs_size));
+  trans_timer.stop();
   CHECK_ERROR(
       gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
+  trans_timer.stop();
+
+  printf("key: %d us, value: %d us, hp: %d us\n", trans_timer.get(), trans_timer.get(), trans_timer.get());
 
   //   perf::CpuTimer<perf::us> timer_gpu_put_latching;
   //   timer_gpu_put_latching.start();  // timer start
@@ -532,25 +538,32 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-
+  perf::CpuMultiTimer<perf::us> trans_in;
   CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
   CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
   CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, n));
   CHECK_ERROR(gutil::DeviceAlloc(d_values_sizes, n));
-
+  trans_in.start();
   CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
   CHECK_ERROR(
       gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+  trans_in.stop();
   CHECK_ERROR(gutil::DeviceSet(d_values_hps, 0x00, n));
   CHECK_ERROR(gutil::DeviceSet(d_values_sizes, 0x00, n));
-
+  printf("trans in time: %d us \n", trans_in.get());
   const int block_size = 128;
   const int num_blocks = (n + block_size - 1) / block_size;
   //   perf::CpuTimer<perf::us> timer_gpu_get_parallel;
   //   timer_gpu_get_parallel.start();
+
+  perf::CpuTimer<perf::us> gpu_kernel;
+  gpu_kernel.start();
   GKernel::gets_parallel<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, n, d_values_hps, d_values_sizes, d_root_p_);
   CHECK_ERROR(cudaDeviceSynchronize());
+  gpu_kernel.stop();
+
+  printf("kernel response time: %d us \n", gpu_kernel.get());
   //   timer_gpu_get_parallel.stop();
   //   printf(
   //       "\033[31m"
@@ -558,8 +571,12 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   //       "\033[0m",
   //       timer_gpu_get_parallel.get(),
   //       (int)(n * 1000.0 / timer_gpu_get_parallel.get() * 1000.0));
+  perf::CpuTimer<perf::us> trans_out;
+  trans_out.start();
   CHECK_ERROR(gutil::CpyDeviceToHost(values_hps, d_values_hps, n));
   CHECK_ERROR(gutil::CpyDeviceToHost(values_sizes, d_values_sizes, n));
+  trans_out.stop();
+  printf("transout time %d us\n", trans_out.get());
 }
 
 void MPT::hash_onepass(const uint8_t *keys_hexs, int *keys_indexs, int n) {
@@ -727,7 +744,7 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
       d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, n,
       d_root_p_, d_start_, allocator_);
 
-  CHECK_ERROR(cudaDeviceSynchronize());
+//   CHECK_ERROR(cudaDeviceSynchronize());
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   // put mark
   // CHECK_ERROR(cudaDeviceSynchronize());
