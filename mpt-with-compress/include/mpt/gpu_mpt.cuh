@@ -616,6 +616,7 @@ void MPT::hash_onepass_v2(Node **d_hash_nodes, int n) {
   GKernel::
       hash_onepass_update_phase_v2<<<rpwarp_num_blocks, rpwarp_block_size>>>(
           d_hash_nodes, n, allocator_, d_start_);
+  CHECK_ERROR(cudaDeviceSynchronize());
 }
 
 void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
