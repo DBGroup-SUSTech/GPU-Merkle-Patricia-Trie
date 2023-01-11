@@ -80,7 +80,7 @@ void lookup_data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
 
 void random_select_read_data(uint8_t * keys, int * keys_indexs, int trie_size,
                              uint8_t *& read_keys, int *&read_keys_indexs, int &n) {
-  n = 1 << 8;
+  n = 1 << 16;
   for (int i = 0; i < n; i++) {
     int rand_key_idx = rand() % trie_size;
     const uint8_t *rand_key = util::element_start(keys_indexs, rand_key_idx, keys);
@@ -3640,6 +3640,26 @@ TEST(TrieV2, LookupYCSBBench) {
   const uint8_t *hash = nullptr;
   int hash_size = 0; 
 
+  perf::CpuTimer<perf::us> cpu_gets;
+  {
+    GPUHashMultiThread::load_constants();
+
+    CpuMPT::Compress::MPT cpu_mpt;
+    cpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
+    cpu_mpt.hashs_dirty_flag();
+    cpu_gets.start();
+    cpu_mpt.gets_baseline(read_keys_hexs, read_keys_hexs_indexs, lookup_num,
+                          read_values_hps, read_value_size);
+    cpu_gets.stop();
+    cpu_mpt.get_root_hash(hash, hash_size);
+    printf("CPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset()); 
+  }
+
+  printf("CPU baseline lookup response time: %d us for %d operations and trie with %d records \n",
+          cpu_gets.get(), lookup_num, record_num);
+
   {
     GPUHashMultiThread::load_constants();
 
@@ -3708,7 +3728,27 @@ TEST(TrieV2, LookupWikiBench) {
   int *read_value_size = new int[lookup_num];
 
   const uint8_t *hash = nullptr;
-  int hash_size = 0; 
+  int hash_size = 0;
+
+  perf::CpuTimer<perf::us> cpu_gets;
+  {
+    GPUHashMultiThread::load_constants();
+
+    CpuMPT::Compress::MPT cpu_mpt;
+    cpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
+    cpu_mpt.hashs_dirty_flag();
+    cpu_gets.start();
+    cpu_mpt.gets_baseline(read_keys_hexs, read_keys_hexs_indexs, lookup_num,
+                          read_values_hps, read_value_size);
+    cpu_gets.stop();
+    cpu_mpt.get_root_hash(hash, hash_size);
+    printf("CPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset()); 
+  }
+
+  printf("CPU baseline lookup response time: %d us for %d operations and trie with %d records \n",
+          cpu_gets.get(), lookup_num, record_num); 
 
   {
     GPUHashMultiThread::load_constants();
@@ -3776,6 +3816,26 @@ TEST(TrieV2, LookupEthtxnBench) {
   const uint8_t *hash = nullptr;
   int hash_size = 0; 
 
+  perf::CpuTimer<perf::us> cpu_gets;
+  {
+    GPUHashMultiThread::load_constants();
+
+    CpuMPT::Compress::MPT cpu_mpt;
+    cpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
+    cpu_mpt.hashs_dirty_flag();
+    cpu_gets.start();
+    cpu_mpt.gets_baseline(read_keys_hexs, read_keys_hexs_indexs, lookup_num,
+                          read_values_hps, read_value_size);
+    cpu_gets.stop();
+    cpu_mpt.get_root_hash(hash, hash_size);
+    printf("CPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset()); 
+  }
+
+  printf("CPU baseline lookup response time: %d us for %d operations and trie with %d records \n",
+          cpu_gets.get(), lookup_num, record_num);
+
   {
     GPUHashMultiThread::load_constants();
 
@@ -3795,4 +3855,98 @@ TEST(TrieV2, LookupEthtxnBench) {
 
   printf("GPU parallel lookup response time: %d us for %d operations and trie with %d records \n",
           gpu_gets.get(), lookup_num, record_num);
+}
+
+TEST(TrieV2, ETEInsertYCSBBench) {
+  using namespace bench::ycsb;
+  GPUHashMultiThread::load_constants();
+
+  uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
+  int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
+  int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
+  int record_num;
+  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs,
+                      record_num);
+  
+  printf("Inserting %d k-v pairs\n", record_num);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, record_num, keys_hexs,
+                     keys_hexs_indexs);
+
+  perf::CpuTimer<perf::us> gpu_B;
+  perf::CpuTimer<perf::us> gpu_olc;
+  perf::CpuTimer<perf::us> gpu_two;
+
+  // {
+  //   GPUHashMultiThread::load_constants();
+
+  //   GpuMPT::Compress::MPT gpu_mpt;
+  //   auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_latching_v2(
+  //     keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
+  //   gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+  //   gpu_gets.start();
+  //   gpu_mpt.gets_parallel(read_keys_hexs, read_keys_hexs_indexs, lookup_num,
+  //                         read_values_hps, read_value_size);
+  //   gpu_gets.stop();
+  //   gpu_mpt.get_root_hash(hash, hash_size);
+  //   printf("GPU hash is: ");
+  //   cutil::println_hex(hash, hash_size);
+  //   CHECK_ERROR(cudaDeviceReset()); 
+  // }
+
+  // {
+  //   GPUHashMultiThread::load_constants();
+
+  //   GpuMPT::Compress::MPT gpu_mpt;
+  //   gpu_olc.start();
+  //   auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_latching_v2(
+  //     keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
+  //   gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+  //   gpu_mpt.gets_parallel(read_keys_hexs, read_keys_hexs_indexs, lookup_num,
+  //                         read_values_hps, read_value_size);
+  //   gpu_olc.stop();
+  //   gpu_mpt.get_root_hash(hash, hash_size);
+  //   printf("GPU hash is: ");
+  //   cutil::println_hex(hash, hash_size);
+  //   CHECK_ERROR(cudaDeviceReset());
+  // }
+
+  // {
+  //   GPUHashMultiThread::load_constants();
+  //   GpuMPT::Compress::MPT gpu_mpt;
+  //   auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_latching_v2(
+  //     keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
+  //   gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+  //   gpu_gets.start();
+  //   gpu_mpt.gets_parallel(read_keys_hexs, read_keys_hexs_indexs, lookup_num,
+  //                         read_values_hps, read_value_size);
+  //   gpu_gets.stop();
+  //   gpu_mpt.get_root_hash(hash, hash_size);
+  //   printf("GPU hash is: ");
+  //   cutil::println_hex(hash, hash_size);
+  //   CHECK_ERROR(cudaDeviceReset());
+  // }
+}
+
+TEST(TrieV2, ETEInsertWikiBench) {
+
+}
+
+TEST(TrieV2, ETEInsertEthtxnBench) {
+
+}
+
+TEST(TrieV2, SubRoutineYCSBBench) {
+
+}
+
+TEST(TrieV2, SubRoutineWikiBench) {
+
+}
+
+TEST(TrieV2, SubRoutineEthtxnBench) {
+
 }
