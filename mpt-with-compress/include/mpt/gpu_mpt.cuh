@@ -750,18 +750,20 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   // CHECK_ERROR(cudaDeviceSynchronize());
   GKernel::puts_2phase_put_mark_phase<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
-      n, d_compress_num, d_root_p_, d_compress_nodes, d_start_, allocator_);
+      n, d_compress_num, d_hash_target_nodes, d_root_p_, d_compress_nodes, d_start_, allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   // CUDA_SAFE_CALL(cudaDeviceSynchronize());
   // // compress
   GKernel::puts_2phase_compress_phase<<<2 * num_blocks, block_size>>>(
-      d_compress_nodes, d_compress_num, d_start_, d_root_p_,
+      d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
       d_hash_target_nodes, d_hash_target_num, allocator_, key_allocator_);
 //   GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
+  h_hash_target_num += n;
+//   printf("target num :%d\n",h_hash_target_num);
   CHECK_ERROR(cudaDeviceSynchronize());
 
   return {d_hash_target_nodes, h_hash_target_num};
@@ -809,7 +811,7 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
 
   int *d_hash_target_num;
   CHECK_ERROR(gutil::DeviceAlloc(d_hash_target_num, 1));
-  CHECK_ERROR(gutil::DeviceSet(d_hash_target_num, 0, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_hash_target_num, n, 1));
 
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_keys_hexs, keys_hexs,
                                           keys_hexs_size, stream_op_));
@@ -846,7 +848,7 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
   GKernel::
       puts_2phase_put_mark_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
           d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs,
-          d_values_hps, n, d_compress_num, d_root_p_, d_compress_nodes,
+          d_values_hps, n, d_compress_num, d_hash_target_nodes, d_root_p_, d_compress_nodes,
           d_start_, allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
@@ -856,7 +858,7 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
                                           values_bytes_size, stream_cp_));
   GKernel::
       puts_2phase_compress_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
-          d_compress_nodes, d_compress_num, d_start_, d_root_p_,
+          d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
           d_hash_target_nodes, d_hash_target_num, allocator_, key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 

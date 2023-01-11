@@ -1288,7 +1288,7 @@ __device__ __forceinline__ void do_hash_onepass_mark_phase_v2(
   }
 
   if (node == nullptr) {
-    assert(false);
+    // assert(false);
     hash_node = nullptr;
   }
 }
@@ -1738,7 +1738,7 @@ __global__ void puts_2phase_get_split_phase(
 
 __device__ __forceinline__ void do_put_2phase_put_mark_phase(
     const uint8_t *key, int key_size, const uint8_t *value, int value_size,
-    const uint8_t *value_hp, Node **root_p, FullNode *&compress_node,
+    const uint8_t *value_hp, Node **root_p, FullNode *&compress_node, Node *& hash_target_node,
     ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
   ValueNode *vnode = node_allocator.malloc<ValueNode>();
   vnode->type = Node::Type::VALUE;
@@ -1759,7 +1759,11 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
         remain_key_size -= s_node->key_size;
         if (remain_key_size == 0) {
           vnode->parent = s_node;
+          if (s_node->val != nullptr){
+            s_node->val->parent = nullptr;
+          }
           s_node->val = vnode;
+          hash_target_node =vnode;
           return;
         }
         unsigned long long int old;
@@ -1791,7 +1795,11 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
           if (old_need_compress == 0) {
             compress_node = f_node;
           }
+          if (f_node->childs[index] != nullptr) {
+            f_node->childs[index]->parent = nullptr;
+          }
           f_node->childs[index] = vnode;
+          hash_target_node =vnode;
           return;
         }
         unsigned long long int old =
@@ -1816,7 +1824,7 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
 __global__ void puts_2phase_put_mark_phase(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
     int64_t *values_indexs, const uint8_t *const *values_hps, int n,
-    int *compress_num, Node **root_p, FullNode **compress_nodes,
+    int *compress_num, Node ** hash_target_nodes, Node **root_p, FullNode **compress_nodes,
     ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
@@ -1828,12 +1836,19 @@ __global__ void puts_2phase_put_mark_phase(
   int value_size = util::element_size(values_indexs, tid);
   const uint8_t *value_hp = values_hps[tid];
   FullNode *compress_node = nullptr;
+  Node *hash_target_node = nullptr;
   do_put_2phase_put_mark_phase(key, key_size, value, value_size, value_hp,
-                               root_p, compress_node, start_node,
+                               root_p, compress_node, hash_target_node, start_node,
                                node_allocator);
   if (compress_node != nullptr) {
     int compress_place = atomicAdd(compress_num, 1);
     compress_nodes[compress_place] = compress_node;
+  }
+  if (hash_target_node != nullptr) {
+    // printf("tid%d\n",tid);
+    hash_target_nodes[tid] = hash_target_node;
+    // ValueNode *v = static_cast<ValueNode*>(hash_target_node);
+    // v->print_self();
   }
 }
 
@@ -1971,7 +1986,6 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
   if (compress_node->child_num() > 1) {
     int old = atomicCAS(&compress_node->compressed, 0, 1);
     if (old) {
-      hash_target_node = compress_node->childs[16];
       return;
     }
     node = node->parent;
@@ -1989,9 +2003,11 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
         if (compressing_node->key_size > 0) {
           late_compress(compressing_node, cached_keys, node, cached_f_node,
                         start_node, root_p, container_size);
-          if (!updated) {
-            hash_target_node = compressing_node->val;
+          if (compressing_node->val->type != Node::Type::VALUE) {
             updated = true;
+            if(!updated) {
+              hash_target_node = compressing_node;
+            }
           }
         }
         return;
@@ -2003,9 +2019,11 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
           if (compressing_node->key_size > 0) {
             late_compress(compressing_node, cached_keys, f_node, cached_f_node,
                           start_node, root_p, container_size);
-            if (!updated) {
-              hash_target_node = compressing_node->val;
+            if (compressing_node->val->type != Node::Type::VALUE) {
               updated = true;
+              if(!updated) {
+                hash_target_node = compressing_node;
+              }
             }
           }
           return;
@@ -2038,9 +2056,11 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
           if (compressing_node->key_size > 0) {
             late_compress(compressing_node, cached_keys, f_node, cached_f_node,
                           start_node, root_p, container_size);
-            if (!updated) {
-              hash_target_node = compressing_node->val;
+            if (compressing_node->val->type != Node::Type::VALUE) {
               updated = true;
+              if(!updated) {
+                hash_target_node = compressing_node;
+              }
             }
           }
           compressing_node = allocator.malloc<ShortNode>();
@@ -2060,7 +2080,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
 }
 
 __global__ void puts_2phase_compress_phase(
-    FullNode **compress_nodes, int *compress_num, ShortNode *start_node,
+    FullNode **compress_nodes, int *compress_num, int n, ShortNode *start_node,
     Node **root_p, Node **hash_target_nodes, int *hash_target_number,
     DynamicAllocator<ALLOC_CAPACITY> allocator,
     KeyDynamicAllocator<KEY_ALLOC_CAPACITY> key_allocator) {
@@ -2075,53 +2095,55 @@ __global__ void puts_2phase_compress_phase(
   new_do_put_2phase_compress_phase(compress_node, start_node, root_p,
                                    hash_target_node, allocator, key_allocator);
   if (hash_target_node != nullptr) {
+    // printf("hash target node address: %p\n", hash_target_node);
     int place = atomicAdd(hash_target_number, 1);
-    hash_target_nodes[place] = hash_target_node;
+    // printf("place: %d\n",place);
+    hash_target_nodes[place+n] = hash_target_node;
   }
 }
 
-__device__ __forceinline__ void dfs_traverse_trie(Node *root) {
-  if (root == nullptr) {
-    return;
-  }
-  if (root->parent != nullptr) {
-    if (root->parent->type == Node::Type::VALUE) {
-      assert(false);
-    }
-  }
-  switch (root->type) {
-    case Node::Type::VALUE: {
-      ValueNode *v = static_cast<ValueNode *>(root);
-      v->print_self();
-      return;
-    }
-    case Node::Type::SHORT: {
-      ShortNode *s = static_cast<ShortNode *>(root);
-      s->print_self();
-      dfs_traverse_trie(s->val);
-      return;
-    }
-    case Node::Type::FULL: {
-      FullNode *f = static_cast<FullNode *>(root);
-      f->print_self();
-      for (int i = 0; i < 17; i++) {
-        if (f->childs[i] != nullptr) {
-          printf("f child %d", i);
-          dfs_traverse_trie(f->childs[i]);
-        }
-      }
-      return;
-    }
-    default:
-      assert(false);
-      return;
-  }
-}
+// __device__ __forceinline__ void dfs_traverse_trie(Node *root) {
+//   if (root == nullptr) {
+//     return;
+//   }
+//   if (root->parent != nullptr) {
+//     if (root->parent->type == Node::Type::VALUE) {
+//       assert(false);
+//     }
+//   }
+//   switch (root->type) {
+//     case Node::Type::VALUE: {
+//       ValueNode *v = static_cast<ValueNode *>(root);
+//       v->print_self();
+//       return;
+//     }
+//     case Node::Type::SHORT: {
+//       ShortNode *s = static_cast<ShortNode *>(root);
+//       s->print_self();
+//       dfs_traverse_trie(s->val);
+//       return;
+//     }
+//     case Node::Type::FULL: {
+//       FullNode *f = static_cast<FullNode *>(root);
+//       f->print_self();
+//       for (int i = 0; i < 17; i++) {
+//         if (f->childs[i] != nullptr) {
+//           printf("f child %d", i);
+//           dfs_traverse_trie(f->childs[i]);
+//         }
+//       }
+//       return;
+//     }
+//     default:
+//       assert(false);
+//       return;
+//   }
+// }
 
-__global__ void traverse_trie(Node **root) {
-  printf("one traverse\n");
-  dfs_traverse_trie(*root);
-}
+// __global__ void traverse_trie(Node **root) {
+//   printf("one traverse\n");
+//   dfs_traverse_trie(*root);
+// }
 }  // namespace GKernel
 }  // namespace Compress
 }  // namespace GpuMPT

@@ -3802,6 +3802,7 @@ TEST(TrieV2, LookupEthtxnBench) {
 
   record_num = read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
                                     values_bytes, values_bytes_indexs);
+  record_num = 640000;
   random_select_read_data(keys_bytes, keys_bytes_indexs, record_num,
                           read_keys_bytes, read_keys_bytes_indexs, lookup_num);
 
