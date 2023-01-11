@@ -1288,6 +1288,7 @@ __device__ __forceinline__ void do_hash_onepass_mark_phase_v2(
   }
 
   if (node == nullptr) {
+    assert(false);
     hash_node = nullptr;
   }
 }
@@ -1947,6 +1948,7 @@ __device__ __forceinline__ void late_compress(
       &cached_keys[container_size - compressing_node->key_size];
   if (compress_parent == start_node) {
     *root_p = compressing_node;
+    (*root_p)->parent = start_node; 
     start_node->val = compressing_node;
     return;
   }
@@ -2078,48 +2080,48 @@ __global__ void puts_2phase_compress_phase(
   }
 }
 
-// __device__ __forceinline__ void dfs_traverse_trie(Node *root) {
-//   if (root == nullptr) {
-//     return;
-//   }
-//   if (root->parent != nullptr) {
-//     if (root->parent->type == Node::Type::VALUE) {
-//       assert(false);
-//     }
-//   }
-//   switch (root->type) {
-//     case Node::Type::VALUE: {
-//       ValueNode *v = static_cast<ValueNode *>(root);
-//       v->print_self();
-//       return;
-//     }
-//     case Node::Type::SHORT: {
-//       ShortNode *s = static_cast<ShortNode *>(root);
-//       s->print_self();
-//       dfs_traverse_trie(s->val);
-//       return;
-//     }
-//     case Node::Type::FULL: {
-//       FullNode *f = static_cast<FullNode *>(root);
-//       f->print_self();
-//       for (int i = 0; i < 17; i++) {
-//         if (f->childs[i] != nullptr) {
-//           printf("f child %d", i);
-//           dfs_traverse_trie(f->childs[i]);
-//         }
-//       }
-//       return;
-//     }
-//     default:
-//       assert(false);
-//       return;
-//   }
-// }
+__device__ __forceinline__ void dfs_traverse_trie(Node *root) {
+  if (root == nullptr) {
+    return;
+  }
+  if (root->parent != nullptr) {
+    if (root->parent->type == Node::Type::VALUE) {
+      assert(false);
+    }
+  }
+  switch (root->type) {
+    case Node::Type::VALUE: {
+      ValueNode *v = static_cast<ValueNode *>(root);
+      v->print_self();
+      return;
+    }
+    case Node::Type::SHORT: {
+      ShortNode *s = static_cast<ShortNode *>(root);
+      s->print_self();
+      dfs_traverse_trie(s->val);
+      return;
+    }
+    case Node::Type::FULL: {
+      FullNode *f = static_cast<FullNode *>(root);
+      f->print_self();
+      for (int i = 0; i < 17; i++) {
+        if (f->childs[i] != nullptr) {
+          printf("f child %d", i);
+          dfs_traverse_trie(f->childs[i]);
+        }
+      }
+      return;
+    }
+    default:
+      assert(false);
+      return;
+  }
+}
 
-// __global__ void traverse_trie(Node **root) {
-//   printf("one traverse\n");
-//   dfs_traverse_trie(*root);
-// }
+__global__ void traverse_trie(Node **root) {
+  printf("one traverse\n");
+  dfs_traverse_trie(*root);
+}
 }  // namespace GKernel
 }  // namespace Compress
 }  // namespace GpuMPT

@@ -3286,7 +3286,7 @@ TEST(TrieV2, HaveDataInsert2Phase) {
 
   {
     GPUHashMultiThread::load_constants();
-    GpuMPT::Compress::MPT gpu_mpt_latching_v2;
+    GpuMPT::Compress::MPT gpu_mpt_two_v2;
     for (const cutil::Segment &segment : segments) {
       printf("segment size = %d\n", segment.n_);
       // cutil::println_hex(
@@ -3297,17 +3297,17 @@ TEST(TrieV2, HaveDataInsert2Phase) {
       //     util::element_size(segment.value_index_, 0));
 
       auto [d_hash_nodes, hash_nodes_num] =
-          gpu_mpt_latching_v2.puts_2phase_with_valuehp(
+          gpu_mpt_two_v2.puts_2phase_with_valuehp(
               segment.key_hex_, segment.key_hex_index_, segment.value_,
               segment.value_index_, segment.value_hp_, segment.n_);
       // printf("hash node num =%d\n", hash_nodes_num);
-      gpu_mpt_latching_v2.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+      gpu_mpt_two_v2.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
 
       // check hash
       const uint8_t *hash = nullptr;
       int hash_size = 0;
-      gpu_mpt_latching_v2.get_root_hash(hash, hash_size);
-      printf("GPU latching + onepass V2 Hash is: ");
+      gpu_mpt_two_v2.get_root_hash(hash, hash_size);
+      printf("GPU two + onepass V2 Hash is: ");
       cutil::println_hex(hash, hash_size);
     }
   }
@@ -3664,7 +3664,7 @@ TEST(TrieV2, LookupYCSBBench) {
     GPUHashMultiThread::load_constants();
 
     GpuMPT::Compress::MPT gpu_mpt;
-    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_latching_v2(
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_2phase(
       keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
     gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu_gets.start();
@@ -3840,7 +3840,7 @@ TEST(TrieV2, LookupEthtxnBench) {
     GPUHashMultiThread::load_constants();
 
     GpuMPT::Compress::MPT gpu_mpt;
-    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_latching_v2(
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_2phase(
       keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, record_num);
     gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu_gets.start();
@@ -3930,19 +3930,20 @@ TEST(TrieV2, ETEInsertYCSBBench) {
     CHECK_ERROR(cudaDeviceReset());
   }
 
-  // {
-  //   GPUHashMultiThread::load_constants();
-  //   GpuMPT::Compress::MPT gpu_mpt_two;
-  //   gpu_two.start();
-  //   auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
-  //     keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, values_hps, insert_num);
-  //   gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
-  //   gpu_two.stop();
-  //   gpu_mpt_two.get_root_hash(hash, hash_size);
-  //   printf("GPU two hash is: ");
-  //   cutil::println_hex(hash, hash_size);
-  //   CHECK_ERROR(cudaDeviceReset());
-  // }
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two;
+    gpu_two.start();
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
+      keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, values_hps, insert_num);
+    gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    gpu_two.stop();
+    gpu_mpt_two.get_root_hash(hash, hash_size);
+    printf("GPU two hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
   printf("CPU baseline end-to-end throughput %d us for %d insert operations and trie with %d records \n",
           cpu.get(), insert_num, record_num);
   printf("GPU baseline end-to-end throughput %d us for %d insert operations and trie with %d records \n",

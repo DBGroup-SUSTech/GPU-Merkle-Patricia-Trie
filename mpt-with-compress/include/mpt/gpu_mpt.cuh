@@ -758,7 +758,7 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   GKernel::puts_2phase_compress_phase<<<2 * num_blocks, block_size>>>(
       d_compress_nodes, d_compress_num, d_start_, d_root_p_,
       d_hash_target_nodes, d_hash_target_num, allocator_, key_allocator_);
-  // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
+//   GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
