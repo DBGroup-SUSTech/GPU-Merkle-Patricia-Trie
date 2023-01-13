@@ -20,16 +20,24 @@ class MPT {
                                   const uint8_t **value_hps, int n);
 
   /// @brief puts baseline loop version, ethereum adaptive
-  // TODO
   void puts_baseline_loop(const uint8_t *keys_hexs, int *keys_indexs,
                           const uint8_t *values_bytes, int64_t *values_indexs,
                           int n);
-  // TODO
   void puts_baseline_loop_with_valuehp(const uint8_t *keys_hexs,
                                        int *keys_indexs,
                                        const uint8_t *values_bytes,
                                        int64_t *values_indexs,
                                        const uint8_t **value_hps, int n);
+
+  /// @brief puts baseline loop version, ethereum adaptive
+  std::tuple<Node **, int> puts_baseline_loop_v2(const uint8_t *keys_hexs,
+                                                 int *keys_indexs,
+                                                 const uint8_t *values_bytes,
+                                                 int64_t *values_indexs, int n);
+
+  std::tuple<Node **, int> puts_baseline_loop_with_valuehp_v2(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **value_hps, int n);
 
   /// @brief parallel puts, based on latching
   void puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
@@ -254,6 +262,82 @@ void MPT::puts_baseline_loop_with_valuehp(const uint8_t *keys_hexs,
       (int)(n * 1000.0 / timer_gpu_put_baseline.get() * 1000.0));
 }
 
+std::tuple<Node **, int> MPT::puts_baseline_loop_v2(const uint8_t *keys_hexs,
+                                                    int *keys_indexs,
+                                                    const uint8_t *values_bytes,
+                                                    int64_t *values_indexs,
+                                                    int n) {
+  // create host side value ptrs
+  const uint8_t **values_hps = new const uint8_t *[n];
+  for (int i = 0; i < n; ++i) {
+    values_hps[i] = util::element_start(values_indexs, i, values_bytes);
+  }
+  return puts_baseline_loop_with_valuehp_v2(
+      keys_hexs, keys_indexs, values_bytes, values_indexs, values_hps, n);
+}
+
+std::tuple<Node **, int> MPT::puts_baseline_loop_with_valuehp_v2(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t **values_hps, int n) {
+  // assert datas on CPU, first transfer to GPU
+  uint8_t *d_keys_hexs = nullptr;
+  int *d_keys_indexs = nullptr;
+  uint8_t *d_values_bytes = nullptr;
+  int64_t *d_values_indexs = nullptr;
+  const uint8_t **d_values_hps = nullptr;
+
+  int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
+  int keys_indexs_size = util::indexs_size_sum(n);
+  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int values_indexs_size = util::indexs_size_sum(n);
+  int values_hps_size = n;
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
+
+  CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_values_bytes, values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::CpyHostToDevice(d_values_indexs, values_indexs,
+                                     values_indexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
+
+  // hash targets
+  Node **d_hash_target_nodes;
+  CHECK_ERROR(gutil::DeviceAlloc(d_hash_target_nodes, 2 * n));
+  CHECK_ERROR(gutil::DeviceSet(d_hash_target_nodes, 0, 2 * n));
+  int *d_other_hash_target_num;
+  CHECK_ERROR(gutil::DeviceAlloc(d_other_hash_target_num, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_other_hash_target_num, 0, 1));
+
+  // puts
+  perf::CpuTimer<perf::us> timer_gpu_put_baseline;
+  timer_gpu_put_baseline.start();  // timer start ------------------------------
+  GKernel::puts_baseline_loop_v2<<<1, 1>>>(
+      d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
+      n, d_start_, allocator_, d_hash_target_nodes, d_other_hash_target_num);
+  timer_gpu_put_baseline.stop();  // timer stop -------------------------------
+
+  int other_hash_target_num;
+  CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
+                                     d_other_hash_target_num, 1));
+  CHECK_ERROR(cudaDeviceSynchronize());  // synchronize all threads
+
+  printf(
+      "\033[31m"
+      "GPU put baseline kernel time: %d us, throughput %d qps\n"
+      "\033[0m",
+      timer_gpu_put_baseline.get(),
+      (int)(n * 1000.0 / timer_gpu_put_baseline.get() * 1000.0));
+  return {d_hash_target_nodes, n + other_hash_target_num};
+}
+
 void MPT::puts_latching(const uint8_t *keys_hexs, int *keys_indexs,
                         const uint8_t *values_bytes, int64_t *values_indexs,
                         int n) {
@@ -440,7 +524,8 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
       gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
   trans_timer.stop();
 
-  printf("key: %d us, value: %d us, hp: %d us\n", trans_timer.get(), trans_timer.get(), trans_timer.get());
+  printf("key: %d us, value: %d us, hp: %d us\n", trans_timer.get(),
+         trans_timer.get(), trans_timer.get());
 
   //   perf::CpuTimer<perf::us> timer_gpu_put_latching;
   //   timer_gpu_put_latching.start();  // timer start
@@ -744,13 +829,14 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
       d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, n,
       d_root_p_, d_start_, allocator_);
 
-//   CHECK_ERROR(cudaDeviceSynchronize());
+  //   CHECK_ERROR(cudaDeviceSynchronize());
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   // put mark
   // CHECK_ERROR(cudaDeviceSynchronize());
   GKernel::puts_2phase_put_mark_phase<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
-      n, d_compress_num, d_hash_target_nodes, d_root_p_, d_compress_nodes, d_start_, allocator_);
+      n, d_compress_num, d_hash_target_nodes, d_root_p_, d_compress_nodes,
+      d_start_, allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   // CUDA_SAFE_CALL(cudaDeviceSynchronize());
@@ -758,12 +844,12 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   GKernel::puts_2phase_compress_phase<<<2 * num_blocks, block_size>>>(
       d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
       d_hash_target_nodes, d_hash_target_num, allocator_, key_allocator_);
-//   GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
+  //   GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
   h_hash_target_num += n;
-//   printf("target num :%d\n",h_hash_target_num);
+  //   printf("target num :%d\n",h_hash_target_num);
   CHECK_ERROR(cudaDeviceSynchronize());
 
   return {d_hash_target_nodes, h_hash_target_num};
@@ -848,8 +934,8 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
   GKernel::
       puts_2phase_put_mark_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
           d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs,
-          d_values_hps, n, d_compress_num, d_hash_target_nodes, d_root_p_, d_compress_nodes,
-          d_start_, allocator_);
+          d_values_hps, n, d_compress_num, d_hash_target_nodes, d_root_p_,
+          d_compress_nodes, d_start_, allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   // CUDA_SAFE_CALL(cudaDeviceSynchronize());

@@ -334,6 +334,180 @@ __global__ void puts_baseline_loop(
   }
 }
 
+__device__ __forceinline__ void put_baseline_loop_v2(
+    const uint8_t *key, int key_size, const uint8_t *value, int value_size,
+    const uint8_t *value_hp, ShortNode *start_node,
+    DynamicAllocator<ALLOC_CAPACITY> &node_allocator, ValueNode *leaf, int n,
+    Node **other_hash_targets, int &other_hash_target_num) {
+  Node *parent = start_node;
+  Node **curr = &start_node->val;
+
+  while (*curr) {
+    Node *node = *curr;
+    if (node->type == Node::Type::VALUE) {
+      assert(key_size == 0);
+      ValueNode *vnode_old = static_cast<ValueNode *>(node);
+      ValueNode *vnode_new = leaf;
+      bool dirty =
+          !util::bytes_equal(vnode_old->d_value, vnode_old->value_size,
+                             vnode_new->d_value, vnode_new->value_size);
+      // TODO: set parent to nullptr
+      *curr = nullptr;
+      break;
+    }
+
+    switch (node->type) {
+      case Node::Type::SHORT: {
+        ShortNode *snode = static_cast<ShortNode *>(node);
+        int matchlen =
+            util::prefix_len(snode->key, snode->key_size, key, key_size);
+        if (matchlen == snode->key_size) {
+          key += matchlen;
+          key_size -= matchlen;
+          curr = &snode->val;
+          parent = snode;
+          break;
+        }
+
+        // split the node
+        FullNode *branch = node_allocator.malloc<FullNode>();
+        branch->type = Node::Type::FULL;
+
+        // construct 3 short nodes (or nil)
+        //  1. branch.old_child(left),
+        //  2. branch.parent(upper)
+        //  3. contine -> branch.new_child(right)
+        uint8_t left_nibble = snode->key[matchlen];
+        const uint8_t *left_key = snode->key + (matchlen + 1);
+        const int left_key_size = snode->key_size - (matchlen + 1);
+
+        uint8_t right_nibble = key[matchlen];
+        const uint8_t *right_key = key + (matchlen + 1);
+        const int right_key_size = key_size - (matchlen + 1);
+
+        const uint8_t *upper_key = snode->key;
+        const int upper_key_size = matchlen;
+
+        // left
+        if (0 != left_key_size) {
+          ShortNode *left_node = node_allocator.malloc<ShortNode>();
+          left_node->type = Node::Type::SHORT;
+          left_node->key = left_key;
+          left_node->key_size = left_key_size;
+          // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, left_node,
+          //        left_node->key_size);
+          branch->childs[left_nibble] = left_node;
+          branch->childs[left_nibble]->parent = branch;
+          left_node->val = snode->val;
+          left_node->val->parent = left_node;
+          // snode->val->parent = left_node;
+          // left_node->parent = branch;
+          // ! left node should hash
+          // int curr_index = atomicAdd(other_hash_target_num, 1);
+
+          int curr_index = (other_hash_target_num++);
+          assert(curr_index < n);
+          other_hash_targets[curr_index] = left_node;
+
+        } else {
+          branch->childs[left_nibble] = snode->val;
+          branch->childs[left_nibble]->parent = branch;
+        }
+
+        // upper
+        if (0 != upper_key_size) {
+          ShortNode *upper_node = node_allocator.malloc<ShortNode>();
+          upper_node->type = Node::Type::SHORT;
+          upper_node->key = upper_key;
+          upper_node->key_size = upper_key_size;
+          // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, upper_node,
+          //        upper_node->key_size);
+          *curr = upper_node;  // set parent.child
+          upper_node->parent = parent;
+          upper_node->val = branch;
+          branch->parent = upper_node;
+        } else {
+          *curr = branch;
+          branch->parent = parent;
+        }
+
+        node->parent = nullptr;
+
+        // continue to insert right child
+        key = right_key;
+        key_size = right_key_size;
+        parent = branch;
+        curr = &branch->childs[right_nibble];
+        break;
+      }
+
+      case Node::Type::FULL: {
+        assert(key_size > 0);
+
+        FullNode *fnode = static_cast<FullNode *>(node);
+        // printf("tid=%d\n full node match, release lock node %p\n",
+        // threadIdx.x,
+        //        parent);
+
+        const uint8_t nibble = key[0];
+        key = key + 1;
+        key_size -= 1;
+        parent = fnode;
+        curr = &fnode->childs[nibble];
+        break;
+      }
+
+      default: {
+        printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+            assert(false);
+        break;
+      }
+    }
+  }
+
+  if (key_size == 0) {
+    *curr = leaf;
+    leaf->parent = parent;
+  } else {
+    ShortNode *snode = node_allocator.malloc<ShortNode>();
+    snode->type = Node::Type::SHORT;
+    snode->key = key;
+    snode->key_size = key_size;
+
+    snode->val = leaf;
+    snode->val->parent = snode;
+
+    *curr = snode;
+    snode->parent = parent;
+  }
+}
+
+__global__ void puts_baseline_loop_v2(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t *const *values_hps, int n,
+    ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator,
+    Node **hash_target_nodes, int *other_hash_target_num) {
+  assert(blockDim.x == 1 && gridDim.x == 1);
+  for (int i = 0; i < n; ++i) {
+    const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
+    int key_size = util::element_size(keys_indexs, i);
+    const uint8_t *value = util::element_start(values_indexs, i, values_bytes);
+    int value_size = util::element_size(values_indexs, i);
+    const uint8_t *value_hp = values_hps[i];
+
+    ValueNode *leaf = node_allocator.malloc<ValueNode>();
+    leaf->type = Node::Type::VALUE;
+    leaf->h_value = value_hp;
+    leaf->d_value = value;
+    leaf->value_size = value_size;
+    hash_target_nodes[i] = leaf;
+
+    put_baseline_loop_v2(key, key_size, value, value_size, value_hp, start_node,
+                         node_allocator, leaf, n, hash_target_nodes + n,
+                         *other_hash_target_num);
+  }
+}
+
 __device__ __forceinline__ void put_latching(
     const uint8_t *key, int key_size, const uint8_t *value, int value_size,
     const uint8_t *value_hp, ShortNode *start_node,
@@ -840,7 +1014,7 @@ restart:  // TODO: replace goto with while
 
       // printf("[line:%d] thread %d success upgrade lock parent\n", __LINE__,
       //        threadIdx.x);
-
+      // TODO: set parent to nullptr
       *curr = leaf;
       leaf->parent = parent;
       // printf("[line:%d] thread %d write unlock parent\n", __LINE__,
@@ -1738,8 +1912,9 @@ __global__ void puts_2phase_get_split_phase(
 
 __device__ __forceinline__ void do_put_2phase_put_mark_phase(
     const uint8_t *key, int key_size, const uint8_t *value, int value_size,
-    const uint8_t *value_hp, Node **root_p, FullNode *&compress_node, Node *& hash_target_node,
-    ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
+    const uint8_t *value_hp, Node **root_p, FullNode *&compress_node,
+    Node *&hash_target_node, ShortNode *start_node,
+    DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
   ValueNode *vnode = node_allocator.malloc<ValueNode>();
   vnode->type = Node::Type::VALUE;
   vnode->h_value = value_hp;
@@ -1759,11 +1934,11 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
         remain_key_size -= s_node->key_size;
         if (remain_key_size == 0) {
           vnode->parent = s_node;
-          if (s_node->val != nullptr){
+          if (s_node->val != nullptr) {
             s_node->val->parent = nullptr;
           }
           s_node->val = vnode;
-          hash_target_node =vnode;
+          hash_target_node = vnode;
           return;
         }
         unsigned long long int old;
@@ -1799,7 +1974,7 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
             f_node->childs[index]->parent = nullptr;
           }
           f_node->childs[index] = vnode;
-          hash_target_node =vnode;
+          hash_target_node = vnode;
           return;
         }
         unsigned long long int old =
@@ -1824,8 +1999,9 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
 __global__ void puts_2phase_put_mark_phase(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
     int64_t *values_indexs, const uint8_t *const *values_hps, int n,
-    int *compress_num, Node ** hash_target_nodes, Node **root_p, FullNode **compress_nodes,
-    ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
+    int *compress_num, Node **hash_target_nodes, Node **root_p,
+    FullNode **compress_nodes, ShortNode *start_node,
+    DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
     return;
@@ -1838,8 +2014,8 @@ __global__ void puts_2phase_put_mark_phase(
   FullNode *compress_node = nullptr;
   Node *hash_target_node = nullptr;
   do_put_2phase_put_mark_phase(key, key_size, value, value_size, value_hp,
-                               root_p, compress_node, hash_target_node, start_node,
-                               node_allocator);
+                               root_p, compress_node, hash_target_node,
+                               start_node, node_allocator);
   if (compress_node != nullptr) {
     int compress_place = atomicAdd(compress_num, 1);
     compress_nodes[compress_place] = compress_node;
@@ -1963,7 +2139,7 @@ __device__ __forceinline__ void late_compress(
       &cached_keys[container_size - compressing_node->key_size];
   if (compress_parent == start_node) {
     *root_p = compressing_node;
-    (*root_p)->parent = start_node; 
+    (*root_p)->parent = start_node;
     start_node->val = compressing_node;
     return;
   }
@@ -2005,7 +2181,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
                         start_node, root_p, container_size);
           if (compressing_node->val->type != Node::Type::VALUE) {
             updated = true;
-            if(!updated) {
+            if (!updated) {
               hash_target_node = compressing_node;
             }
           }
@@ -2021,7 +2197,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
                           start_node, root_p, container_size);
             if (compressing_node->val->type != Node::Type::VALUE) {
               updated = true;
-              if(!updated) {
+              if (!updated) {
                 hash_target_node = compressing_node;
               }
             }
@@ -2058,7 +2234,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
                           start_node, root_p, container_size);
             if (compressing_node->val->type != Node::Type::VALUE) {
               updated = true;
-              if(!updated) {
+              if (!updated) {
                 hash_target_node = compressing_node;
               }
             }
@@ -2098,7 +2274,7 @@ __global__ void puts_2phase_compress_phase(
     // printf("hash target node address: %p\n", hash_target_node);
     int place = atomicAdd(hash_target_number, 1);
     // printf("place: %d\n",place);
-    hash_target_nodes[place+n] = hash_target_node;
+    hash_target_nodes[place + n] = hash_target_node;
   }
 }
 

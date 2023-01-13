@@ -3167,6 +3167,80 @@ void create_hp(const uint8_t **&values_hps, int n, uint8_t *values,
   }
 }
 
+TEST(TrieV2, HaveDataInsertBaseline) {
+  const uint8_t *keys_bytes = nullptr;
+  int *keys_bytes_indexs = nullptr;
+  const uint8_t *values_bytes = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
+  int n;
+
+  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  const uint8_t **values_hps = new const uint8_t *[n];
+  for (int i = 0; i < n; ++i) {
+    values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
+  }
+
+  {
+    CpuMPT::Compress::MPT cpu_mpt_dirty_flag;
+    cpu_mpt_dirty_flag.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                                     values_bytes_indexs, n);
+    cpu_mpt_dirty_flag.hashs_dirty_flag();
+    // check hash
+    const uint8_t *hash = nullptr;
+    int hash_size = 0;
+    cpu_mpt_dirty_flag.get_root_hash(hash, hash_size);
+    printf("CPU dirty flag root hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  // segment data
+  const int seg_size = 12345;
+  cutil::Segment data_all{
+      .key_hex_ = keys_hexs,
+      .key_hex_index_ = keys_hexs_indexs,
+      .value_ = values_bytes,
+      .value_index_ = values_bytes_indexs,
+      .value_hp_ = values_hps,
+      .n_ = n,
+  };
+  std::vector<cutil::Segment> segments = data_all.split_into_size(seg_size);
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_baseline_v2;
+    for (const cutil::Segment &segment : segments) {
+      printf("segment size = %d\n", segment.n_);
+      // cutil::println_hex(
+      //     util::element_start(segment.key_hex_index_, 0, segment.key_hex_),
+      //     util::element_size(segment.key_hex_index_, 0));
+      // cutil::println_str(
+      //     util::element_start(segment.value_index_, 0, segment.value_),
+      //     util::element_size(segment.value_index_, 0));
+
+      auto [d_hash_nodes, hash_nodes_num] =
+          gpu_mpt_baseline_v2.puts_baseline_loop_with_valuehp_v2(
+              segment.key_hex_, segment.key_hex_index_, segment.value_,
+              segment.value_index_, segment.value_hp_, segment.n_);
+      // printf("hash node num =%d\n", hash_nodes_num);
+      gpu_mpt_baseline_v2.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+
+      // check hash
+      const uint8_t *hash = nullptr;
+      int hash_size = 0;
+      gpu_mpt_baseline_v2.get_root_hash(hash, hash_size);
+      printf("GPU baseline + onepass V2 Hash is: ");
+      cutil::println_hex(hash, hash_size);
+    }
+  }
+}
+
 TEST(TrieV2, HaveDataInsertLatching) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
@@ -4114,8 +4188,9 @@ TEST(TrieV2, ETEInsertEthtxnBench) {
   uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   int record_num = 0;
-  int insert_num = read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
-                                    values_bytes, values_bytes_indexs);
+  int insert_num =
+      read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
+                           values_bytes, values_bytes_indexs);
   insert_num = 1000;
 
   printf("Inserting %d k-v pairs\n", insert_num);
