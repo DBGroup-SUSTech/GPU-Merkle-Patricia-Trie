@@ -582,6 +582,14 @@ std::tuple<Node **, int> MPT::puts_latching_pipeline_v2(
   CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
   CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
 
+  // hash targets
+  Node **d_hash_target_nodes;
+  CHECK_ERROR(gutil::DeviceAlloc(d_hash_target_nodes, 2 * n));
+  CHECK_ERROR(gutil::DeviceSet(d_hash_target_nodes, 0, 2 * n));
+  int *d_other_hash_target_num;
+  CHECK_ERROR(gutil::DeviceAlloc(d_other_hash_target_num, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_other_hash_target_num, 0, 1));
+
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_keys_hexs, keys_hexs,
                                           keys_hexs_size, stream_op_));
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_keys_indexs, keys_indexs,
@@ -592,14 +600,6 @@ std::tuple<Node **, int> MPT::puts_latching_pipeline_v2(
                                           values_hps_size, stream_op_));
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
                                           values_bytes_size, stream_cp_));
-
-  // hash targets
-  Node **d_hash_target_nodes;
-  CHECK_ERROR(gutil::DeviceAlloc(d_hash_target_nodes, 2 * n));
-  CHECK_ERROR(gutil::DeviceSet(d_hash_target_nodes, 0, 2 * n));
-  int *d_other_hash_target_num;
-  CHECK_ERROR(gutil::DeviceAlloc(d_other_hash_target_num, 1));
-  CHECK_ERROR(gutil::DeviceSet(d_other_hash_target_num, 0, 1));
 
   // puts
   const int rpwarp_block_size = 1024;
@@ -922,6 +922,7 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
   CHECK_ERROR(gutil::DeviceAlloc(d_hash_target_num, 1));
   CHECK_ERROR(gutil::DeviceSet(d_hash_target_num, n, 1));
 
+  CHECK_ERROR(cudaDeviceSynchronize());
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_keys_hexs, keys_hexs,
                                           keys_hexs_size, stream_op_));
   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_keys_indexs, keys_indexs,
