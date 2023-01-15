@@ -79,7 +79,7 @@ std::vector<clk::time_point> CpuMultiTimer<T>::get_all() const {
 }
 
 template <typename T> class GpuTimer : Timer {
-  static_assert(std::is_same_v<T, ms>);
+  static_assert(std::is_same_v<T, us>);
 
 public:
   GpuTimer(cudaStream_t stream = (cudaStream_t)0) : stream_(stream) {
@@ -105,7 +105,8 @@ template <typename T> void GpuTimer<T>::stop() {
 }
 template <typename T> int GpuTimer<T>::get() {
   float ms;
+  CHECK_ERROR(cudaEventSynchronize(stop_));
   CHECK_ERROR(cudaEventElapsedTime(&ms, start_, stop_));
-  return static_cast<int>(ms);
+  return static_cast<int>(ms * 1000);
 }
 } // namespace perf
