@@ -20,11 +20,11 @@ n4=$GMPT_YCSB_DATA_VOLUME
 for n in $(seq 8); do
     /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/utils "--gtest_filter=Util.args" "--gtest_also_run_disabled_tests"
     run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.LookupYCSBBench" "--gtest_also_run_disabled_tests" >> test_ycsb_lookup.log
-    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.LookupYCSBBench" "--gtest_also_run_disabled_tests" >> test_wiki_lookup.log
-    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.LookupYCSBBench" "--gtest_also_run_disabled_tests" >> test_eth_lookup.log
-    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.LookupYCSBBench" "--gtest_also_run_disabled_tests" >> test_ycsb_insert.log
-    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.LookupYCSBBench" "--gtest_also_run_disabled_tests" >> test_wiki_insert.log
-    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.LookupYCSBBench" "--gtest_also_run_disabled_tests" >> test_eth_insert.log
+    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.LookupWikiBench" "--gtest_also_run_disabled_tests" >> test_wiki_lookup.log
+    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.LookupEthtxnBench" "--gtest_also_run_disabled_tests" >> test_eth_lookup.log
+    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.ETEInsertYCSBBench" "--gtest_also_run_disabled_tests" >> test_ycsb_insert.log
+    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.ETEInsertWikiBench" "--gtest_also_run_disabled_tests" >> test_wiki_insert.log
+    run_n_times 10 /home/ymx/ccpro/bench/GPU-Merkle-Patricia-Trie/mpt-with-compress/build/trie "--gtest_filter=TrieV2.ETEInsertEthtxnBench" "--gtest_also_run_disabled_tests" >> test_eth_insert.log
 
     n1=`expr $n1 / 2`
     n2=`expr $n2 / 2`
