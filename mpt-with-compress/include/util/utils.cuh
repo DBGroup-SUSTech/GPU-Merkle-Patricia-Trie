@@ -4,8 +4,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+// #include <string.h>
+#include <string>
 #include <vector>
+#include <stdlib.h>
 
 #define ROUNDS 24
 #define HASH_SIZE 32
@@ -21,6 +23,41 @@
 #define MAX_RESULT_BUF 1 << 30
 
 #define WARP_FULL_MASK 0xFFFFFFFF
+
+namespace arg_util {
+  enum class Dataset { WIKI, YCSB, ETH, LOOKUP };
+  int get_record_num(Dataset dataset) {
+    char * data_num_str;
+    switch (dataset){
+    case Dataset::WIKI: {
+      data_num_str = getenv("GMPT_WIKI_DATA_VOLUME");
+      assert(data_num_str!=nullptr);
+      break;
+    }
+    case Dataset::YCSB: {
+      data_num_str = getenv("GMPT_YCSB_DATA_VOLUME");
+      assert(data_num_str!=nullptr);
+      break;
+    }
+    case Dataset::ETH: {
+      data_num_str = getenv("GMPT_ETH_DATA_VOLUME");
+      assert(data_num_str!=nullptr);
+      break;
+    }
+    case Dataset::LOOKUP: {
+      data_num_str = getenv("GMPT_DATA_LOOKUP_VOLUME");
+      assert(data_num_str!=nullptr);
+      break;
+    }
+    default:
+      printf("Wrong dataset type\n");
+      assert(false);
+      break;
+    }
+    int data_num = std::atoi(data_num_str);
+    return data_num;
+  }
+}
 
 namespace util {
 

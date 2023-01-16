@@ -34,3 +34,12 @@ TEST(Util, HexToCompact) {
 // 	}
 // }
 }
+TEST(Util, args) {
+  int wiki_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
+  int ycsb_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  int eth_num = arg_util::get_record_num(arg_util::Dataset::ETH);
+
+  int lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
+
+  printf("wiki record number %d, ycsb record number %d, eth record number %d, lookup operation %d\n", wiki_num, ycsb_num, eth_num, lookup_num);
+}

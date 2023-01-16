@@ -81,7 +81,7 @@ void lookup_data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
 void random_select_read_data(uint8_t *keys, int *keys_indexs, int trie_size,
                              uint8_t *&read_keys, int *&read_keys_indexs,
                              int &n) {
-  n = 1 << 16;
+  n = 1280000;
   for (int i = 0; i < n; i++) {
     int rand_key_idx = rand() % trie_size;
     const uint8_t *rand_key =
@@ -3691,6 +3691,7 @@ TEST(TrieV2, LookupYCSBBench) {
                         values_bytes, values_bytes_indexs, record_num);
   read_ycsb_data_read(WIKI_INDEX_PATH, read_keys_bytes, read_keys_bytes_indexs,
                       lookup_num);
+  lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num,
          lookup_num);
 
@@ -3771,7 +3772,7 @@ TEST(TrieV2, LookupWikiBench) {
 
   uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
   int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
-  uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
+  uint8_t *values_bytes = (uint8_t *)malloc(20000000000);
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   int record_num;
   uint8_t *read_keys_bytes = (uint8_t *)malloc(2000000000);
@@ -3785,9 +3786,11 @@ TEST(TrieV2, LookupWikiBench) {
 
   ASSERT_EQ(n, vn);
   record_num = n;
+  record_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
+
   random_select_read_data(keys_bytes, keys_bytes_indexs, record_num,
                           read_keys_bytes, read_keys_bytes_indexs, lookup_num);
-
+  lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num,
          lookup_num);
 
@@ -3877,10 +3880,12 @@ TEST(TrieV2, LookupEthtxnBench) {
 
   record_num = read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
                                     values_bytes, values_bytes_indexs);
-  record_num = 10000;
+
+  record_num = arg_util::get_record_num(arg_util::Dataset::ETH);
   random_select_read_data(keys_bytes, keys_bytes_indexs, record_num,
                           read_keys_bytes, read_keys_bytes_indexs, lookup_num);
 
+  lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num,
          lookup_num);
 
@@ -3967,7 +3972,7 @@ TEST(TrieV2, ETEInsertYCSBBench) {
   int insert_num;
   read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs, insert_num);
-
+  insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
   printf("Inserting %d k-v pairs\n", insert_num);
 
   const uint8_t *keys_hexs = nullptr;
@@ -3988,6 +3993,12 @@ TEST(TrieV2, ETEInsertYCSBBench) {
   const uint8_t *hash = nullptr;
   int hash_size = 0;
 
+  int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(values_bytes_indexs, insert_num);
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
   {
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
@@ -4003,11 +4014,16 @@ TEST(TrieV2, ETEInsertYCSBBench) {
   }
 
   {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     gpu_B.start();
-    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_baseline.puts_latching_v2(
-        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
+        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, values_hps,
         insert_num);
     gpu_mpt_baseline.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu_B.stop();
@@ -4018,6 +4034,11 @@ TEST(TrieV2, ETEInsertYCSBBench) {
   }
 
   {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     gpu_olc.start();
@@ -4034,6 +4055,11 @@ TEST(TrieV2, ETEInsertYCSBBench) {
   }
 
   {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     gpu_two.start();
@@ -4047,7 +4073,6 @@ TEST(TrieV2, ETEInsertYCSBBench) {
     cutil::println_hex(hash, hash_size);
     CHECK_ERROR(cudaDeviceReset());
   }
-
   printf(
       "CPU baseline end-to-end throughput %d us for %d insert operations and "
       "trie with %d records \n",
@@ -4072,7 +4097,7 @@ TEST(TrieV2, ETEInsertWikiBench) {
 
   uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
   int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
-  uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
+  uint8_t *values_bytes = (uint8_t *)malloc(20000000000);
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   int record_num = 0;
   int n =
@@ -4081,7 +4106,7 @@ TEST(TrieV2, ETEInsertWikiBench) {
                                      values_bytes_indexs);
 
   ASSERT_EQ(n, vn);
-  int insert_num = n;
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
 
   printf("Inserting %d k-v pairs\n", insert_num);
 
@@ -4102,6 +4127,12 @@ TEST(TrieV2, ETEInsertWikiBench) {
   const uint8_t *hash = nullptr;
   int hash_size = 0;
 
+  int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(values_bytes_indexs, insert_num);
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
   {
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
@@ -4117,11 +4148,16 @@ TEST(TrieV2, ETEInsertWikiBench) {
   }
 
   {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     gpu_B.start();
-    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_baseline.puts_latching_v2(
-        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
+        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, values_hps,
         insert_num);
     gpu_mpt_baseline.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu_B.stop();
@@ -4132,6 +4168,11 @@ TEST(TrieV2, ETEInsertWikiBench) {
   }
 
   {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     gpu_olc.start();
@@ -4148,6 +4189,11 @@ TEST(TrieV2, ETEInsertWikiBench) {
   }
 
   {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     gpu_two.start();
@@ -4161,7 +4207,6 @@ TEST(TrieV2, ETEInsertWikiBench) {
     cutil::println_hex(hash, hash_size);
     CHECK_ERROR(cudaDeviceReset());
   }
-
   printf(
       "CPU baseline end-to-end throughput %d us for %d insert operations and "
       "trie with %d records \n",
@@ -4192,7 +4237,7 @@ TEST(TrieV2, ETEInsertEthtxnBench) {
   int insert_num =
       read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
                            values_bytes, values_bytes_indexs);
-  insert_num = 1000;
+  insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
 
   printf("Inserting %d k-v pairs\n", insert_num);
 
@@ -4213,7 +4258,12 @@ TEST(TrieV2, ETEInsertEthtxnBench) {
 
   const uint8_t *hash = nullptr;
   int hash_size = 0;
-
+  int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(values_bytes_indexs, insert_num);
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
   {
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
@@ -4229,11 +4279,16 @@ TEST(TrieV2, ETEInsertEthtxnBench) {
   }
 
   {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     gpu_B.start();
-    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_baseline.puts_latching_v2(
-        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
+        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, values_hps,
         insert_num);
     gpu_mpt_baseline.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu_B.stop();
@@ -4244,6 +4299,11 @@ TEST(TrieV2, ETEInsertEthtxnBench) {
   }
 
   {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     gpu_olc.start();
@@ -4260,6 +4320,11 @@ TEST(TrieV2, ETEInsertEthtxnBench) {
   }
 
   {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     gpu_two.start();
