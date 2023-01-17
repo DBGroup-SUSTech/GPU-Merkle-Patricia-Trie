@@ -190,6 +190,7 @@ int read_wiki_data_all_values(std::string dir_path, uint8_t *out, int64_t *index
     file_index += line_num * 2;
     file_start += file_length;
     total_values += line_num;
+    printf("file_start: %ld\n", file_start);
   }
   return total_values;
 }

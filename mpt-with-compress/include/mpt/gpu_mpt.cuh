@@ -160,7 +160,7 @@ void MPT::puts_baseline_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
@@ -224,7 +224,7 @@ void MPT::puts_baseline_loop_with_valuehp(const uint8_t *keys_hexs,
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
@@ -288,7 +288,7 @@ std::tuple<Node **, int> MPT::puts_baseline_loop_with_valuehp_v2(
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
@@ -366,7 +366,7 @@ void MPT::puts_latching_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
@@ -421,7 +421,7 @@ void MPT::puts_latching_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
@@ -500,7 +500,7 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
   perf::CpuMultiTimer<perf::us> trans_timer;
@@ -572,7 +572,7 @@ std::tuple<Node **, int> MPT::puts_latching_pipeline_v2(
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
@@ -785,7 +785,7 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 
@@ -891,7 +891,7 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
 
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
-  int values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
   int values_indexs_size = util::indexs_size_sum(n);
   int values_hps_size = n;
 

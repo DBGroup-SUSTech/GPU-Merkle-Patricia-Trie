@@ -78,18 +78,17 @@ void lookup_data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
   }
 }
 
-void random_select_read_data(uint8_t *keys, int *keys_indexs, int trie_size,
-                             uint8_t *&read_keys, int *&read_keys_indexs,
-                             int &n) {
-  n = 1280000;
+void random_select_read_data(const uint8_t *keys, const int *keys_indexs,
+                             int trie_size, uint8_t *read_keys,
+                             int *read_keys_indexs, const int n) {
   for (int i = 0; i < n; i++) {
     int rand_key_idx = rand() % trie_size;
     const uint8_t *rand_key =
         util::element_start(keys_indexs, rand_key_idx, keys);
     int rand_key_size = util::element_size(keys_indexs, rand_key_idx);
     read_keys_indexs[2 * i] = util::elements_size_sum(read_keys_indexs, i);
-    read_keys_indexs[2 * i + 1] += rand_key_size - 1;
-    memcpy(keys + read_keys_indexs[2 * i], rand_key, rand_key_size);
+    read_keys_indexs[2 * i + 1] = read_keys_indexs[2 * i] + rand_key_size - 1;
+    memcpy(read_keys + read_keys_indexs[2 * i], rand_key, rand_key_size);
   }
 }
 
@@ -1906,18 +1905,17 @@ TEST(Trie, PutWikiBench) {
   // data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs,
   // n);
   uint8_t *keys_buffer = (uint8_t *)malloc(100000000);
-  int *keys_bytes_indexs_buffer = (int *)malloc(1000000 * sizeof(int));
-  uint8_t *value_buffer = (uint8_t *)malloc(2000000000);
+  int *keys_bytes_indexs_buffer = (int *)malloc(100000000 * sizeof(int));
+  uint8_t *value_buffer = (uint8_t *)malloc(8000000000);
   int64_t *values_bytes_indexs_buffer =
-      (int64_t *)malloc(1000000 * sizeof(int64_t));
+      (int64_t *)malloc(100000000 * sizeof(int64_t));
   int n = read_wiki_data_all_keys(WIKI_INDEX_PATH, keys_buffer,
                                   keys_bytes_indexs_buffer);
   int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, value_buffer,
                                      values_bytes_indexs_buffer);
 
   ASSERT_EQ(n, vn);
-
-  n = 10000;
+  n = 320000;
   printf("how much%d\n", n);
 
   const uint8_t *keys_hexs = nullptr;
@@ -3681,17 +3679,23 @@ TEST(TrieV2, LookupYCSBBench) {
   int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
   uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
-  int record_num;
   uint8_t *read_keys_bytes = (uint8_t *)malloc(2000000000);
   int *read_keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
-  int lookup_num;
+  int record_num_from_file;
+  int lookup_num_from_file;
 
   // load data
   read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
-                        values_bytes, values_bytes_indexs, record_num);
+                        values_bytes, values_bytes_indexs,
+                        record_num_from_file);
   read_ycsb_data_read(WIKI_INDEX_PATH, read_keys_bytes, read_keys_bytes_indexs,
-                      lookup_num);
-  lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
+                      lookup_num_from_file);
+
+  int record_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  int lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
+  assert(record_num <= record_num_from_file);
+  assert(lookup_num <= lookup_num_from_file);
+
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num,
          lookup_num);
 
@@ -3771,26 +3775,28 @@ TEST(TrieV2, LookupWikiBench) {
   GPUHashMultiThread::load_constants();
 
   uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
-  int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  int *keys_bytes_indexs = (int *)malloc(1000000000 * sizeof(int));
   uint8_t *values_bytes = (uint8_t *)malloc(20000000000);
-  int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
+  int64_t *values_bytes_indexs =
+      (int64_t *)malloc(1000000000 * sizeof(int64_t));
   int record_num;
   uint8_t *read_keys_bytes = (uint8_t *)malloc(2000000000);
-  int *read_keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  int *read_keys_bytes_indexs = (int *)malloc(1000000000 * sizeof(int));
   int lookup_num;
 
   int n =
       read_wiki_data_all_keys(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs);
   int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, values_bytes,
                                      values_bytes_indexs);
-
   ASSERT_EQ(n, vn);
-  record_num = n;
+
   record_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
+  lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
+  assert(record_num <= n);
+  // assert(lookup_num <= n_from_file);
 
   random_select_read_data(keys_bytes, keys_bytes_indexs, record_num,
                           read_keys_bytes, read_keys_bytes_indexs, lookup_num);
-  lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num,
          lookup_num);
 
@@ -3873,19 +3879,20 @@ TEST(TrieV2, LookupEthtxnBench) {
   int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
   uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
-  int record_num;
   uint8_t *read_keys_bytes = (uint8_t *)malloc(2000000000);
   int *read_keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
-  int lookup_num;
 
-  record_num = read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
-                                    values_bytes, values_bytes_indexs);
+  int record_num_from_file =
+      read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
+                           values_bytes, values_bytes_indexs);
 
-  record_num = arg_util::get_record_num(arg_util::Dataset::ETH);
+  int record_num = arg_util::get_record_num(arg_util::Dataset::ETH);
+  int lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
+  assert(record_num <= record_num_from_file);
+
   random_select_read_data(keys_bytes, keys_bytes_indexs, record_num,
                           read_keys_bytes, read_keys_bytes_indexs, lookup_num);
 
-  lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num,
          lookup_num);
 
@@ -3969,10 +3976,13 @@ TEST(TrieV2, ETEInsertYCSBBench) {
   uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   int record_num = 0;
-  int insert_num;
+  int insert_num_from_file;
   read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
-                        values_bytes, values_bytes_indexs, insert_num);
-  insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+                        values_bytes, values_bytes_indexs,
+                        insert_num_from_file);
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  assert(insert_num <= insert_num_from_file);
+
   printf("Inserting %d k-v pairs\n", insert_num);
 
   const uint8_t *keys_hexs = nullptr;
@@ -4022,9 +4032,10 @@ TEST(TrieV2, ETEInsertYCSBBench) {
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     gpu_B.start();
-    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
-        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, values_hps,
-        insert_num);
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num);
     gpu_mpt_baseline.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu_B.stop();
     gpu_mpt_baseline.get_root_hash(hash, hash_size);
@@ -4096,9 +4107,10 @@ TEST(TrieV2, ETEInsertWikiBench) {
   GPUHashMultiThread::load_constants();
 
   uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
-  int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  int *keys_bytes_indexs = (int *)malloc(1000000000 * sizeof(int));
   uint8_t *values_bytes = (uint8_t *)malloc(20000000000);
-  int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
+  int64_t *values_bytes_indexs =
+      (int64_t *)malloc(1000000000 * sizeof(int64_t));
   int record_num = 0;
   int n =
       read_wiki_data_all_keys(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs);
@@ -4107,6 +4119,7 @@ TEST(TrieV2, ETEInsertWikiBench) {
 
   ASSERT_EQ(n, vn);
   int insert_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
+  assert(insert_num <= n);
 
   printf("Inserting %d k-v pairs\n", insert_num);
 
@@ -4156,9 +4169,10 @@ TEST(TrieV2, ETEInsertWikiBench) {
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     gpu_B.start();
-    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
-        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, values_hps,
-        insert_num);
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num);
     gpu_mpt_baseline.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu_B.stop();
     gpu_mpt_baseline.get_root_hash(hash, hash_size);
@@ -4234,11 +4248,11 @@ TEST(TrieV2, ETEInsertEthtxnBench) {
   uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   int record_num = 0;
-  int insert_num =
+  int insert_num_from_file =
       read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
                            values_bytes, values_bytes_indexs);
-  insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
-
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
+  assert(insert_num <= insert_num_from_file);
   printf("Inserting %d k-v pairs\n", insert_num);
 
   const uint8_t *keys_hexs = nullptr;
@@ -4287,9 +4301,10 @@ TEST(TrieV2, ETEInsertEthtxnBench) {
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     gpu_B.start();
-    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
-        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, values_hps,
-        insert_num);
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num);
     gpu_mpt_baseline.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu_B.stop();
     gpu_mpt_baseline.get_root_hash(hash, hash_size);
@@ -4584,7 +4599,7 @@ TEST(TrieV2Pin, PipelineProfile) {
   int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
   uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
-  int record_num = 0;
+  // int record_num = 0;
   int insert_num;
   read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs, insert_num);
@@ -4596,17 +4611,13 @@ TEST(TrieV2Pin, PipelineProfile) {
   keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num, keys_hexs,
                      keys_hexs_indexs);
 
-  perf::CpuTimer<perf::us> gpu_B;
-  perf::CpuTimer<perf::us> gpu_olc;
-  perf::CpuTimer<perf::us> gpu_two;
-
   const uint8_t **values_hps = new const uint8_t *[insert_num];
   for (int i = 0; i < insert_num; ++i) {
     values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
   }
 
-  const uint8_t *hash = nullptr;
-  int hash_size = 0;
+  // const uint8_t *hash = nullptr;
+  // int hash_size = 0;
 
   // pre-pinned
   int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
