@@ -3723,6 +3723,20 @@ TEST(TrieV2, LookupYCSBBench) {
   const uint8_t *hash = nullptr;
   int hash_size = 0;
 
+  // pre-pinned
+  // int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, record_num);
+  // int keys_indexs_size = util::indexs_size_sum(record_num);
+  // int read_keys_hexs_size =
+  //     util::elements_size_sum(read_keys_hexs_indexs, lookup_num);
+  // int read_keys_indexs_size = util::indexs_size_sum(lookup_num);
+
+  // int64_t values_bytes_size =
+  //     util::elements_size_sum(values_bytes_indexs, record_num);
+  // int values_indexs_size = util::indexs_size_sum(record_num);
+  // int values_hps_size = record_num;
+  // int read_value_hps_size = lookup_num;
+  // int read_value_size_size = lookup_num;
+
   perf::CpuTimer<perf::us> cpu_gets;
   {
     GPUHashMultiThread::load_constants();
@@ -3748,6 +3762,15 @@ TEST(TrieV2, LookupYCSBBench) {
 
   {
     GPUHashMultiThread::load_constants();
+    // CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    // CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    // CHECK_ERROR(gutil::PinHost(read_keys_hexs, read_keys_hexs_size));
+    // CHECK_ERROR(gutil::PinHost(read_keys_hexs_indexs, read_keys_indexs_size));
+    // CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    // CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    // CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    // CHECK_ERROR(gutil::PinHost(read_values_hps, read_value_hps_size));
+    // CHECK_ERROR(gutil::PinHost(read_value_size, read_value_size_size));
 
     GpuMPT::Compress::MPT gpu_mpt;
     auto [d_hash_nodes, hash_nodes_num] =
@@ -4085,19 +4108,19 @@ TEST(TrieV2, ETEInsertYCSBBench) {
     CHECK_ERROR(cudaDeviceReset());
   }
   printf(
-      "CPU baseline end-to-end throughput %d us for %d insert operations and "
+      "CPU baseline end-to-end time %d us for %d insert operations and "
       "trie with %d records \n",
       cpu.get(), insert_num, record_num);
   printf(
-      "GPU baseline end-to-end throughput %d us for %d insert operations and "
+      "GPU baseline end-to-end time %d us for %d insert operations and "
       "trie with %d records \n",
       gpu_B.get(), insert_num, record_num);
   printf(
-      "GPU olc end-to-end throughput %d us for %d insert operations and trie "
+      "GPU olc end-to-end time %d us for %d insert operations and trie "
       "with %d records \n",
       gpu_olc.get(), insert_num, record_num);
   printf(
-      "GPU two end-to-end throughput %d us for %d insert operations and trie "
+      "GPU two end-to-end time %d us for %d insert operations and trie "
       "with %d records \n",
       gpu_two.get(), insert_num, record_num);
 }
@@ -4222,19 +4245,19 @@ TEST(TrieV2, ETEInsertWikiBench) {
     CHECK_ERROR(cudaDeviceReset());
   }
   printf(
-      "CPU baseline end-to-end throughput %d us for %d insert operations and "
+      "CPU baseline end-to-end time %d us for %d insert operations and "
       "trie with %d records \n",
       cpu.get(), insert_num, record_num);
   printf(
-      "GPU baseline end-to-end throughput %d us for %d insert operations and "
+      "GPU baseline end-to-end time %d us for %d insert operations and "
       "trie with %d records \n",
       gpu_B.get(), insert_num, record_num);
   printf(
-      "GPU olc end-to-end throughput %d us for %d insert operations and trie "
+      "GPU olc end-to-end time %d us for %d insert operations and trie "
       "with %d records \n",
       gpu_olc.get(), insert_num, record_num);
   printf(
-      "GPU two end-to-end throughput %d us for %d insert operations and trie "
+      "GPU two end-to-end time %d us for %d insert operations and trie "
       "with %d records \n",
       gpu_two.get(), insert_num, record_num);
 }
@@ -4355,19 +4378,19 @@ TEST(TrieV2, ETEInsertEthtxnBench) {
   }
 
   printf(
-      "CPU baseline end-to-end throughput %d us for %d insert operations and "
+      "CPU baseline end-to-end time %d us for %d insert operations and "
       "trie with %d records \n",
       cpu.get(), insert_num, record_num);
   printf(
-      "GPU baseline end-to-end throughput %d us for %d insert operations and "
+      "GPU baseline end-to-end time %d us for %d insert operations and "
       "trie with %d records \n",
       gpu_B.get(), insert_num, record_num);
   printf(
-      "GPU olc end-to-end throughput %d us for %d insert operations and trie "
+      "GPU olc end-to-end time %d us for %d insert operations and trie "
       "with %d records \n",
       gpu_olc.get(), insert_num, record_num);
   printf(
-      "GPU two end-to-end throughput %d us for %d insert operations and trie "
+      "GPU two end-to-end time %d us for %d insert operations and trie "
       "with %d records \n",
       gpu_two.get(), insert_num, record_num);
 }
