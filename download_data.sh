@@ -16,6 +16,46 @@ then
   bzip2 -d enwiki-20230101-pages-articles-multistream-index1.txt-p1p41242.bz2
   mv enwiki-20230101-pages-articles-multistream-index1.txt-p1p41242 index/
 fi
+
+if [ ! -f 'value/enwiki-20230101-pages-articles-multistream2.xml-p41243p151573' ];
+then
+  wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream2.xml-p41243p151573.bz2
+  bzip2 -d enwiki-20230101-pages-articles-multistream2.xml-p41243p151573.bz2
+  mv enwiki-20230101-pages-articles-multistream2.xml-p41243p151573 value/
+fi
+if [ ! -f 'index/enwiki-20230101-pages-articles-multistream-index2.txt-p41243p151573' ];
+then
+  wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream-index2.txt-p41243p151573.bz2
+  bzip2 -d enwiki-20230101-pages-articles-multistream-index2.txt-p41243p151573.bz2
+  mv enwiki-20230101-pages-articles-multistream-index2.txt-p41243p151573 index/
+fi
+
+if [ ! -f 'value/enwiki-20230101-pages-articles-multistream3.xml-p151574p311329' ];
+then
+  wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream3.xml-p151574p311329.bz2
+  bzip2 -d enwiki-20230101-pages-articles-multistream3.xml-p151574p311329.bz2
+  mv enwiki-20230101-pages-articles-multistream3.xml-p151574p311329 value/
+fi
+if [ ! -f 'index/enwiki-20230101-pages-articles-multistream-index3.txt-p151574p311329' ];
+then
+  wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream-index3.txt-p151574p311329.bz2
+  bzip2 -d enwiki-20230101-pages-articles-multistream-index3.txt-p151574p311329.bz2
+  mv enwiki-20230101-pages-articles-multistream-index3.txt-p151574p311329 index/
+fi
+
+if [ ! -f 'value/enwiki-20230101-pages-articles-multistream4.xml-p311330p558391' ];
+then
+  wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream4.xml-p311330p558391.bz2
+  bzip2 -d enwiki-20230101-pages-articles-multistream4.xml-p311330p558391.bz2
+  mv enwiki-20230101-pages-articles-multistream4.xml-p311330p558391 value/
+fi
+if [ ! -f 'index/enwiki-20230101-pages-articles-multistream-index4.txt-p311330p558391' ];
+then
+  wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream-index4.txt-p311330p558391.bz2
+  bzip2 -d enwiki-20230101-pages-articles-multistream-index4.txt-p311330p558391.bz2
+  mv enwiki-20230101-pages-articles-multistream-index4.txt-p311330p558391 index/
+fi
+
 cd $PROJECT_DIR
 
 # YCSB
