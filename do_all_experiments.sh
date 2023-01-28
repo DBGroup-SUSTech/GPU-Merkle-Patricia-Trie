@@ -28,7 +28,6 @@ rm test_eth_lookup.log
 rm test_ycsb_insert.log
 rm test_wiki_insert.log
 rm test_eth_insert.log
-$BUILD_PATH/trie "--gtest_filter=TrieV2.LookupWikiBench"
 
 for n in $(seq 8); do
     $BUILD_PATH/utils "--gtest_filter=Util.args" "--gtest_also_run_disabled_tests"
