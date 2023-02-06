@@ -10,14 +10,15 @@ namespace GpuMPT {
 namespace Compress {
 class MPT {
  public:
-  /// @brief puts baseline, adaptive from ethereum
-  void puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
-                     const uint8_t *values_bytes, int64_t *values_indexs,
-                     int n);
-  void puts_baseline_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
-                                  const uint8_t *values_bytes,
-                                  int64_t *values_indexs,
-                                  const uint8_t **value_hps, int n);
+  //   /// @brief puts baseline, adaptive from ethereum
+  //   void puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
+  //                      const uint8_t *values_bytes, int64_t *values_indexs,
+  //                      int n);
+  //   void puts_baseline_with_valuehp(const uint8_t *keys_hexs, int
+  //   *keys_indexs,
+  //                                   const uint8_t *values_bytes,
+  //                                   int64_t *values_indexs,
+  //                                   const uint8_t **value_hps, int n);
 
   /// @brief puts baseline loop version, ethereum adaptive
   void puts_baseline_loop(const uint8_t *keys_hexs, int *keys_indexs,
@@ -105,6 +106,7 @@ class MPT {
  public:
   // utils that need test
   void get_root_hash(const uint8_t *&hash, int &hash_size) const;
+  std::tuple<const uint8_t *, int> get_root_hash() const;
 
  private:
   /// @note d_start always saves the root node. d_root_p_ = &d_start.val
@@ -135,68 +137,68 @@ class MPT {
   }
 };
 
-void MPT::puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
-                        const uint8_t *values_bytes, int64_t *values_indexs,
-                        int n) {
-  // create host side value ptrs
-  const uint8_t **values_hps = new const uint8_t *[n];
-  for (int i = 0; i < n; ++i) {
-    values_hps[i] = util::element_start(values_indexs, i, values_bytes);
-  }
-  puts_baseline_with_valuehp(keys_hexs, keys_indexs, values_bytes,
-                             values_indexs, values_hps, n);
-}
+// void MPT::puts_baseline(const uint8_t *keys_hexs, int *keys_indexs,
+//                         const uint8_t *values_bytes, int64_t *values_indexs,
+//                         int n) {
+//   // create host side value ptrs
+//   const uint8_t **values_hps = new const uint8_t *[n];
+//   for (int i = 0; i < n; ++i) {
+//     values_hps[i] = util::element_start(values_indexs, i, values_bytes);
+//   }
+//   puts_baseline_with_valuehp(keys_hexs, keys_indexs, values_bytes,
+//                              values_indexs, values_hps, n);
+// }
 
-void MPT::puts_baseline_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
-                                     const uint8_t *values_bytes,
-                                     int64_t *values_indexs,
-                                     const uint8_t **values_hps, int n) {
-  // assert datas on CPU, first transfer to GPU
-  uint8_t *d_keys_hexs = nullptr;
-  int *d_keys_indexs = nullptr;
-  uint8_t *d_values_bytes = nullptr;
-  int64_t *d_values_indexs = nullptr;
-  const uint8_t **d_values_hps = nullptr;
+// void MPT::puts_baseline_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
+//                                      const uint8_t *values_bytes,
+//                                      int64_t *values_indexs,
+//                                      const uint8_t **values_hps, int n) {
+//   // assert datas on CPU, first transfer to GPU
+//   uint8_t *d_keys_hexs = nullptr;
+//   int *d_keys_indexs = nullptr;
+//   uint8_t *d_values_bytes = nullptr;
+//   int64_t *d_values_indexs = nullptr;
+//   const uint8_t **d_values_hps = nullptr;
 
-  int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
-  int keys_indexs_size = util::indexs_size_sum(n);
-  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
-  int values_indexs_size = util::indexs_size_sum(n);
-  int values_hps_size = n;
+//   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
+//   int keys_indexs_size = util::indexs_size_sum(n);
+//   int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
+//   int values_indexs_size = util::indexs_size_sum(n);
+//   int values_hps_size = n;
 
-  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
-  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
-  CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
-  CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
-  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
+//   CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+//   CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+//   CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
+//   CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
+//   CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
 
-  CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
-  CHECK_ERROR(
-      gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
-  CHECK_ERROR(
-      gutil::CpyHostToDevice(d_values_bytes, values_bytes, values_bytes_size));
-  CHECK_ERROR(gutil::CpyHostToDevice(d_values_indexs, values_indexs,
-                                     values_indexs_size));
-  CHECK_ERROR(
-      gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
+//   CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
+//   CHECK_ERROR(
+//       gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+//   CHECK_ERROR(
+//       gutil::CpyHostToDevice(d_values_bytes, values_bytes, values_bytes_size));
+//   CHECK_ERROR(gutil::CpyHostToDevice(d_values_indexs, values_indexs,
+//                                      values_indexs_size));
+//   CHECK_ERROR(
+//       gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
 
-  // puts
-  perf::CpuTimer<perf::us> timer_gpu_put_baseline;
-  timer_gpu_put_baseline.start();  // timer start ------------------------------
+//   // puts
+//   perf::CpuTimer<perf::us> timer_gpu_put_baseline;
+//   timer_gpu_put_baseline.start();  // timer start ------------------------------
 
-  GKernel::puts_baseline<<<1, 1>>>(d_keys_hexs, d_keys_indexs, d_values_bytes,
-                                   d_values_indexs, d_values_hps, n, d_root_p_,
-                                   allocator_);
-  CHECK_ERROR(cudaDeviceSynchronize());
+//   GKernel::puts_baseline<<<1, 1>>>(d_keys_hexs, d_keys_indexs, d_values_bytes,
+//                                    d_values_indexs, d_values_hps, n, d_root_p_,
+//                                    allocator_);
+//   CHECK_ERROR(cudaDeviceSynchronize());
 
-  timer_gpu_put_baseline.stop();  // timer stop -------------------------------
-  printf(
-      "\033[31m"
-      "GPU put baseline kernel time: %d us, throughput %d qps\n"
-      "\033[0m",
-      timer_gpu_put_baseline.get(),
-      (int)(n * 1000.0 / timer_gpu_put_baseline.get() * 1000.0));
-}
+//   timer_gpu_put_baseline.stop();  // timer stop -------------------------------
+//   printf(
+//       "\033[31m"
+//       "GPU put baseline kernel time: %d us, throughput %d qps\n"
+//       "\033[0m",
+//       timer_gpu_put_baseline.get(),
+//       (int)(n * 1000.0 / timer_gpu_put_baseline.get() * 1000.0));
+// }
 
 void MPT::puts_baseline_loop(const uint8_t *keys_hexs, int *keys_indexs,
                              const uint8_t *values_bytes,
@@ -752,6 +754,13 @@ void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
   CHECK_ERROR(gutil::DeviceFree(d_hash));
   CHECK_ERROR(gutil::DeviceFree(d_hash_size_p));
   // TODO free h_hash if not passed out
+}
+
+std::tuple<const uint8_t *, int> MPT::get_root_hash() const {
+  const uint8_t *hash;
+  int hash_size;
+  get_root_hash(hash, hash_size);
+  return {hash, hash_size};
 }
 
 std::tuple<Node **, int> MPT::puts_2phase(const uint8_t *keys_hexs,

@@ -59,25 +59,6 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
          value_size);
 }
 
-void lookup_data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
-                     int &n) {
-  n = 1 << 20;
-  std::random_device rd;
-  std::mt19937 g(rd());
-  std::uniform_int_distribution<> dist(0, 1 << 8);
-  uint16_t *keys = new uint16_t[n]{};  // 2 * n byte
-  for (int i = 0; i < n; ++i) {
-    keys[i] = i % (1 << 16);
-  }
-  std::shuffle(keys, keys + n, g);
-  keys_bytes = reinterpret_cast<uint8_t *>(keys);
-  keys_bytes_indexs = new int[n * 2]{};
-  for (int i = 0; i < n; ++i) {
-    keys_bytes_indexs[2 * i] = 2 * i;
-    keys_bytes_indexs[2 * i + 1] = 2 * i + 1;
-  }
-}
-
 void random_select_read_data(const uint8_t *keys, const int *keys_indexs,
                              int trie_size, uint8_t *read_keys,
                              int *read_keys_indexs, const int n) {
@@ -423,8 +404,8 @@ TEST(GpuMpt, PutsBaselineBasic) {
                      keys_hexs_indexs);
 
   GpuMPT::Compress::MPT mpt;
-  mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
-                    values_bytes_indexs, n);
+  mpt.puts_baseline_loop(keys_hexs, keys_hexs_indexs, values_bytes,
+                         values_bytes_indexs, n);
   mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
 
   for (int i = 0; i < n; ++i) {
@@ -469,7 +450,7 @@ TEST(GpuMpt, PutsBaselineOverride) {
                      keys_hexs_indexs);
 
   GpuMPT::Compress::MPT mpt;
-  mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+  mpt.puts_baseline_loop(keys_hexs, keys_hexs_indexs, values_bytes,
                     values_bytes_indexs, n);
   mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
 
@@ -502,7 +483,7 @@ TEST(GpuMpt, PutsBaselineFullTrie) {
                      keys_hexs_indexs);
 
   GpuMPT::Compress::MPT mpt;
-  mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+  mpt.puts_baseline_loop(keys_hexs, keys_hexs_indexs, values_bytes,
                     values_bytes_indexs, n);
 
   const uint8_t **values_ptrs = new const uint8_t *[n] {};
@@ -995,7 +976,7 @@ TEST(Trie, HashBenchmark) {
   //                                values_bytes_indexs, n);
 
   GpuMPT::Compress::MPT gpu_mpt_onepass;
-  gpu_mpt_onepass.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+  gpu_mpt_onepass.puts_baseline_loop(keys_hexs, keys_hexs_indexs, values_bytes,
                                 values_bytes_indexs, n);
 
   perf::CpuTimer<perf::us> timer_cpu_hash_dirty_flag;  // timer start --
@@ -2243,7 +2224,7 @@ TEST(Trie, LookupBench) {
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     int values_sizes[n]{};
-    gpu_mpt_baseline.puts_baseline_with_valuehp(
+    gpu_mpt_baseline.puts_baseline_loop_with_valuehp(
         keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
         values_hps, n);
     gpu_mpt_baseline.hash_onepass(keys_hexs, keys_hexs_indexs, n);
@@ -2532,7 +2513,7 @@ TEST(Trie, ETEBench) {
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     timer_gpu_put_baseline.start();  // timer start
-    gpu_mpt_baseline.puts_baseline_with_valuehp(
+    gpu_mpt_baseline.puts_baseline_loop_with_valuehp(
         keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
         values_hps, n);
 
@@ -3765,12 +3746,13 @@ TEST(TrieV2, LookupYCSBBench) {
     // CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     // CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     // CHECK_ERROR(gutil::PinHost(read_keys_hexs, read_keys_hexs_size));
-    // CHECK_ERROR(gutil::PinHost(read_keys_hexs_indexs, read_keys_indexs_size));
-    // CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
-    // CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
-    // CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
-    // CHECK_ERROR(gutil::PinHost(read_values_hps, read_value_hps_size));
-    // CHECK_ERROR(gutil::PinHost(read_value_size, read_value_size_size));
+    // CHECK_ERROR(gutil::PinHost(read_keys_hexs_indexs,
+    // read_keys_indexs_size)); CHECK_ERROR(gutil::PinHost(values_bytes,
+    // values_bytes_size)); CHECK_ERROR(gutil::PinHost(values_bytes_indexs,
+    // values_indexs_size)); CHECK_ERROR(gutil::PinHost(values_hps,
+    // values_hps_size)); CHECK_ERROR(gutil::PinHost(read_values_hps,
+    // read_value_hps_size)); CHECK_ERROR(gutil::PinHost(read_value_size,
+    // read_value_size_size));
 
     GpuMPT::Compress::MPT gpu_mpt;
     auto [d_hash_nodes, hash_nodes_num] =
@@ -3834,8 +3816,6 @@ TEST(TrieV2, LookupWikiBench) {
   keys_bytes_to_hexs(read_keys_bytes, read_keys_bytes_indexs, lookup_num,
                      read_keys_hexs, read_keys_hexs_indexs);
 
-  perf::CpuTimer<perf::us> gpu_gets;
-
   const uint8_t **values_hps = new const uint8_t *[record_num];
   for (int i = 0; i < record_num; ++i) {
     values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
@@ -3847,6 +3827,7 @@ TEST(TrieV2, LookupWikiBench) {
   const uint8_t *hash = nullptr;
   int hash_size = 0;
 
+  perf::CpuTimer<perf::us> gpu_gets;
   perf::CpuTimer<perf::us> cpu_gets;
   {
     GPUHashMultiThread::load_constants();

@@ -32,17 +32,17 @@ rm test_eth_insert.log
 for n in $(seq 8); do
     $BUILD_PATH/utils "--gtest_filter=Util.args" "--gtest_also_run_disabled_tests"
     echo test_ycsb_lookup...
-    run_n_times 10 $BUILD_PATH/trie "--gtest_filter=TrieV2.LookupYCSBBench" "--gtest_also_run_disabled_tests" >> test_ycsb_lookup.log
+    run_n_times 10 $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupYCSB" >> test_ycsb_lookup.log
     echo test_wiki_lookup...
-    run_n_times 10 $BUILD_PATH/trie "--gtest_filter=TrieV2.LookupWikiBench" "--gtest_also_run_disabled_tests" >> test_wiki_lookup.log
+    run_n_times 10 $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupWiki" >> test_wiki_lookup.log
     echo test_eth_lookup...
-    run_n_times 10 $BUILD_PATH/trie "--gtest_filter=TrieV2.LookupEthtxnBench" "--gtest_also_run_disabled_tests" >> test_eth_lookup.log
+    run_n_times 10 $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupEthtxn" >> test_eth_lookup.log
     echo test_ycsb_insert...
-    run_n_times 10 $BUILD_PATH/trie "--gtest_filter=TrieV2.ETEInsertYCSBBench" "--gtest_also_run_disabled_tests" >> test_ycsb_insert.log
+    run_n_times 10 $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.InsertYCSB" >> test_ycsb_insert.log
     echo test_wiki_insert...
-    run_n_times 10 $BUILD_PATH/trie "--gtest_filter=TrieV2.ETEInsertWikiBench" "--gtest_also_run_disabled_tests" >> test_wiki_insert.log
+    run_n_times 10 $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.InsertWiki" >> test_wiki_insert.log
     echo test_eth_insert...
-    run_n_times 10 $BUILD_PATH/trie "--gtest_filter=TrieV2.ETEInsertEthtxnBench" "--gtest_also_run_disabled_tests" >> test_eth_insert.log
+    run_n_times 10 $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.InsertEthtxn" >> test_eth_insert.log
 
     n1=`expr $n1 / 2`
     n2=`expr $n2 / 2`

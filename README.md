@@ -19,6 +19,18 @@ where
   EXTRACT(date FROM block_timestamp) between "2022-11-15" and "2022-12-29"
 ```
 The results need to be exported to one or multiple csv files and saved in `/ethereum/transactions/` folder.
+### Build
+```sh
+git clone https://github.com/TKONIY/GPU-Merkle-Patricia-Trie.git
+cd GPU-Merkle-Patricia-Trie
+mkdir build
+cd build
+cmake ../mpt-with-compress/
+cmake --build . -j
+```
 ### Run
-* Compile [mpt-with-compress](./mpt-with-compress/) project and run tests.
+You can run unit tests in [go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go) and 
+``` sh
+bash do_all_experiments.sh
+```
 * Ethereum experients in [go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go)
