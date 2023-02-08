@@ -12,6 +12,7 @@
 void random_select_read_data(const uint8_t *keys, const int *keys_indexs,
                              int trie_size, uint8_t *read_keys,
                              int *read_keys_indexs, const int n) {
+  srand(time(NULL)); // TODO reset a new seed?
   for (int i = 0; i < n; i++) {
     int rand_key_idx = rand() % trie_size;
     const uint8_t *rand_key =
@@ -220,7 +221,7 @@ TEST(EXPERIMENTS, InsertWiki) {
   int vn = read_wiki_data_all_values(WIKI_VALUE_PATH, values_bytes,
                                      values_bytes_indexs);
   ASSERT_EQ(kn, vn);
-
+  printf("kn:%d, vn:%d\n", kn, vn);
   // load args from command line
   int insert_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
   assert(insert_num <= kn);
@@ -784,4 +785,12 @@ TEST(EXPERIMENTS, TrieSizeWiki) {
 
 TEST(EXPERIMENTS, TrieSizeEthtxn) {
   // TODO
+}
+
+// TODO: delete
+TEST(EXPERIMENTS, Random) {
+  srand(0);
+  for (int i = 0; i < 10; i++) {
+    printf("%d\n", rand() % 100);
+  }
 }
