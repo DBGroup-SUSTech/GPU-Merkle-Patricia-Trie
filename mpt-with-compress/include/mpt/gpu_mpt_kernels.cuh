@@ -863,8 +863,8 @@ restart:  // TODO: replace goto with while
         key_size = right_key_size;
         parent = branch;
 
-        branch->check_or_restart(v, need_restart);
-        if (need_restart) goto restart;
+        // branch->check_or_restart(v, need_restart);
+        // if (need_restart) goto restart;
 
         parent_v = v;
         break;
@@ -889,8 +889,8 @@ restart:  // TODO: replace goto with while
 
         // printf("[line:%d] thread %d check or restart\n", __LINE__,
         // threadIdx.x);
-        node->check_or_restart(v, need_restart);
-        if (need_restart) goto restart;
+        // node->check_or_restart(v, need_restart);
+        // if (need_restart) goto restart;
 
         parent_v = v;
         break;
@@ -1110,8 +1110,9 @@ restart:  // TODO: replace goto with while
         // lock child
         // printf("[line:%d] thread %d try read lock parent\n", __LINE__,
         //        threadIdx.x);
+
         v = branch->read_lock_or_restart(need_restart);
-        node->write_unlock_obsolete();
+        // node->write_unlock_obsolete();
         parent->write_unlock();
         if (need_restart) goto restart;
 
@@ -1148,8 +1149,8 @@ restart:  // TODO: replace goto with while
         key_size = right_key_size;
         parent = branch;
 
-        branch->check_or_restart(v, need_restart);
-        if (need_restart) goto restart;
+        // branch->check_or_restart(v, need_restart);
+        // if (need_restart) goto restart;
 
         parent_v = v;
         break;
@@ -1174,8 +1175,8 @@ restart:  // TODO: replace goto with while
 
         // printf("[line:%d] thread %d check or restart\n", __LINE__,
         // threadIdx.x);
-        node->check_or_restart(v, need_restart);
-        if (need_restart) goto restart;
+        // node->check_or_restart(v, need_restart);
+        // if (need_restart) goto restart;
 
         parent_v = v;
         break;
@@ -1234,7 +1235,7 @@ __global__ void puts_latching_v2(
     ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator,
     Node **hash_target_nodes, int *other_hash_target_num) {
   int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
-
+  // printf("wid %d\n", wid);
   if (wid >= n) {
     return;
   }
@@ -1254,7 +1255,7 @@ __global__ void puts_latching_v2(
   leaf->d_value = value;
   leaf->value_size = value_size;
   hash_target_nodes[wid] = leaf;
-
+  // printf("wid %d\n", wid);
   // put_olc(key, key_size, value, value_size, value_hp, start_node,
   //         node_allocator);
   put_olc_v2(key, key_size, value, value_size, value_hp, start_node,
