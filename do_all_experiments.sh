@@ -37,18 +37,21 @@ for n in $(seq 8); do
     run_n_times 10 $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupYCSB" >> test_ycsb_lookup.log
     pushd $GO_ETH_PATH
     go test -run ^TestLookupYCSB$ -count=10 >> ../../test_ycsb_lookup.log
+    go test -run ^TestLookupYCSBParallel$ -count=10 >> ../../test_ycsb_lookup.log
     popd
 
     echo test_wiki_lookup...
     run_n_times 10 $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupWiki" >> test_wiki_lookup.log
     pushd $GO_ETH_PATH
-    go test -run TestLookupWiki -count=10 >> ../../test_wiki_lookup.log
+    go test -run ^TestLookupWiki$ -count=10 >> ../../test_wiki_lookup.log
+    go test -run ^TestLookupWikiParallel$ -count=10 >> ../../test_wiki_lookup.log
     popd
 
     echo test_eth_lookup...
     run_n_times 10 $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupEthtxn" >> test_eth_lookup.log
     pushd $GO_ETH_PATH
     go test -run ^TestLookupEthtxn$ -count=10 >> ../../test_eth_lookup.log
+    go test -run ^TestLookupEthtxnParallel$ -count=10 >> ../../test_eth_lookup.log
     popd
 
     echo test_ycsb_insert...

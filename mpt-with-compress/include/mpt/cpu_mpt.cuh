@@ -6,6 +6,7 @@
 #include "hash/cpu_hash.h"
 #include "mpt/node.cuh"
 #include "util/utils.cuh"
+#include "util/timer.cuh"
 
 namespace CpuMPT {
 namespace Compress {
@@ -216,6 +217,8 @@ void MPT::put_baseline(const uint8_t *key, int key_size, const uint8_t *value,
 void MPT::puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
                         const uint8_t *values_bytes,
                         const int64_t *values_indexs, int n) {
+  perf::CpuTimer<perf::us> timer;
+  timer.start();
   for (int i = 0; i < n; ++i) {
     const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
     int key_size = util::element_size(keys_indexs, i);
@@ -223,6 +226,8 @@ void MPT::puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
     int value_size = util::element_size(values_indexs, i);
     put_baseline(key, key_size, value, value_size);
   }
+  timer.stop();
+  printf("CPU insert response time: %d\n", timer.get());
 }
 
 void MPT::dfs_hashs_dirty_flag(Node *node) {
@@ -306,7 +311,13 @@ void MPT::dfs_hashs_dirty_flag(Node *node) {
   printf("ERROR ON INSERT\n"), assert(false);
 }
 
-void MPT::hashs_dirty_flag() { dfs_hashs_dirty_flag(root_); }
+void MPT::hashs_dirty_flag() { 
+  perf::CpuTimer<perf::us> timer;
+  timer.start();
+  dfs_hashs_dirty_flag(root_); 
+  timer.stop();
+  printf("CPU hash response time: %d\n", timer.get());
+}
 
 void MPT::dfs_get_baseline(Node *node, const uint8_t *key, int key_size,
                            int pos, const uint8_t *&value,

@@ -324,6 +324,7 @@ std::tuple<Node **, int> MPT::puts_baseline_loop_with_valuehp_v2(
   GKernel::puts_baseline_loop_v2<<<1, 1>>>(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
       n, d_start_, allocator_, d_hash_target_nodes, d_other_hash_target_num);
+  CHECK_ERROR(cudaDeviceSynchronize());
   timer_gpu_put_baseline.stop();  // timer stop -------------------------------
 
   int other_hash_target_num;
@@ -334,7 +335,8 @@ std::tuple<Node **, int> MPT::puts_baseline_loop_with_valuehp_v2(
   printf(
       "\033[31m"
       "GPU put baseline kernel time: %d us, throughput %d qps\n"
-      "\033[0m",
+      "\033[0m"
+      "baseline ",
       timer_gpu_put_baseline.get(),
       (int)(n * 1000.0 / timer_gpu_put_baseline.get() * 1000.0));
   return {d_hash_target_nodes, n + other_hash_target_num};
@@ -550,6 +552,8 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
   const int rpwarp_block_size = 1024;
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size;  // one warp per request
+  perf::GpuTimer<perf::us> kernel_timer;
+  kernel_timer.start();
   GKernel::puts_latching_v2<<<rpwarp_num_blocks, rpwarp_block_size>>>(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
       n, d_start_, allocator_, d_hash_target_nodes, d_other_hash_target_num);
@@ -558,6 +562,8 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
   CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
                                      d_other_hash_target_num, 1));
   CHECK_ERROR(cudaDeviceSynchronize());  // synchronize all threads
+  kernel_timer.stop();
+  printf("olc insert kernel response time %d us\nolc ", kernel_timer.get());
 
   return {d_hash_target_nodes, n + other_hash_target_num};
 }
@@ -658,7 +664,7 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   CHECK_ERROR(cudaDeviceSynchronize());
   gpu_kernel.stop();
 
-  printf("kernel response time: %d us \n", gpu_kernel.get());
+  printf("lookup kernel response time: %d us \n", gpu_kernel.get());
   //   timer_gpu_get_parallel.stop();
   //   printf(
   //       "\033[31m"
@@ -717,6 +723,9 @@ void MPT::hash_onepass_v2(Node **d_hash_nodes, int n) {
   const int rpthread_block_size = 128;
   const int rpthread_num_blocks =
       (n + rpthread_block_size - 1) / rpthread_block_size;
+
+  perf::CpuTimer<perf::us> gpu_kernel;
+  gpu_kernel.start(); 
   GKernel::
       hash_onepass_mark_phase_v2<<<rpthread_num_blocks, rpthread_block_size>>>(
           d_hash_nodes, n, d_root_p_);
@@ -729,6 +738,8 @@ void MPT::hash_onepass_v2(Node **d_hash_nodes, int n) {
       hash_onepass_update_phase_v2<<<rpwarp_num_blocks, rpwarp_block_size>>>(
           d_hash_nodes, n, allocator_, d_start_);
   CHECK_ERROR(cudaDeviceSynchronize());
+  gpu_kernel.stop();
+  printf("hash kernel response time %d us\n", gpu_kernel.get());
 }
 
 void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
@@ -857,6 +868,8 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   CHECK_ERROR(gutil::DeviceSet(d_compress_nodes, 0, 2 * n));
   const int block_size = 128;
   int num_blocks = (n + block_size - 1) / block_size;
+  perf::GpuTimer<perf::us> kernel_timer;
+  kernel_timer.start();
   GKernel::puts_2phase_get_split_phase<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, n,
       d_root_p_, d_start_, allocator_);
@@ -877,12 +890,16 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
       d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
       d_hash_target_nodes, d_hash_target_num, allocator_, key_allocator_);
   //   GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
+  CHECK_ERROR(cudaDeviceSynchronize());
 
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
+  kernel_timer.stop();
+
+  printf("2phase insert kernel response time %d us\n2phase ", kernel_timer.get());
+
   h_hash_target_num += n;
   //   printf("target num :%d\n",h_hash_target_num);
-  CHECK_ERROR(cudaDeviceSynchronize());
 
   return {d_hash_target_nodes, h_hash_target_num};
 }
