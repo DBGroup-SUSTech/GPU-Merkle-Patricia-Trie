@@ -968,7 +968,8 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
   // d_values_indexs += 2;
   // d_values_hps += 1;
   // n -= 1;
-
+//   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
+//                                           values_bytes_size, stream_cp_));
   // split get
   const int block_size = 128;
   int num_blocks = (n + block_size - 1) / block_size;
@@ -981,17 +982,18 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   // put mark
   // CHECK_ERROR(cudaDeviceSynchronize());
+CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
+                                          values_bytes_size, stream_cp_));
   GKernel::
       puts_2phase_put_mark_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
           d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs,
           d_values_hps, n, d_compress_num, d_hash_target_nodes, d_root_p_,
           d_compress_nodes, d_start_, allocator_);
+
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   // CUDA_SAFE_CALL(cudaDeviceSynchronize());
   // // compress
-  CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
-                                          values_bytes_size, stream_cp_));
   GKernel::
       puts_2phase_compress_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
           d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
@@ -1002,6 +1004,7 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
   CHECK_ERROR(gutil::CpyDeviceToHostAsync(&h_hash_target_num, d_hash_target_num,
                                           1, stream_op_));
   CHECK_ERROR(cudaDeviceSynchronize());
+  h_hash_target_num += n;
 
   return {d_hash_target_nodes, h_hash_target_num};
 }
