@@ -1113,7 +1113,6 @@ restart:  // TODO: replace goto with while
 
         v = branch->read_lock_or_restart(need_restart);
         // node->write_unlock_obsolete();
-        parent->write_unlock();
         if (need_restart) goto restart;
 
         // 2) left
@@ -1138,6 +1137,9 @@ restart:  // TODO: replace goto with while
           branch->childs[left_nibble] = snode->val;
           branch->childs[left_nibble]->parent = branch;
         }
+
+        // TODO: where to unlock
+        parent->write_unlock();
 
         // printf("tid=%d\n splited, release lock node %p\n", threadIdx.x,
         // parent);
