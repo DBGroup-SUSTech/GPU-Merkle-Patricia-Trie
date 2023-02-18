@@ -97,6 +97,7 @@ int read_ethtxn_data_all(std::string dir_path, uint8_t *out_key, int *key_index,
                          uint8_t *out_value, int64_t *value_index) {
   std::vector<std::string> file_names;
   getFiles(dir_path, file_names);
+  std::sort(file_names.begin(), file_names.end());
   uint8_t *file_out_key = out_key, *file_out_value = out_value;
   int *file_index_key = key_index;
   int64_t *file_index_value = value_index;
@@ -107,6 +108,7 @@ int read_ethtxn_data_all(std::string dir_path, uint8_t *out_key, int *key_index,
   int limit_files = 8;  // TODO: not reading all files
 
   for (int i = 0; i < file_names.size() && i < limit_files; i++) {
+    // printf("file name: %s\n", file_names[i].c_str());
     int line_num = 0;
     int file_key_length = 0;
     int64_t file_value_length = 0;

@@ -32,6 +32,10 @@ void getFiles(std::string path, std::vector<std::string> &filenames) {
     }
   }
   closedir(pDir);
+  std::sort(filenames.begin(), filenames.end());
+  // for (auto f : filenames) {
+  //   printf("%s\n", f.c_str());
+  // }
 }
 
 void print_elements(xmlNodePtr node) {
@@ -61,9 +65,7 @@ int read_wiki_data_keys(std::string file_name, uint8_t *out, int *index, int &n,
     std::stringstream ss(line);
     std::getline(ss, catagory, ':');
     std::getline(ss, subcatagory, ':');
-    std::string out_key = catagory + subcatagory;
-    // printf("%s \n",out_key.c_str());
-    // break;
+    std::string out_key = catagory + ':' + subcatagory;
     memcpy(out + length, (uint8_t *)out_key.c_str(), out_key.size());
     index[2 * i] = length + start_index;
     length += out_key.size();

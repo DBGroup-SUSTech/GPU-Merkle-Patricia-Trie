@@ -136,7 +136,7 @@ TEST(EXPERIMENTS, InsertYCSB) {
 
   // load data from file
   int insert_num_from_file;
-  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs,
                         insert_num_from_file);
   int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
@@ -521,10 +521,10 @@ TEST(EXPERIMENTS, LookupYCSB) {
   int lookup_num_from_file = 0;
 
   // load data from file
-  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs,
                         record_num_from_file);
-  read_ycsb_data_read(WIKI_INDEX_PATH, read_keys_bytes, read_keys_bytes_indexs,
+  read_ycsb_data_read(YCSB_PATH, read_keys_bytes, read_keys_bytes_indexs,
                       lookup_num_from_file);
 
   // load args from command line
@@ -886,7 +886,7 @@ TEST(EXPERIMENTS, AsyncMemcpyYCSB) {
 
   // load data from file
   int insert_num_from_file;
-  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs,
                         insert_num_from_file);
   // int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
@@ -1293,7 +1293,7 @@ TEST(EXPERIMENTS, TrieSizeYCSB) {
 
   // load data from file
   int insert_num_from_file;
-  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs,
                         insert_num_from_file);
 

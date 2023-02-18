@@ -169,14 +169,14 @@ __host__ __device__ __forceinline__ int hex_to_compact(const uint8_t *hex,
   }
   int bytes_size = hex_size / 2 + 1;
   // encoding flags
-  bytes[0] = terminator < 5;
+  bytes[0] = terminator << 5;
   if (hex_size & 1 == 1) {
     bytes[0] |= (1 << 4);  // old flag
     bytes[0] |= hex[0];    // first nibble
     hex += 1;
     hex_size -= 1;
-    bytes += 1;
   }
+  bytes += 1;
   // decode nibbles
   for (int bi = 0, ni = 0; ni < hex_size; bi += 1, ni += 2) {
     bytes[bi] = hex[ni] << 4 | hex[ni + 1];

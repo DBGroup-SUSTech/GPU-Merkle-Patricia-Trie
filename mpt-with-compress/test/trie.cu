@@ -451,7 +451,7 @@ TEST(GpuMpt, PutsBaselineOverride) {
 
   GpuMPT::Compress::MPT mpt;
   mpt.puts_baseline_loop(keys_hexs, keys_hexs_indexs, values_bytes,
-                    values_bytes_indexs, n);
+                         values_bytes_indexs, n);
   mpt.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
 
   ASSERT_TRUE(util::bytes_equal(values_ptrs[0], values_sizes[0],
@@ -484,7 +484,7 @@ TEST(GpuMpt, PutsBaselineFullTrie) {
 
   GpuMPT::Compress::MPT mpt;
   mpt.puts_baseline_loop(keys_hexs, keys_hexs_indexs, values_bytes,
-                    values_bytes_indexs, n);
+                         values_bytes_indexs, n);
 
   const uint8_t **values_ptrs = new const uint8_t *[n] {};
   int *values_sizes = new int[n]{};
@@ -977,7 +977,7 @@ TEST(Trie, HashBenchmark) {
 
   GpuMPT::Compress::MPT gpu_mpt_onepass;
   gpu_mpt_onepass.puts_baseline_loop(keys_hexs, keys_hexs_indexs, values_bytes,
-                                values_bytes_indexs, n);
+                                     values_bytes_indexs, n);
 
   perf::CpuTimer<perf::us> timer_cpu_hash_dirty_flag;  // timer start --
   timer_cpu_hash_dirty_flag.start();
@@ -1148,6 +1148,35 @@ TEST(CpuMpt, LedgerdbHash) {
   delete[] keys_bytes_indexs;
   delete[] values_bytes;
   delete[] values_bytes_indexs;
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
+}
+
+TEST(CpuMpt, HashRawEncode) {
+  const int n = 3;
+  const uint8_t *keys_bytes =
+      reinterpret_cast<const uint8_t *>("doedogdogglesworth");
+  int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
+  const uint8_t *values_bytes =
+      reinterpret_cast<const uint8_t *>("aaaaaaaaaaaabbbbbbbbbbbbcccccccccccc");
+  int64_t values_bytes_indexs[2 * n] = {0, 11, 12, 23, 24, 35};
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+  // cutil::print_hex(keys_hexs, keys_hexs_indexs[2 * n - 1] + 1);
+
+  CpuMPT::Compress::MPT mpt;
+  mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                    values_bytes_indexs, n);
+  mpt.hashs_dirty_flag();
+  const uint8_t *hash;
+  int hash_size = 0;
+  mpt.get_root_hash(hash, hash_size);
+  printf("CPU hash is: ");
+  cutil::println_hex(hash, hash_size);
   delete[] keys_hexs;
   delete[] keys_hexs_indexs;
 }
@@ -2899,9 +2928,9 @@ TEST(Trie, ETEYCSBBench) {
   int *read_key_index = (int *)malloc(10000000 * sizeof(int));
   int read_data_number;
 
-  read_ycsb_data_insert(WIKI_INDEX_PATH, key, key_index, value, value_index,
+  read_ycsb_data_insert(YCSB_PATH, key, key_index, value, value_index,
                         data_number);
-  read_ycsb_data_read(WIKI_INDEX_PATH, read_key, read_key_index,
+  read_ycsb_data_read(YCSB_PATH, read_key, read_key_index,
                       read_data_number);
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", data_number,
          read_data_number);
@@ -3444,9 +3473,9 @@ TEST(Trie, YCSBHaveDataInsert) {
   int *read_key_index_all = (int *)malloc(10000000 * sizeof(int));
   int read_data_number_all;
 
-  read_ycsb_data_insert(WIKI_INDEX_PATH, key_all, key_index_all, value_all,
+  read_ycsb_data_insert(YCSB_PATH, key_all, key_index_all, value_all,
                         value_index_all, data_number_all);
-  read_ycsb_data_read(WIKI_INDEX_PATH, read_key_all, read_key_index_all,
+  read_ycsb_data_read(YCSB_PATH, read_key_all, read_key_index_all,
                       read_data_number_all);
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n",
          data_number_all, read_data_number_all);
@@ -3666,10 +3695,10 @@ TEST(TrieV2, LookupYCSBBench) {
   int lookup_num_from_file;
 
   // load data
-  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs,
                         record_num_from_file);
-  read_ycsb_data_read(WIKI_INDEX_PATH, read_keys_bytes, read_keys_bytes_indexs,
+  read_ycsb_data_read(YCSB_PATH, read_keys_bytes, read_keys_bytes_indexs,
                       lookup_num_from_file);
 
   int record_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
@@ -3981,7 +4010,7 @@ TEST(TrieV2, ETEInsertYCSBBench) {
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   int record_num = 0;
   int insert_num_from_file;
-  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs,
                         insert_num_from_file);
   int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
@@ -4392,7 +4421,7 @@ TEST(TrieV2Pin, ETEInsertProfileYCSB) {
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   int record_num = 0;
   int insert_num;
-  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs, insert_num);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -4605,7 +4634,7 @@ TEST(TrieV2Pin, PipelineProfile) {
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   // int record_num = 0;
   int insert_num;
-  read_ycsb_data_insert(WIKI_INDEX_PATH, keys_bytes, keys_bytes_indexs,
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
                         values_bytes, values_bytes_indexs, insert_num);
 
   printf("Inserting %d k-v pairs\n", insert_num);

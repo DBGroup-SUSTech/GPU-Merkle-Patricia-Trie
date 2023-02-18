@@ -224,6 +224,8 @@ void MPT::puts_baseline(const uint8_t *keys_hexs, const int *keys_indexs,
     int key_size = util::element_size(keys_indexs, i);
     const uint8_t *value = util::element_start(values_indexs, i, values_bytes);
     int value_size = util::element_size(values_indexs, i);
+    // printf("key size: %d, value size %d\n value: ", key_size, value_size);
+    // cutil::println_hex(value, value_size);
     put_baseline(key, key_size, value, value_size);
   }
   timer.stop();
