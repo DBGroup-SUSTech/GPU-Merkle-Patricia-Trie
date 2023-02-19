@@ -51,8 +51,8 @@ int get_record_num(Dataset dataset) {
       break;
     }
     case Dataset::TRIESIZE: {
-      // data_num_str = getenv("GMPT_TRIESIZE");
-      data_num_str = "20000";
+      data_num_str = getenv("GMPT_TRIESIZE");
+      // data_num_str = "20000";
       assert(data_num_str != nullptr);
       break;
     }
