@@ -14,7 +14,7 @@
 #define HASH_DATA_AREA 136
 
 #define ALLOC_CAPACITY ((uint64_t(1) << 34))  // 16GB for node
-#define KEY_ALLOC_CAPACITY (3*(uint64_t(1) << 30)) //48 MB
+#define KEY_ALLOC_CAPACITY (3*(uint64_t(1) << 30)) //3 GB for key
 
 #define MAX_NODES 1 << 18
 #define MAX_REQUEST 1 << 20
@@ -25,7 +25,7 @@
 #define WARP_FULL_MASK 0xFFFFFFFF
 
 namespace arg_util {
-  enum class Dataset { WIKI, YCSB, ETH, LOOKUP };
+  enum class Dataset { WIKI, YCSB, ETH, LOOKUP, TRIESIZE };
   int get_record_num(Dataset dataset) {
     char * data_num_str;
     switch (dataset){
@@ -46,6 +46,11 @@ namespace arg_util {
     }
     case Dataset::LOOKUP: {
       data_num_str = getenv("GMPT_DATA_LOOKUP_VOLUME");
+      assert(data_num_str!=nullptr);
+      break;
+    }
+    case Dataset::TRIESIZE: {
+      data_num_str = getenv("GMPT_TRIESIZE");
       assert(data_num_str!=nullptr);
       break;
     }

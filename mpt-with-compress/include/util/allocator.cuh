@@ -123,7 +123,7 @@ public:
   }
 
   __device__ __forceinline__ uint32_t allocated() const {
-    return *d_small_count_aligned8_ + *d_medium_count_aligned8_*4 + *d_large_count_aligned8_ *32;
+    return *d_small_count_aligned8_ + *d_medium_count_aligned8_*4 + *d_large_count_aligned8_*32;
   }
 
 private:

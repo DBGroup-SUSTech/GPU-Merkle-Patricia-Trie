@@ -872,6 +872,8 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   CHECK_ERROR(gutil::DeviceSet(d_compress_nodes, 0, 2 * n));
   const int block_size = 128;
   int num_blocks = (n + block_size - 1) / block_size;
+  perf::CpuMultiTimer<perf::us> sub_timer;
+  sub_timer.start();
   perf::GpuTimer<perf::us> kernel_timer;
   kernel_timer.start();
   GKernel::puts_2phase_get_split_phase<<<num_blocks, block_size>>>(
@@ -881,27 +883,29 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   //   CHECK_ERROR(cudaDeviceSynchronize());
 //   GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
 //   // put mark
-//   CHECK_ERROR(cudaDeviceSynchronize());
+  CHECK_ERROR(cudaDeviceSynchronize());
+  sub_timer.stop();
   GKernel::puts_2phase_put_mark_phase<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
       n, d_compress_num, d_hash_target_nodes, d_root_p_, d_compress_nodes,
       d_start_, allocator_);
 //   GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
 
-//   CUDA_SAFE_CALL(cudaDeviceSynchronize());
+  CUDA_SAFE_CALL(cudaDeviceSynchronize());
+  sub_timer.stop();
   // // compress
   GKernel::puts_2phase_compress_phase<<<2 * num_blocks, block_size>>>(
       d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
       d_hash_target_nodes, d_hash_target_num, allocator_, d_split_num, key_allocator_);
     // GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
-//   CHECK_ERROR(cudaDeviceSynchronize());
-
+  CHECK_ERROR(cudaDeviceSynchronize());
+  sub_timer.stop();
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
   kernel_timer.stop();
 
   printf("2phase insert kernel response time %d us\n2phase ", kernel_timer.get());
-
+  printf("2phase insert kernel submodules response time %d us split, %d us put, %d us compress\n", sub_timer.get(0), sub_timer.get(1),sub_timer.get(2));
   h_hash_target_num += n;
 //   printf("target num :%d\n",h_hash_target_num);
 
