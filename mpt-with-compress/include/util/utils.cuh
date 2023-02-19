@@ -5,16 +5,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 // #include <string.h>
+#include <stdlib.h>
+
 #include <string>
 #include <vector>
-#include <stdlib.h>
 
 #define ROUNDS 24
 #define HASH_SIZE 32
 #define HASH_DATA_AREA 136
 
-#define ALLOC_CAPACITY ((uint64_t(1) << 34))  // 16GB for node
-#define KEY_ALLOC_CAPACITY (3*(uint64_t(1) << 30)) //3 GB for key
+#define ALLOC_CAPACITY ((uint64_t(1) << 34))          // 16GB for node
+#define KEY_ALLOC_CAPACITY (3 * (uint64_t(1) << 30))  // 3 GB for key
 
 #define MAX_NODES 1 << 18
 #define MAX_REQUEST 1 << 20
@@ -25,44 +26,45 @@
 #define WARP_FULL_MASK 0xFFFFFFFF
 
 namespace arg_util {
-  enum class Dataset { WIKI, YCSB, ETH, LOOKUP, TRIESIZE };
-  int get_record_num(Dataset dataset) {
-    char * data_num_str;
-    switch (dataset){
+enum class Dataset { WIKI, YCSB, ETH, LOOKUP, TRIESIZE };
+int get_record_num(Dataset dataset) {
+  const char *data_num_str;
+  switch (dataset) {
     case Dataset::WIKI: {
       data_num_str = getenv("GMPT_WIKI_DATA_VOLUME");
-      assert(data_num_str!=nullptr);
+      assert(data_num_str != nullptr);
       break;
     }
     case Dataset::YCSB: {
       data_num_str = getenv("GMPT_YCSB_DATA_VOLUME");
-      assert(data_num_str!=nullptr);
+      assert(data_num_str != nullptr);
       break;
     }
     case Dataset::ETH: {
       data_num_str = getenv("GMPT_ETH_DATA_VOLUME");
-      assert(data_num_str!=nullptr);
+      assert(data_num_str != nullptr);
       break;
     }
     case Dataset::LOOKUP: {
       data_num_str = getenv("GMPT_DATA_LOOKUP_VOLUME");
-      assert(data_num_str!=nullptr);
+      assert(data_num_str != nullptr);
       break;
     }
     case Dataset::TRIESIZE: {
-      data_num_str = getenv("GMPT_TRIESIZE");
-      assert(data_num_str!=nullptr);
+      // data_num_str = getenv("GMPT_TRIESIZE");
+      data_num_str = "20000";
+      assert(data_num_str != nullptr);
       break;
     }
     default:
       printf("Wrong dataset type\n");
       assert(false);
       break;
-    }
-    int data_num = std::atoi(data_num_str);
-    return data_num;
   }
+  int data_num = std::atoi(data_num_str);
+  return data_num;
 }
+}  // namespace arg_util
 
 namespace util {
 
@@ -81,7 +83,8 @@ __host__ __device__ __forceinline__ int element_size(const int *indexs, int i) {
   return indexs[2 * i + 1] - indexs[2 * i] + 1;
 }
 
-__host__ __device__ __forceinline__ int element_size(const int64_t *indexs, int i) {
+__host__ __device__ __forceinline__ int element_size(const int64_t *indexs,
+                                                     int i) {
   return int(indexs[2 * i + 1] - indexs[2 * i] + 1);
 }
 
@@ -104,8 +107,8 @@ __host__ __device__ __forceinline__ int elements_size_sum(const int *indexs,
   return indexs[2 * i + 1] + 1;
 }
 
-__host__ __device__ __forceinline__ int64_t elements_size_sum(const int64_t *indexs,
-                                                          int n) {
+__host__ __device__ __forceinline__ int64_t
+elements_size_sum(const int64_t *indexs, int n) {
   int i = n - 1;  // i of the last num;
   return indexs[2 * i + 1] + 1;
 }
@@ -239,6 +242,54 @@ struct Segment {
   const uint8_t **value_hp_;
   int n_;
 
+  std::vector<Segment> split_into_two(const int seg_size) {
+    std::vector<Segment> segments(2);
+
+    const uint8_t *next_key_hex = key_hex_;
+    int *next_key_hex_index = key_hex_index_;
+    const uint8_t *next_value = value_;
+    int64_t *next_value_index = value_index_;
+    const uint8_t **next_value_hp = value_hp_;
+
+    int offset_key_hex = 0;
+    int64_t offset_value = 0;
+
+    int arr_ni[]{seg_size, n_ - seg_size};
+
+    for (int i = 0; i < 2; ++i) {
+      int n_i = arr_ni[i];
+      assert(n_i >= 0);
+
+      Segment seg_i = {
+          .key_hex_ = next_key_hex,
+          .key_hex_index_ = next_key_hex_index,
+          .value_ = next_value,
+          .value_index_ = next_value_index,
+          .value_hp_ = next_value_hp,
+          .n_ = n_i,
+      };
+
+      // remove offset
+      for (int j = 0; j < util::indexs_size_sum(n_i); ++j) {
+        seg_i.key_hex_index_[j] -= offset_key_hex;
+        seg_i.value_index_[j] -= offset_value;
+      }
+
+      segments.at(i) = seg_i;
+
+      // advanced
+      offset_key_hex += util::elements_size_sum(seg_i.key_hex_index_, seg_i.n_);
+      offset_value += util::elements_size_sum(seg_i.value_index_, seg_i.n_);
+
+      next_key_hex += util::elements_size_sum(next_key_hex_index, seg_i.n_);
+      next_key_hex_index += util::indexs_size_sum(seg_i.n_);
+      next_value += util::elements_size_sum(next_value_index, seg_i.n_);
+      next_value_index += util::indexs_size_sum(seg_i.n_);
+      next_value_hp += seg_i.n_;
+    }
+    return segments;
+  }
+
   std::vector<Segment> split_into_size(int seg_size) {
     int seg_number = (n_ + seg_size - 1) / seg_size;
     int n_remain = n_;
@@ -324,7 +375,8 @@ cudaError_t PinHost(T *src, size_t count) {
                           cudaHostRegisterDefault);
 }
 
-template <typename T> cudaError_t UnpinHost(T *src) {
+template <typename T>
+cudaError_t UnpinHost(T *src) {
   return cudaHostUnregister((void *)src);
 }
 
@@ -344,4 +396,3 @@ cudaError_t DeviceFree(T *data) {
 }
 
 }  // namespace gutil
-
