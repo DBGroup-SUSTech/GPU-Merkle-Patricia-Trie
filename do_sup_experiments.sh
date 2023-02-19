@@ -19,7 +19,7 @@ REPEAT=10
 rm test_sup_experiments.log
 
 for n in $(seq 7); do
-    $BUILD_PATH/utils "--gtest_filter=Util.args" "--gtest_also_run_disabled_tests"
+    # $BUILD_PATH/utils "--gtest_filter=Util.args" "--gtest_also_run_disabled_tests"
 
     echo test_trie_size...
     run_n_times $REPEAT $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.TrieSizeEthtxn" >> test_sup_experiments.log
