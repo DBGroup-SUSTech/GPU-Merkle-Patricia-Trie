@@ -10,13 +10,28 @@ run_n_times(){
 }
 
 export GMPT_TRIESIZE=320000
+export GMPT_KEYTYPE_LEN=40  # hex len = $ * 2 + 1
+export GMPT_KEYTYPE_NUM=320000
 n1=$GMPT_TRIESIZE
+n2=$GMPT_KEYTYPE_LEN
 
 BUILD_PATH=./build
 GO_ETH_PATH=./go-ethereum/trie
-REPEAT=10
+REPEAT=1
 
 rm test_sup_experiments.log
+rm test_dense.log
+rm test_sparse.log
+
+for n in $(seq 10); do
+  echo test_key_type...
+  run_n_times $REPEAT $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.KeyTypeSparse" >> test_sparse.log
+  run_n_times $REPEAT $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.KeyTypeDense" >> test_dense.log
+  n2=`expr $n2 - 4`
+  echo $n2
+  export GMPT_KEYTYPE_LEN=$n2
+
+done
 
 for n in $(seq 7); do
     # $BUILD_PATH/utils "--gtest_filter=Util.args" "--gtest_also_run_disabled_tests"

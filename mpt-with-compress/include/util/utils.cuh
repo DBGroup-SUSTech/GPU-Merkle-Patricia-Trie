@@ -26,7 +26,15 @@
 #define WARP_FULL_MASK 0xFFFFFFFF
 
 namespace arg_util {
-enum class Dataset { WIKI, YCSB, ETH, LOOKUP, TRIESIZE };
+enum class Dataset {
+  WIKI,
+  YCSB,
+  ETH,
+  LOOKUP,
+  TRIESIZE,
+  KEYTYPE_NUM,
+  KEYTYPE_LEN
+};
 int get_record_num(Dataset dataset) {
   const char *data_num_str;
   switch (dataset) {
@@ -52,7 +60,16 @@ int get_record_num(Dataset dataset) {
     }
     case Dataset::TRIESIZE: {
       data_num_str = getenv("GMPT_TRIESIZE");
-      // data_num_str = "20000";
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::KEYTYPE_LEN: {
+      data_num_str = getenv("GMPT_KEYTYPE_LEN");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::KEYTYPE_NUM: {
+      data_num_str = getenv("GMPT_KEYTYPE_NUM");
       assert(data_num_str != nullptr);
       break;
     }

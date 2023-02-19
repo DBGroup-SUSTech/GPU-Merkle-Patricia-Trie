@@ -32,7 +32,7 @@ rm test_wiki_insert.log
 rm test_eth_insert.log
 
 for n in $(seq 8); do
-    $BUILD_PATH/utils "--gtest_filter=Util.args" "--gtest_also_run_disabled_tests"
+    # $BUILD_PATH/utils "--gtest_filter=Util.args" "--gtest_also_run_disabled_tests"
 
     echo test_ycsb_lookup...
     run_n_times $REPEAT $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupYCSB" >> test_ycsb_lookup.log
