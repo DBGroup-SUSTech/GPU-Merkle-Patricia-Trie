@@ -25,6 +25,21 @@ void random_select_read_data(const uint8_t *keys, const int *keys_indexs,
   }
 }
 
+void random_select_read_data_with_random(const uint8_t * keys, const int *keys_indexs,
+                                        int data_range_l, int trie_size, uint8_t *read_keys,
+                                        int *read_keys_indexs, const int n) {
+  srand(time(NULL));  // TODO reset a new seed?
+  for (int i = 0; i < n; i++) {
+    int rand_key_idx = rand() % trie_size + data_range_l;
+    const uint8_t *rand_key =
+        util::element_start(keys_indexs, rand_key_idx, keys);
+    int rand_key_size = util::element_size(keys_indexs, rand_key_idx);
+    read_keys_indexs[2 * i] = util::elements_size_sum(read_keys_indexs, i);
+    read_keys_indexs[2 * i + 1] = read_keys_indexs[2 * i] + rand_key_size - 1;
+    memcpy(read_keys + read_keys_indexs[2 * i], rand_key, rand_key_size);
+  }
+}
+
 void keys_bytes_to_hexs(const uint8_t *keys_bytes, int *keys_bytes_indexs,
                         int n, const uint8_t *&keys_hexs,
                         int *&keys_hexs_indexs) {
@@ -576,12 +591,12 @@ TEST(EXPERIMENTS, LookupWiki) {
   using namespace bench::wiki;
 
   // allocate
-  uint8_t *keys_bytes = new uint8_t[1000000000];
-  int *keys_bytes_indexs = new int[1000000000];
-  uint8_t *values_bytes = new uint8_t[20000000000];
-  int64_t *values_bytes_indexs = new int64_t[1000000000];
-  uint8_t *read_keys_bytes = new uint8_t[2000000000];
-  int *read_keys_bytes_indexs = new int[1000000000];
+  uint8_t *keys_bytes = new uint8_t[4000000000];
+  int *keys_bytes_indexs = new int[4000000000];
+  uint8_t *values_bytes = new uint8_t[40000000000];
+  int64_t *values_bytes_indexs = new int64_t[4000000000];
+  uint8_t *read_keys_bytes = new uint8_t[4000000000];
+  int *read_keys_bytes_indexs = new int[4000000000];
 
   // load data from file
   int kn =
@@ -597,12 +612,12 @@ TEST(EXPERIMENTS, LookupWiki) {
   int lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
   assert(record_num <= record_num_from_file);
 
+  int random_head = rand()%320000;
   // generate lookup workload
-  random_select_read_data(keys_bytes, keys_bytes_indexs, record_num,
-                          read_keys_bytes, read_keys_bytes_indexs, lookup_num);
-
-  printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num,
-         lookup_num);
+  // random_select_read_data(keys_bytes, keys_bytes_indexs, record_num,
+  //                         read_keys_bytes, read_keys_bytes_indexs, lookup_num);
+  random_select_read_data_with_random(keys_bytes, keys_bytes_indexs, random_head, record_num,
+                                      read_keys_bytes, read_keys_bytes_indexs, lookup_num);
 
   // transform keys
   const uint8_t *keys_hexs = nullptr;
@@ -613,12 +628,29 @@ TEST(EXPERIMENTS, LookupWiki) {
 
   keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, record_num, keys_hexs,
                      keys_hexs_indexs);
-  keys_bytes_to_hexs(read_keys_bytes, read_keys_bytes_indexs, lookup_num,
-                     read_keys_hexs, read_keys_hexs_indexs);
-
   // get value in and out
   const uint8_t **values_hps =
       get_values_hps(record_num, values_bytes_indexs, values_bytes);
+
+  cutil::Segment data_all{
+    .key_hex_ = keys_hexs,
+    .key_hex_index_ = keys_hexs_indexs,
+    .value_ = values_bytes,
+    .value_index_ = values_bytes_indexs,
+    .value_hp_ = values_hps,
+    .n_ = record_num + random_head,
+  };
+
+  std::vector<cutil::Segment> segments = data_all.split_into_two(random_head);
+  assert(segments.size() == 2);
+  assert(segments[1].n_ == record_num);
+
+  printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", record_num,
+         lookup_num);
+
+  keys_bytes_to_hexs(read_keys_bytes, read_keys_bytes_indexs, lookup_num,
+                     read_keys_hexs, read_keys_hexs_indexs);
+
   const uint8_t **read_values_hps = new const uint8_t *[lookup_num];
   int *read_value_size = new int[lookup_num];
 

@@ -121,7 +121,7 @@ TEST(Util, Wiki) {
                                      values_bytes_indexs);
   ASSERT_EQ(kn, vn);
   printf("kn:%d, vn:%d\n", kn, vn);
-  int insert_num = 320000;
+  int insert_num = kn;
   assert(insert_num <= kn);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -153,7 +153,7 @@ TEST(Util, Eth) {
   int insert_num = 640000;
   assert(insert_num <= insert_num_from_file);
 
-  printf("Inserting %d k-v pairs\n", insert_num);
+  printf("Inserting %d k-v pairs, %d from files\n", insert_num, insert_num_from_file);
 
   // transform keys
   const uint8_t *keys_hexs = nullptr;
