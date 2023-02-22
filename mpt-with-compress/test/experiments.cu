@@ -491,7 +491,7 @@ TEST(EXPERIMENTS, LookupYCSB) {
                       lookup_num_from_file);
 
   // load args from command line
-  int record_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  int record_num = 1280000;
   int lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
   assert(record_num <= record_num_from_file);
   assert(lookup_num <= lookup_num_from_file);
@@ -592,7 +592,8 @@ TEST(EXPERIMENTS, LookupWiki) {
   int record_num_from_file = kn;
 
   // load args from comand line
-  int record_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
+  // int record_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
+  int record_num = 320000;
   int lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
   assert(record_num <= record_num_from_file);
 
@@ -682,7 +683,7 @@ TEST(EXPERIMENTS, LookupEthtxn) {
                            values_bytes, values_bytes_indexs);
 
   // load args from command line
-  int record_num = arg_util::get_record_num(arg_util::Dataset::ETH);
+  int record_num = 640000;
   int lookup_num = arg_util::get_record_num(arg_util::Dataset::LOOKUP);
   assert(record_num <= record_num_from_file);
 
