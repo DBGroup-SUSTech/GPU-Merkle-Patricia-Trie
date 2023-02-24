@@ -8,7 +8,7 @@ namespace Compress {
 
 // @note: use reinterpret_cast
 struct Node {
-  // TODO compress all nodes into one might gain performance
+  // TODO compress all nodes into one might gain performanced
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
   Node *parent;
@@ -123,6 +123,8 @@ struct Node {
 
   // for onepass hash
   Node *parent;
+  int record0;
+  int record1;
   int visit_count;
   int parent_visit_count_added;
 

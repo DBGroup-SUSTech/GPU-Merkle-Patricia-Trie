@@ -150,7 +150,7 @@ TEST(Util, Eth) {
   int insert_num_from_file =
         read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
                            values_bytes, values_bytes_indexs);
-  int insert_num = 640000;
+  int insert_num = insert_num_from_file;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs, %d from files\n", insert_num, insert_num_from_file);

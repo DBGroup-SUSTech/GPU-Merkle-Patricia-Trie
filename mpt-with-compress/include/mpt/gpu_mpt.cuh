@@ -623,7 +623,6 @@ std::tuple<Node **, int> MPT::puts_latching_pipeline_v2(
   CHECK_ERROR(gutil::CpyDeviceToHostAsync(
       &other_hash_target_num, d_other_hash_target_num, 1, stream_op_));
   CHECK_ERROR(cudaDeviceSynchronize());  // synchronize all threads
-
   return {d_hash_target_nodes, n + other_hash_target_num};
 }
 
@@ -725,11 +724,14 @@ void MPT::hash_onepass_v2(Node **d_hash_nodes, int n) {
       (n + rpthread_block_size - 1) / rpthread_block_size;
 
   perf::CpuTimer<perf::us> gpu_kernel;
+  perf::CpuMultiTimer<perf::us> gpu_two_kernel;
   gpu_kernel.start(); 
+  gpu_two_kernel.start();
   GKernel::
       hash_onepass_mark_phase_v2<<<rpthread_num_blocks, rpthread_block_size>>>(
           d_hash_nodes, n, d_root_p_);
-
+  CHECK_ERROR(cudaDeviceSynchronize());
+  gpu_two_kernel.stop();
   // update phase, one warp per request
   const int rpwarp_block_size = 128;
   const int rpwarp_num_blocks =
@@ -738,8 +740,10 @@ void MPT::hash_onepass_v2(Node **d_hash_nodes, int n) {
       hash_onepass_update_phase_v2<<<rpwarp_num_blocks, rpwarp_block_size>>>(
           d_hash_nodes, n, allocator_, d_start_);
   CHECK_ERROR(cudaDeviceSynchronize());
+  gpu_two_kernel.stop();
   gpu_kernel.stop();
   printf("hash kernel response time %d us\n", gpu_kernel.get());
+  printf("hash mark kernel time %d us, update kernel %d\n",gpu_two_kernel.get(0), gpu_two_kernel.get(1));
 }
 
 void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
@@ -804,6 +808,8 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   int *d_compress_num;
   int *d_split_num;
 
+  CHECK_ERROR(gutil::DeviceAlloc(d_split_num, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_split_num, 0, 1));
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
   int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
@@ -893,6 +899,20 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
 
   CUDA_SAFE_CALL(cudaDeviceSynchronize());
   sub_timer.stop();
+//       int *d_s_num1, h_s_num1;
+//   CHECK_ERROR(gutil::DeviceAlloc(d_s_num1, 1));
+//   CHECK_ERROR(gutil::DeviceSet(d_s_num1, 0, 1));
+//     int *d_f_num1, h_f_num1;
+//   CHECK_ERROR(gutil::DeviceAlloc(d_f_num1, 1));
+//   CHECK_ERROR(gutil::DeviceSet(d_f_num1, 0, 1));
+//     int *d_v_num1, h_v_num1;
+//   CHECK_ERROR(gutil::DeviceAlloc(d_v_num1, 1));
+//   CHECK_ERROR(gutil::DeviceSet(d_v_num1, 0, 1));
+//         GKernel::traverse_trie<<<num_blocks, block_size>>>(d_root_p_, d_keys_hexs, d_keys_indexs, n, d_s_num1,d_f_num1,d_v_num1, 0);
+//     CHECK_ERROR(gutil::CpyDeviceToHost(&h_s_num1, d_s_num1, 1));
+//       CHECK_ERROR(gutil::CpyDeviceToHost(&h_f_num1, d_f_num1, 1));
+//         CHECK_ERROR(gutil::CpyDeviceToHost(&h_v_num1, d_v_num1, 1));
+//   printf("after put full node: %d, short node %d, value node %d\n", h_f_num1, h_s_num1, h_v_num1);
   // // compress
   GKernel::puts_2phase_compress_phase<<<2 * num_blocks, block_size>>>(
       d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
@@ -903,7 +923,21 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
   kernel_timer.stop();
-
+//     int *d_s_num, h_s_num;
+//   CHECK_ERROR(gutil::DeviceAlloc(d_s_num, 1));
+//   CHECK_ERROR(gutil::DeviceSet(d_s_num, 0, 1));
+//     int *d_f_num, h_f_num;
+//   CHECK_ERROR(gutil::DeviceAlloc(d_f_num, 1));
+//   CHECK_ERROR(gutil::DeviceSet(d_f_num, 0, 1));
+//     int *d_v_num, h_v_num;
+//   CHECK_ERROR(gutil::DeviceAlloc(d_v_num, 1));
+//   CHECK_ERROR(gutil::DeviceSet(d_v_num, 0, 1));
+//         GKernel::traverse_trie<<<num_blocks, block_size>>>(d_root_p_, d_keys_hexs, d_keys_indexs, n, d_s_num,d_f_num,d_v_num,1);
+//     CHECK_ERROR(gutil::CpyDeviceToHost(&h_s_num, d_s_num, 1));
+//       CHECK_ERROR(gutil::CpyDeviceToHost(&h_f_num, d_f_num, 1));
+//         CHECK_ERROR(gutil::CpyDeviceToHost(&h_v_num, d_v_num, 1));
+//   printf("after compress full node: %d, short node %d, value node %d\n", h_f_num, h_s_num, h_v_num);
+//   printf("%d full nodes are compressed to short nodes\n", h_f_num1-h_f_num);
   printf("2phase insert kernel response time %d us\n2phase ", kernel_timer.get());
   printf("2phase insert kernel submodules response time %d us split, %d us put, %d us compress\n", sub_timer.get(0), sub_timer.get(1),sub_timer.get(2));
   h_hash_target_num += n;
