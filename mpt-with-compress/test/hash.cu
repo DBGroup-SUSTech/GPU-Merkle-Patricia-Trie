@@ -210,7 +210,7 @@ TEST(Basic, GPUBatchBasic) {
 TEST(Basic, SingleHashBench) {
   const uint8_t *values_bytes = nullptr;
   int *values_indexs = nullptr;
-  int n = 4;
+  int n = 1073; //10894 1073 523
   data_gen(values_bytes, values_indexs, n, MUL_FACTOR);
   // for(size_t i=0;i<n;i++){
   //   for (size_t j= 0; j <128; j++)
@@ -272,3 +272,4 @@ TEST(Basic, SingleHashBench) {
       timer_cpu_get.get(), timer_gpu_get.get(), timer_gpu_raw_get.get(),
       timer_gpu_single_get.get());
 }
+

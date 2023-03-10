@@ -224,7 +224,8 @@ TEST(EXPERIMENTS, InsertYCSB) {
 
 TEST(EXPERIMENTS, InsertWiki) {
   using namespace bench::wiki;
-
+  unsigned seed = time(0);
+  srand(seed);
   // allocate
   uint8_t *keys_bytes = new uint8_t[1000000000];
   int *keys_bytes_indexs = new int[1000000000];
@@ -368,7 +369,8 @@ TEST(EXPERIMENTS, InsertWiki) {
 
 TEST(EXPERIMENTS, InsertEthtxn) {
   using namespace bench::ethtxn;
-
+  unsigned seed = time(0);
+  srand(seed);
   // allocate
   uint8_t *keys_bytes = new uint8_t[1000000000];
   int *keys_bytes_indexs = new int[1000000000];
@@ -382,7 +384,7 @@ TEST(EXPERIMENTS, InsertEthtxn) {
 
   // load args from command line
   int insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
-  // int insert_num =320000;
+  // int insert_num = 80000;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -390,6 +392,7 @@ TEST(EXPERIMENTS, InsertEthtxn) {
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
   int random_head = rand()%640000;
+  printf("random :%d\n", random_head);
 
   keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num+random_head, keys_hexs,
                      keys_hexs_indexs);
@@ -414,6 +417,7 @@ TEST(EXPERIMENTS, InsertEthtxn) {
   int keys_indexs_size = util::indexs_size_sum(insert_num);
   int64_t values_bytes_size =
       util::elements_size_sum(segments[1].value_index_, insert_num);
+  printf("value avg length: %d\n",int(values_bytes_size/insert_num));
   int values_indexs_size = util::indexs_size_sum(insert_num);
   int values_hps_size = insert_num;
 
@@ -999,7 +1003,8 @@ TEST(EXPERIMENTS, KeyTypeDense) {
 
 TEST(EXPERIMENTS, AsyncMemcpyYCSB) {
   using namespace bench::ycsb;
-
+  unsigned seed = time(0);
+  srand(seed);
   // allocate
   uint8_t *keys_bytes = new uint8_t[1000000000];
   int *keys_bytes_indexs = new int[10000000];
@@ -1133,7 +1138,8 @@ TEST(EXPERIMENTS, AsyncMemcpyYCSB) {
 
 TEST(EXPERIMENTS, AsyncMemcpyWiki) {
   using namespace bench::wiki;
-
+  unsigned seed = time(0);
+  srand(seed);
   // allocate
   uint8_t *keys_bytes = new uint8_t[1000000000];
   int *keys_bytes_indexs = new int[1000000000];
@@ -1270,7 +1276,8 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki) {
 
 TEST(EXPERIMENTS, AsyncMemcpyEthtxn) {
   using namespace bench::ethtxn;
-
+  unsigned seed = time(0);
+  srand(seed);
   // allocate
   uint8_t *keys_bytes = new uint8_t[1000000000];
   int *keys_bytes_indexs = new int[1000000000];
