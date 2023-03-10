@@ -132,6 +132,7 @@ struct Node {
   // 60b version, 1b lock, 1b obsolete
   gutil::ull_t version_lock_obsolete;
 
+  // optimistic lock
   __device__ __forceinline__ gutil::ull_t read_lock_or_restart(
       bool &need_restart) const {
     gutil::ull_t version;
