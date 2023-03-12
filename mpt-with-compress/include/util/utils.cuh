@@ -212,6 +212,20 @@ template <int N>
 __host__ __device__ __forceinline__ int align_to(int n) {
   return n % N == 0 ? n : n - (n % N) + N;
 }
+
+// > 0, < 0, = 0
+__host__ __device__ __forceinline__ int bytes_cmp(const uint8_t *l, int llen,
+                                                  const uint8_t *r, int rlen) {
+#pragma unroll
+  for (int i = 0; i < llen && i < rlen; ++i) {
+    if (l[i] > r[i]) {
+      return 1;
+    } else if (l[i] < r[i]) {
+      return -1;
+    }
+  }
+  return llen - rlen;
+}
 }  // namespace util
 
 #define CHECK_ERROR(call)                                     \
