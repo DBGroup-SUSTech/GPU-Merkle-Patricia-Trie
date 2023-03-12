@@ -72,7 +72,7 @@ struct InnerNode : public Node {
     int pos = lower_bound(key, key_size);
     memmove(keys + pos + 1, keys + pos, sizeof(uint8_t *) * (n_key - pos));
     memmove(keys_sizes + pos + 1, keys_sizes + pos,
-            sizeof(uint8_t *) * (n_key - pos));
+            sizeof(int) * (n_key - pos));
     memmove(children + pos + 1, children + pos,
             sizeof(Node *) * (n_key + 1 - pos));
     keys[pos] = key;
@@ -168,4 +168,4 @@ struct LeafNode : public Node {
   }
 };
 
-}; // namespace CpuBTree
+};  // namespace CpuBTree

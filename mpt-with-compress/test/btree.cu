@@ -33,7 +33,7 @@ TEST(BTREE, InsertYCSB) {
   read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
                         values_bytes_indexs, insert_num_from_file);
   // int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
-  int insert_num = 100;
+  int insert_num = 320000;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -68,9 +68,9 @@ TEST(BTREE, InsertYCSB) {
     cpu_btree.gets_baseline(keys_bytes, keys_bytes_indexs, insert_num,
                             read_values_hps, read_values_sizes);
     for (int i = 0; i < insert_num; ++i) {
-      printf("%p ?= %p\n", read_values_hps[i], values_hps[i]);
-      printf("%d ?= %d\n", read_values_sizes[i],
-             util::element_size(values_bytes_indexs, i));
+      // printf("%p ?= %p\n", read_values_hps[i], values_hps[i]);
+      // printf("%d ?= %d\n", read_values_sizes[i],
+      //        util::element_size(values_bytes_indexs, i));
       ASSERT_EQ(read_values_hps[i], values_hps[i]);
       ASSERT_EQ(read_values_sizes[i],
                 util::element_size(values_bytes_indexs, i));
@@ -112,7 +112,7 @@ TEST(BTREE, InsertYCSB) {
   //   CHECK_ERROR(cudaDeviceReset());
   // }
 
-  cpu.print();
-  plc.print();
-  olc.print();
+  // cpu.print();
+  // plc.print();
+  // olc.print();
 }

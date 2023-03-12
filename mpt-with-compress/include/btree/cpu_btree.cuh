@@ -33,7 +33,7 @@ void BTree::puts_baseline(const uint8_t *keys_bytes, const int *keys_indexs,
     int key_size = util::element_size(keys_indexs, i);
     const uint8_t *value = util::element_start(values_indexs, i, values_bytes);
     int value_size = util::element_size(values_indexs, i);
-    printf("insert <%p, %d> <%p, %d>\n", key, key_size, value, value_size);
+    // printf("insert <%p, %d> <%p, %d>\n", key, key_size, value, value_size);
     put_baseline(key, key_size, value, value_size);
   }
 }
@@ -48,7 +48,7 @@ restart:
   // printf("node: %p, parent: %p\n", node, parent);
 
   while (node->type == Node::Type::INNER) {
-    printf("inner node: %p, parent: %p\n", node, parent);
+    // printf("inner node: %p, parent: %p\n", node, parent);
     InnerNode *inner = static_cast<InnerNode *>(node);
 
     // split preemptively if full
