@@ -1,5 +1,5 @@
 #pragma once
-#include "cpu_node.cuh"
+#include "btree/cpu_node.cuh"
 #include <stdint.h>
 namespace CpuBTree {
 class BTree {

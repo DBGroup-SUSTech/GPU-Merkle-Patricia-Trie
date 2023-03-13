@@ -38,45 +38,45 @@ enum class Dataset {
 int get_record_num(Dataset dataset) {
   const char *data_num_str;
   switch (dataset) {
-    case Dataset::WIKI: {
-      data_num_str = getenv("GMPT_WIKI_DATA_VOLUME");
-      assert(data_num_str != nullptr);
-      break;
-    }
-    case Dataset::YCSB: {
-      data_num_str = getenv("GMPT_YCSB_DATA_VOLUME");
-      assert(data_num_str != nullptr);
-      break;
-    }
-    case Dataset::ETH: {
-      data_num_str = getenv("GMPT_ETH_DATA_VOLUME");
-      assert(data_num_str != nullptr);
-      break;
-    }
-    case Dataset::LOOKUP: {
-      data_num_str = getenv("GMPT_DATA_LOOKUP_VOLUME");
-      assert(data_num_str != nullptr);
-      break;
-    }
-    case Dataset::TRIESIZE: {
-      data_num_str = getenv("GMPT_TRIESIZE");
-      assert(data_num_str != nullptr);
-      break;
-    }
-    case Dataset::KEYTYPE_LEN: {
-      data_num_str = getenv("GMPT_KEYTYPE_LEN");
-      assert(data_num_str != nullptr);
-      break;
-    }
-    case Dataset::KEYTYPE_NUM: {
-      data_num_str = getenv("GMPT_KEYTYPE_NUM");
-      assert(data_num_str != nullptr);
-      break;
-    }
-    default:
-      printf("Wrong dataset type\n");
-      assert(false);
-      break;
+  case Dataset::WIKI: {
+    data_num_str = getenv("GMPT_WIKI_DATA_VOLUME");
+    assert(data_num_str != nullptr);
+    break;
+  }
+  case Dataset::YCSB: {
+    data_num_str = getenv("GMPT_YCSB_DATA_VOLUME");
+    assert(data_num_str != nullptr);
+    break;
+  }
+  case Dataset::ETH: {
+    data_num_str = getenv("GMPT_ETH_DATA_VOLUME");
+    assert(data_num_str != nullptr);
+    break;
+  }
+  case Dataset::LOOKUP: {
+    data_num_str = getenv("GMPT_DATA_LOOKUP_VOLUME");
+    assert(data_num_str != nullptr);
+    break;
+  }
+  case Dataset::TRIESIZE: {
+    data_num_str = getenv("GMPT_TRIESIZE");
+    assert(data_num_str != nullptr);
+    break;
+  }
+  case Dataset::KEYTYPE_LEN: {
+    data_num_str = getenv("GMPT_KEYTYPE_LEN");
+    assert(data_num_str != nullptr);
+    break;
+  }
+  case Dataset::KEYTYPE_NUM: {
+    data_num_str = getenv("GMPT_KEYTYPE_NUM");
+    assert(data_num_str != nullptr);
+    break;
+  }
+  default:
+    printf("Wrong dataset type\n");
+    assert(false);
+    break;
   }
   int data_num = std::atoi(data_num_str);
   return data_num;
@@ -226,16 +226,31 @@ __host__ __device__ __forceinline__ int bytes_cmp(const uint8_t *l, int llen,
   }
   return llen - rlen;
 }
-}  // namespace util
 
-#define CHECK_ERROR(call)                                     \
-  do {                                                        \
-    cudaError_t err = call;                                   \
-    if (err != cudaSuccess) {                                 \
-      printf("CUDA error at %s %d: %s\n", __FILE__, __LINE__, \
-             cudaGetErrorString(err));                        \
-      exit(EXIT_FAILURE);                                     \
-    }                                                         \
+// dest >= src
+__host__ __device__ __forceinline__ void
+memmove_forward(void *dest, const void *src, size_t n) {
+  assert(dest > src);
+  if (n == 0) {
+    return;
+  }
+  uint8_t *dest_ = static_cast<uint8_t *>(dest);
+  const uint8_t *src_ = static_cast<const uint8_t *>(src);
+  do {
+    n--;
+    dest_[n] = src_[n];
+  } while (n > 0);
+}
+} // namespace util
+
+#define CHECK_ERROR(call)                                                      \
+  do {                                                                         \
+    cudaError_t err = call;                                                    \
+    if (err != cudaSuccess) {                                                  \
+      printf("CUDA error at %s %d: %s\n", __FILE__, __LINE__,                  \
+             cudaGetErrorString(err));                                         \
+      exit(EXIT_FAILURE);                                                      \
+    }                                                                          \
   } while (0)
 
 namespace cutil {
