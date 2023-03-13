@@ -6,10 +6,11 @@
 #include <stdlib.h>
 // #include <string.h>
 #include <stdlib.h>
-
+#include <iostream>
 #include <string>
 #include <vector>
 
+#define MAX_LEVEL 16
 #define ROUNDS 24
 #define HASH_SIZE 32
 #define HASH_DATA_AREA 136
@@ -96,6 +97,26 @@ enum class Device { CPU, GPU };
  * len(indexs) = 2 * n
  * each element is represented by 2 index in indexs
  */
+__host__ __device__ __forceinline__ bool key_cmp(const uint8_t * key1,
+  const int key_size1, const uint8_t * key2, const int key_size2) {
+  int i = 0;
+  while (i < key_size1 && i < key_size2) {
+    if(key1[i]<key2[i]) {
+      return true;
+    } else if (key1[i]>key2[i]) {
+      return false;
+    } else {
+      i++;
+      continue;
+    }
+  }
+  if (key_size1 > key_size2) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 __host__ __device__ __forceinline__ int element_size(const int *indexs, int i) {
   return indexs[2 * i + 1] - indexs[2 * i] + 1;
 }
