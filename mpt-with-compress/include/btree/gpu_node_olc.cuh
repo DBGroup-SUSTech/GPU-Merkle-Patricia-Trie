@@ -1,5 +1,6 @@
 #pragma once
 #include "util/allocator.cuh"
+#include "util/lock.cuh"
 #include "util/utils.cuh"
 #include <stdint.h>
 namespace GpuBTree {
@@ -7,10 +8,51 @@ namespace OLC {
 struct Node {
   enum class Type : int { NONE = 0, INNER, LEAF };
   Type type;
+
+  gutil::ull_t version_lock_obsolete;
+
+  // optimistic lock
+  __device__ __forceinline__ gutil::ull_t
+  read_lock_or_restart(bool &need_restart) const {
+    gutil::ull_t version;
+    version = gutil::atomic_load(&version_lock_obsolete);
+    if (gutil::is_locked(version) || gutil::is_obsolete(version)) {
+      need_restart = true;
+    }
+    return version;
+  }
+
+  __device__ __forceinline__ void
+  read_unlock_or_restart(gutil::ull_t start_read, bool &need_restart) const {
+    // TODO: should we use spinlock to await?
+    need_restart = (start_read != gutil::atomic_load(&version_lock_obsolete));
+  }
+
+  __device__ __forceinline__ gutil::ull_t
+  check_or_restart(gutil::ull_t start_read, bool &need_restart) const {
+    read_unlock_or_restart(start_read, need_restart);
+  }
+
+  __device__ __forceinline__ void
+  upgrade_to_write_lock_or_restart(gutil::ull_t &version, bool &need_restart) {
+    if (version == atomicCAS(&version_lock_obsolete, version, version + 0b10)) {
+      version = version + 0b10;
+    } else {
+      need_restart = true;
+    }
+  }
+
+  __device__ __forceinline__ void write_unlock() {
+    atomicAdd(&version_lock_obsolete, 0b10);
+  }
+
+  __device__ __forceinline__ void write_unlock_obsolete() {
+    atomicAdd(&version_lock_obsolete, 0b11);
+  }
 };
 
 struct InnerNode : public Node {
-  static const int MAX_ENTRIES = 4;
+  static const int MAX_ENTRIES = 16;
   static_assert(MAX_ENTRIES % 2 == 0);
 
   int n_key;
@@ -104,7 +146,7 @@ struct InnerNode : public Node {
 };
 
 struct LeafNode : public Node {
-  static const int MAX_ENTRIES = 4;
+  static const int MAX_ENTRIES = 16;
   static_assert(MAX_ENTRIES % 2 == 0);
 
   int n_key;
