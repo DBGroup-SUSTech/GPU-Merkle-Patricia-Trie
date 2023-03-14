@@ -25,6 +25,7 @@ add_compile_definitions(PROJECT_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\")
 set(SRC_PATH ${PROJECT_SOURCE_DIR}/src)
 set(INC_PATH ${PROJECT_SOURCE_DIR}/include)
 set(TEST_PATH ${PROJECT_SOURCE_DIR}/test)
+message(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 file(GLOB_RECURSE SRC_FILES "src/*.cu" "src/*.cpp")
 file(GLOB_RECURSE TEST_FILES "test/*.cu" "test/*.cpp")
@@ -34,7 +35,8 @@ foreach(test_file IN LISTS TEST_FILES)
         add_executable(${test_name} ${test_file} ${SRC_FILES})
         target_include_directories(${test_name}
                 PUBLIC ${INC_PATH}
-                PUBLIC ${LIBXML2_INCLUDE_DIR})  
+                PUBLIC ${LIBXML2_INCLUDE_DIR}
+                PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})  
         target_link_libraries(${test_name} 
                 PRIVATE cuda 
                 PRIVATE GTest::gtest_main

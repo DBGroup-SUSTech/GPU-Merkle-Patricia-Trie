@@ -2,8 +2,8 @@
 #include <cstdint>
 #include <vector>
 #include <string>
-#include "util/utils.cuh"
 
+#include "util/utils.cuh"
 namespace CpuSkiplist
 {
     struct SkipNode

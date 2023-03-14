@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <random>
 #include "skiplist/cpu_skiplist.cuh"
+#include "skiplist/gpu_skiplist.cuh"
 
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int64_t *&values_indexs, int &n) {
