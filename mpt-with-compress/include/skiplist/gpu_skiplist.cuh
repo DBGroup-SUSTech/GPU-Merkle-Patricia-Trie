@@ -21,7 +21,7 @@ namespace GpuSkiplist {
             SkipList() {
                 CHECK_ERROR(gutil::DeviceAlloc(d_start_node_, 1));
                 CHECK_ERROR(gutil::DeviceSet(d_start_node_, 0x00, 1));
-                
+                CHECK_ERROR(cudaDeviceSynchronize()); 
             }
         private:
             SkipNode * d_start_node_;

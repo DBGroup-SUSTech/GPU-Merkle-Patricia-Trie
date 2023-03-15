@@ -114,7 +114,7 @@ namespace GKernel {
         
         int level = randomLevel(state);
 
-        new_node->level = level;
+        // new_node->level = level;
         put_olc(key, key_size, value, value_size, start, new_node, level);
     }
 
