@@ -8,10 +8,12 @@
 namespace GpuSkiplist {
     class SkipList {
         public:
-            void puts_latch(const uint8_t *keys_bytes, int *keys_indexs,
-                const uint8_t *values_bytes, int64_t *values_indexs, int n);
-            void puts_olc(const uint8_t *keys_bytes, int *keys_indexs,
-                const uint8_t *values_bytes, int64_t *values_indexs, int n);
+            void puts_latch_with_ksize(const uint8_t *keys_bytes, const int *keys_indexs,
+                           const uint8_t *const *value_hps,
+                           const int *values_sizes, int n);
+            void puts_olc_with_ksize(const uint8_t *keys_bytes, const int *keys_indexs,
+                           const uint8_t *const *value_hps,
+                           const int *values_sizes, int n);
             void gets_parallel(const uint8_t *keys, int *keys_indexs, int n,
                        const uint8_t **values_hps, int *values_sizes);
             // void display_list();
@@ -25,6 +27,53 @@ namespace GpuSkiplist {
             SkipNode * d_start_node_;
             DynamicAllocator<ALLOC_CAPACITY> allocator_;
     };
+
+    void SkipList::puts_latch_with_ksize(const uint8_t *keys_bytes, const int *keys_indexs,
+                           const uint8_t *const *value_hps,
+                           const int *values_sizes, int n) {
+        
+
+    }
+
+    void SkipList::puts_olc_with_ksize(const uint8_t *keys_bytes, const int *keys_indexs,
+                           const uint8_t *const *value_hps,
+                           const int *values_sizes, int n) {
+        uint8_t *d_keys_bytes = nullptr;
+        int *d_keys_indexs = nullptr;
+        const uint8_t **d_values_hps = nullptr;
+        int *d_values_sizes = nullptr;
+
+        int keys_bytes_size = util::elements_size_sum(keys_indexs, n);
+        int keys_indexs_size = util::indexs_size_sum(n);
+        int values_hps_size = n;
+        int values_sizes_size = n;
+
+        CHECK_ERROR(gutil::DeviceAlloc(d_keys_bytes, keys_bytes_size));
+        CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+        CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
+        CHECK_ERROR(gutil::DeviceAlloc(d_values_sizes, values_sizes_size));
+
+        CHECK_ERROR(
+            gutil::CpyHostToDevice(d_keys_bytes, keys_bytes, keys_bytes_size));
+        CHECK_ERROR(
+            gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+        CHECK_ERROR(gutil::CpyHostToDevice(d_values_hps, value_hps, values_hps_size));
+        CHECK_ERROR(
+            gutil::CpyHostToDevice(d_values_sizes, values_sizes, values_sizes_size));
+
+        // puts
+        const int rpwarp_block_size = 1024;
+        const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
+                                        rpwarp_block_size;  // one warp per request
+        
+        curandState *d_states;
+        CHECK_ERROR(gutil::DeviceAlloc(d_states,n));
+        GKernel::random_setup<<<rpwarp_num_blocks, rpwarp_block_size>>>(d_states,n);
+        GKernel::puts_olc<<<rpwarp_num_blocks, rpwarp_block_size>>>(
+            d_keys_bytes, d_keys_indexs, d_values_sizes, d_values_hps, n,
+            allocator_, d_start_node_, d_states);
+        CHECK_ERROR(cudaDeviceSynchronize());
+    }
 
     void SkipList::gets_parallel(const uint8_t *keys, int *keys_indexs, int n,
                        const uint8_t **values_hps, int *values_sizes) {

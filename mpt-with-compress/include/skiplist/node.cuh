@@ -1,5 +1,6 @@
 #pragma once
 #include "util/utils.cuh"
+#include "util/lock.cuh"
 
 namespace GpuSkiplist{
     struct SkipNode {
@@ -11,5 +12,6 @@ namespace GpuSkiplist{
         int level;
         // pointers to successor nodes
         SkipNode *forwards[MAX_LEVEL];
+        gutil::ull_t locks[MAX_LEVEL+1]; //locks for fowards and itself
     };
 }

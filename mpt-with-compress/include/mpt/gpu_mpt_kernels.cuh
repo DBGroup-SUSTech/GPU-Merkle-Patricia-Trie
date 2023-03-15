@@ -1073,7 +1073,7 @@ restart:  // TODO: replace goto with while
 
         // construct 3 short nodes (or nil)
         //  1. branch.parent(upper)
-        //  1. branch.old_child(left)
+        // 1. branch.old_child(left)
         //  3. contine -> branch.new_child(right)
         uint8_t left_nibble = snode->key[matchlen];
         const uint8_t *left_key = snode->key + (matchlen + 1);
