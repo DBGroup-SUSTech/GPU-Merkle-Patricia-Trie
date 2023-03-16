@@ -10,7 +10,7 @@ namespace GpuSkiplist{
         int key_size;
         int value_size;
         // pointers to successor nodes
-        SkipNode *forwards[MAX_LEVEL];
+        SkipNode *forwards[MAX_LEVEL+1];
         gutil::ull_t locks[MAX_LEVEL+1]; //locks for fowards and itself
     };
 }

@@ -14,7 +14,7 @@ namespace CpuSkiplist
         int value_size;
         int level;
         // pointers to successor nodes
-        SkipNode *forwards[MAX_LEVEL];
+        SkipNode *forwards[MAX_LEVEL+1];
     };
 
     class SkipList

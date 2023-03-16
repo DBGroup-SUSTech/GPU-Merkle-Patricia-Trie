@@ -37,8 +37,8 @@ namespace GKernel {
             int level) {
     restart:
         SkipNode *current = start;
-        __shared__ SkipNode *update[MAX_LEVEL + 1];
-        __shared__ gutil::ull_t *update_locks_ptr[MAX_LEVEL + 1];
+        SkipNode *update[MAX_LEVEL + 1];
+        gutil::ull_t *update_locks_ptr[MAX_LEVEL + 1];
         bool need_restart = false;
         gutil::ull_t cur_v = gutil::read_lock_or_restart(current->locks[MAX_LEVEL], need_restart);
         if (need_restart) {
