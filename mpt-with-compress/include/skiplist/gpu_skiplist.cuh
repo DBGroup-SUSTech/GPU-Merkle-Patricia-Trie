@@ -69,6 +69,7 @@ namespace GpuSkiplist {
         curandState *d_states;
         CHECK_ERROR(gutil::DeviceAlloc(d_states,n));
         GKernel::random_setup<<<rpwarp_num_blocks, rpwarp_block_size>>>(d_states,n);
+        CHECK_ERROR(cudaDeviceSynchronize());
         GKernel::puts_olc<<<rpwarp_num_blocks, rpwarp_block_size>>>(
             d_keys_bytes, d_keys_indexs, d_values_sizes, d_values_hps, n,
             allocator_, d_start_node_, d_states);

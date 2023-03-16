@@ -253,6 +253,52 @@ TEST(GpuSkipList, PutLatch) {
 }
 
 TEST(GpuSkipList, PutOLC) {
+  const int n = 3;
+  const uint8_t *keys_bytes =
+      reinterpret_cast<const uint8_t *>("doedogdogglesworth");
+  int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
+  const uint8_t *values_bytes =
+      reinterpret_cast<const uint8_t *>("reindeerpuppycat");
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  const uint8_t *values_ptrs[n]{};
+  int read_values_sizes[n]{};
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  const uint8_t **values_hps =
+      get_values_hps(n, values_bytes_indexs, values_bytes);
+  const int *values_sizes = get_value_sizes(n, values_bytes_indexs);
+
+  GpuSkiplist::SkipList sl;
+  sl.puts_olc_with_ksize(keys_hexs, keys_bytes_indexs, values_hps, values_sizes, n);
+
+  sl.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, read_values_sizes);
+  for (int i = 0; i < n; ++i) {
+    ASSERT_TRUE(util::bytes_equal(
+        util::element_start(values_bytes_indexs, i, values_bytes),
+        util::element_size(values_bytes_indexs, i), values_ptrs[i],
+        read_values_sizes[i]));
+    // printf("Key=");
+    // cutil::println_str(util::element_start(keys_bytes_indexs, i, keys_bytes),
+    //                    util::element_size(keys_bytes_indexs, i));
+    // printf("Hex=");
+    // cutil::println_hex(util::element_start(keys_hexs_indexs, i, keys_hexs),
+    //                    util::element_size(keys_hexs_indexs, i));
+    // printf("Value=");
+    // cutil::println_str(
+    //     util::element_start(values_bytes_indexs, i, values_bytes),
+    //     util::element_size(values_bytes_indexs, i));
+    // printf("Get=");
+    // cutil::println_str(values_ptrs[i], values_sizes[i]);
+  }
+
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
 
 }
 
