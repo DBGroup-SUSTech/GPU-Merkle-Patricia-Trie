@@ -62,7 +62,7 @@ namespace GpuSkiplist {
             gutil::CpyHostToDevice(d_values_sizes, values_sizes, values_sizes_size));
 
         // puts
-        const int rpwarp_block_size = 1024;
+        const int rpwarp_block_size = 256;
         const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                         rpwarp_block_size;  // one warp per request
         

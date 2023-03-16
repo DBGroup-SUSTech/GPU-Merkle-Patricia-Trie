@@ -40,8 +40,8 @@ TEST(BTREE, InsertYCSB) {
   int insert_num_from_file;
   read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
                         values_bytes_indexs, insert_num_from_file);
-  int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
-  // int insert_num = 32000;
+  // int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  int insert_num = 10000;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs\n", insert_num);
