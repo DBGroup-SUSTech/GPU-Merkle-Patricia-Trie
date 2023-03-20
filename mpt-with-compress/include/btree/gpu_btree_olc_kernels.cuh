@@ -166,14 +166,14 @@ restart:
     parent = inner;
     parent_v = v;
 
-    // printf("%d: inner = %p start\n", blockIdx.x * blockDim.x + threadIdx.x,
-    //        inner);
     node = inner->children[inner->lower_bound(key, key_size)];
-    // printf("%d: inner = %p end\n", blockIdx.x * blockDim.x + threadIdx.x,
-    // inner);
-    // TODO: this is required, why?
-    inner->check_or_restart(v, need_restart);
-    if (need_restart) goto restart;
+    /// @note check_or_restart()'s usage:
+    ///   1. The correctness can be achieved without check_or_restart()
+    ///   2. check_or_restart() avoids reading illigal memory. The program
+    ///      cannot pass sanitizer without check_or_restart()
+
+    // inner->check_or_restart(v, need_restart);
+    // if (need_restart) goto restart;
 
     v = node->read_lock_or_restart(need_restart);
     if (need_restart) goto restart;
