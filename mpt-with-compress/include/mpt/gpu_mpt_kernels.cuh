@@ -1426,6 +1426,7 @@ __device__ __forceinline__ void put_plc_spin_v2(
           branch->childs[left_nibble]->parent = branch;
         }
 
+        assert(gutil::try_acquire_lock(&branch->lock));
         // TODO: where to unlock
         gutil::release_lock(&parent->lock);
 
@@ -1702,6 +1703,7 @@ restart:  // TODO: replace goto with while
           branch->childs[left_nibble]->parent = branch;
         }
 
+        assert(gutil::try_acquire_lock(&branch->lock));
         // TODO: where to unlock
         gutil::release_lock(&parent->lock);
 
