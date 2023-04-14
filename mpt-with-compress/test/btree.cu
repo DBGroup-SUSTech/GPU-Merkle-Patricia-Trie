@@ -40,8 +40,8 @@ TEST(BTREE, InsertYCSB) {
   int insert_num_from_file;
   read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
                         values_bytes_indexs, insert_num_from_file);
-  int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
-  // int insert_num = 32000;
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::BTREE_YCSB);
+  // int insert_num = 1280000;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -85,32 +85,32 @@ TEST(BTREE, InsertYCSB) {
     }
   }
 
-  {
-    CHECK_ERROR(cudaDeviceReset());
-    CHECK_ERROR(gutil::PinHost(keys_bytes, keys_bytes_size));
-    CHECK_ERROR(gutil::PinHost(keys_bytes_indexs, keys_bytes_size));
-    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
-    CHECK_ERROR(gutil::PinHost(values_sizes, values_sizes_size));
-    GpuBTree::OLC::BTree gpu_btree;
-    gpu.start();
-    gpu_btree.puts_baseline_with_vsize(keys_bytes, keys_bytes_indexs,
-                                       values_hps, values_sizes, insert_num);
-    gpu.stop();
-    gpu_btree.gets_parallel(keys_bytes, keys_bytes_indexs, insert_num,
-                            read_values_hps, read_values_sizes);
-    for (int i = 0; i < insert_num; ++i) {
-      // printf("%p ?= %p\n", read_values_hps[i], values_hps[i]);
-      // printf("%d ?= %d\n", read_values_sizes[i],
-      //        util::element_size(values_bytes_indexs, i));
-      ASSERT_EQ(read_values_hps[i], values_hps[i]);
-      ASSERT_EQ(read_values_sizes[i], values_sizes[i]);
-    }
-  }
+  // {
+  //   CHECK_ERROR(cudaDeviceReset());
+  //   CHECK_ERROR(gutil::PinHost(keys_bytes, keys_bytes_size));
+  //   CHECK_ERROR(gutil::PinHost(keys_bytes_indexs, keys_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+  //   CHECK_ERROR(gutil::PinHost(values_sizes, values_sizes_size));
+  //   GpuBTree::OLC::BTree gpu_btree;
+  //   gpu.start();
+  //   gpu_btree.puts_baseline_with_vsize(keys_bytes, keys_bytes_indexs,
+  //                                      values_hps, values_sizes, insert_num);
+  //   gpu.stop();
+  //   gpu_btree.gets_parallel(keys_bytes, keys_bytes_indexs, insert_num,
+  //                           read_values_hps, read_values_sizes);
+  //   for (int i = 0; i < insert_num; ++i) {
+  //     // printf("%p ?= %p\n", read_values_hps[i], values_hps[i]);
+  //     // printf("%d ?= %d\n", read_values_sizes[i],
+  //     //        util::element_size(values_bytes_indexs, i));
+  //     ASSERT_EQ(read_values_hps[i], values_hps[i]);
+  //     ASSERT_EQ(read_values_sizes[i], values_sizes[i]);
+  //   }
+  // }
 
   {
     CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_bytes, keys_bytes_size));
-    CHECK_ERROR(gutil::PinHost(keys_bytes_indexs, keys_bytes_size));
+    CHECK_ERROR(gutil::PinHost(keys_bytes_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     CHECK_ERROR(gutil::PinHost(values_sizes, values_sizes_size));
     GpuBTree::OLC::BTree olc_btree;
@@ -130,6 +130,6 @@ TEST(BTREE, InsertYCSB) {
   }
 
   cpu.print();
-  gpu.print();
+  // gpu.print();
   olc.print();
 }

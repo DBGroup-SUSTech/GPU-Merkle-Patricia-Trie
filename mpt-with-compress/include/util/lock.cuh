@@ -88,6 +88,11 @@ __device__ __forceinline__ void write_unlock(
   atomicAdd(&version_lock_obsolete, 0b10);
 }
 
+__device__ __forceinline__ void write_unlock(
+    gutil::ull_t * version_lock_obsolete_ptr) {
+  atomicAdd(version_lock_obsolete_ptr, 0b10);
+}
+
 __device__ __forceinline__ void write_unlock_obsolete(
     gutil::ull_t &version_lock_obsolete) {
   atomicAdd(&version_lock_obsolete, 0b11);

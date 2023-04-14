@@ -1,6 +1,27 @@
 #include <gtest/gtest.h>
 #include <random>
+#include "bench/ycsb.cuh"
+#include "util/timer.cuh"
+#include "util/experiments.cuh"
 #include "skiplist/cpu_skiplist.cuh"
+#include "skiplist/gpu_skiplist.cuh"
+
+const uint8_t **get_values_hps(int n, const int64_t *values_bytes_indexs,
+                               const uint8_t *values_bytes) {
+  const uint8_t **values_hps = new const uint8_t *[n];
+  for (int i = 0; i < n; ++i) {
+    values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
+  }
+  return values_hps;
+}
+
+const int *get_value_sizes(int n, const int64_t *values_indexs) {
+  int *values_sizes = new int[n];
+  for (int i = 0; i < n; ++i) {
+    values_sizes[i] = util::element_size(values_indexs, i);
+  }
+  return values_sizes;
+}
 
 void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
               const uint8_t *&values_bytes, int64_t *&values_indexs, int &n) {
@@ -232,5 +253,133 @@ TEST(GpuSkipList, PutLatch) {
 }
 
 TEST(GpuSkipList, PutOLC) {
+  const int n = 3;
+  const uint8_t *keys_bytes =
+      reinterpret_cast<const uint8_t *>("doedogdogglesworth");
+  int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
+  const uint8_t *values_bytes =
+      reinterpret_cast<const uint8_t *>("reindeerpuppycat");
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
 
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  const uint8_t *values_ptrs[n]{};
+  int read_values_sizes[n]{};
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  const uint8_t **values_hps =
+      get_values_hps(n, values_bytes_indexs, values_bytes);
+  const int *values_sizes = get_value_sizes(n, values_bytes_indexs);
+
+  GpuSkiplist::SkipList sl;
+  sl.puts_olc_with_ksize(keys_hexs, keys_hexs_indexs, values_hps, values_sizes, n);
+
+  sl.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, read_values_sizes);
+  for (int i = 0; i < n; ++i) {
+    ASSERT_TRUE(util::bytes_equal(
+        util::element_start(values_bytes_indexs, i, values_bytes),
+        util::element_size(values_bytes_indexs, i), values_ptrs[i],
+        read_values_sizes[i]));
+    // printf("Key=");
+    // cutil::println_str(util::element_start(keys_bytes_indexs, i, keys_bytes),
+    //                    util::element_size(keys_bytes_indexs, i));
+    // printf("Hex=");
+    // cutil::println_hex(util::element_start(keys_hexs_indexs, i, keys_hexs),
+    //                    util::element_size(keys_hexs_indexs, i));
+    // printf("Value=");
+    // cutil::println_str(
+    //     util::element_start(values_bytes_indexs, i, values_bytes),
+    //     util::element_size(values_bytes_indexs, i));
+    // printf("Get=");
+    // cutil::println_str(values_ptrs[i], values_sizes[i]);
+  }
+
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
+
+}
+
+TEST(SkipList, InsertYCSB) {
+  using namespace bench::ycsb;
+  // allocate
+  uint8_t *keys_bytes = new uint8_t[1000000000];
+  int *keys_bytes_indexs = new int[10000000];
+  uint8_t *values_bytes = new uint8_t[2000000000];
+  int64_t *values_bytes_indexs = new int64_t[10000000];
+
+  // load data from file
+  int insert_num_from_file;
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
+                        values_bytes_indexs, insert_num_from_file);
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::SKIPLIST_YCSB);
+  // int insert_num = 1280000;
+  assert(insert_num <= insert_num_from_file);
+
+  printf("Inserting %d k-v pairs\n", insert_num);
+
+  // get value in
+  const uint8_t **values_hps =
+      get_values_hps(insert_num, values_bytes_indexs, values_bytes);
+  const int *values_sizes = get_value_sizes(insert_num, values_bytes_indexs);
+
+  // get value out
+  const uint8_t **read_values_hps = new const uint8_t *[insert_num] {};
+  int *read_values_sizes = new int[insert_num]{};
+
+  // calculate size to pre-pin
+  int keys_bytes_size = util::elements_size_sum(keys_bytes_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
+  int values_sizes_size = insert_num;
+
+  // profiler
+  using T = perf::CpuTimer<perf::us>;
+  exp_util::InsertProfiler<T> cpu("CPU baseline", insert_num, 0);
+  // exp_util::InsertProfiler<T> gpu("GPU baseline", insert_num, 0);
+  // exp_util::InsertProfiler<T> plc("GPU plc", insert_num, 0);
+  exp_util::InsertProfiler<T> olc("GPU olc", insert_num, 0);
+
+  {
+    CpuSkiplist::SkipList cpu_skiplist;
+    cpu.start();
+    cpu_skiplist.puts_baseline(keys_bytes, keys_bytes_indexs, values_bytes,
+                            values_bytes_indexs, insert_num);
+    cpu.stop();
+    cpu_skiplist.gets_baseline(keys_bytes, keys_bytes_indexs, 
+                            read_values_hps, read_values_sizes, insert_num);
+    for (int i = 0; i < insert_num; ++i) {
+      // printf("%p ?= %p\n", read_values_hps[i], values_hps[i]);
+      // printf("%d ?= %d\n", read_values_sizes[i],
+      //        util::element_size(values_bytes_indexs, i));
+      ASSERT_EQ(read_values_hps[i], values_hps[i]);
+      ASSERT_EQ(read_values_sizes[i], values_sizes[i]);
+    }
+  }
+  cpu.print();
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    CHECK_ERROR(gutil::PinHost(keys_bytes, keys_bytes_size));
+    CHECK_ERROR(gutil::PinHost(keys_bytes_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    CHECK_ERROR(gutil::PinHost(values_sizes, values_sizes_size));
+    GpuSkiplist::SkipList gpu_skiplist;
+    olc.start();
+    gpu_skiplist.puts_olc_with_ksize(keys_bytes, keys_bytes_indexs,
+                                       values_hps, values_sizes, insert_num);
+    olc.stop();
+    gpu_skiplist.gets_parallel(keys_bytes, keys_bytes_indexs, insert_num,
+                            read_values_hps, read_values_sizes);
+    for (int i = 0; i < insert_num; ++i) {
+      // printf("%p ?= %p\n", read_values_hps[i], values_hps[i]);
+      // printf("%d ?= %d\n", read_values_sizes[i],
+      //        util::element_size(values_bytes_indexs, i));
+      ASSERT_EQ(read_values_hps[i], values_hps[i]);
+      ASSERT_EQ(read_values_sizes[i], values_sizes[i]);
+    }
+  }
+
+  olc.print();
 }

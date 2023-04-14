@@ -2,8 +2,8 @@
 #include <cstdint>
 #include <vector>
 #include <string>
-#include "util/utils.cuh"
 
+#include "util/utils.cuh"
 namespace CpuSkiplist
 {
     struct SkipNode
@@ -14,7 +14,7 @@ namespace CpuSkiplist
         int value_size;
         int level;
         // pointers to successor nodes
-        SkipNode *forwards[MAX_LEVEL];
+        SkipNode *forwards[MAX_LEVEL+1];
     };
 
     class SkipList
