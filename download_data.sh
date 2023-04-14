@@ -60,26 +60,26 @@ if [ ! -f 'value/enwiki-20230101-pages-articles-multistream5.xml-p558392p958045.
 then
   wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream5.xml-p558392p958045.bz2
   bzip2 -d enwiki-20230101-pages-articles-multistream5.xml-p558392p958045.bz2
-  mv enwiki-20230101-pages-articles-multistream5.xml-p558392p958045.bz2 value/
+  mv enwiki-20230101-pages-articles-multistream5.xml-p558392p958045 value/
 fi
 if [ ! -f 'index/enwiki-20230101-pages-articles-multistream-index5.txt-p558392p958045.bz2' ];
 then
   wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream-index5.txt-p558392p958045.bz2
   bzip2 -d enwiki-20230101-pages-articles-multistream-index5.txt-p558392p958045.bz2
-  mv enwiki-20230101-pages-articles-multistream-index5.txt-p558392p958045.bz2 index/
+  mv enwiki-20230101-pages-articles-multistream-index5.txt-p558392p958045 index/
 fi
 
 if [ ! -f 'value/enwiki-20230101-pages-articles-multistream6.xml-p958046p1483661.bz2' ];
 then
   wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream6.xml-p958046p1483661.bz2
   bzip2 -d enwiki-20230101-pages-articles-multistream6.xml-p958046p1483661.bz2
-  mv enwiki-20230101-pages-articles-multistream6.xml-p958046p1483661.bz2 value/
+  mv enwiki-20230101-pages-articles-multistream6.xml-p958046p1483661 value/
 fi
 if [ ! -f 'index/enwiki-20230101-pages-articles-multistream-index6.txt-p958046p1483661.bz2' ];
 then
   wget https://dumps.wikimedia.org/enwiki/20230101/enwiki-20230101-pages-articles-multistream-index6.txt-p958046p1483661.bz2
   bzip2 -d enwiki-20230101-pages-articles-multistream-index6.txt-p958046p1483661.bz2
-  mv enwiki-20230101-pages-articles-multistream-index6.txt-p958046p1483661.bz2 index/
+  mv enwiki-20230101-pages-articles-multistream-index6.txt-p958046p1483661 index/
 fi
 
 cd $PROJECT_DIR
