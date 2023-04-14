@@ -287,8 +287,8 @@ TEST(EXPERIMENTS, InsertWiki) {
   ASSERT_EQ(kn, vn);
   printf("kn:%d, vn:%d\n", kn, vn);
   // load args from command line
-  // int insert_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
-  int insert_num = 320000;
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
+  // int insert_num = 320000;
 
   assert(insert_num <= kn);
 
@@ -609,20 +609,20 @@ TEST(EXPERIMENTS, InsertEthtxn) {
   // gpu.print();
   // two.print();
   // olc.print();
-  exp_util::InsertProfiler<T> plc_spin("GPU plc-spin", insert_num, 0);
   exp_util::InsertProfiler<T> plc_restart("GPU plc_restart", insert_num, 0);
+  exp_util::InsertProfiler<T> plc_spin("GPU plc-spin", insert_num, 0);
   {
-    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt;
     plc_restart.start();
     auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_plc_with_valuehp_v2(
-        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
-        values_hps, insert_num, true);
+        segments[1].key_hex_, segments[1].key_hex_index_, segments[1].value_,
+        segments[1].value_index_, segments[1].value_hp_, insert_num, true);
     gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     plc_restart.stop();
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
@@ -632,21 +632,21 @@ TEST(EXPERIMENTS, InsertEthtxn) {
   }
 
   {
-    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt;
     plc_spin.start();
     auto [d_hash_nodes, hash_nodes_num] = gpu_mpt.puts_plc_with_valuehp_v2(
-        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
-        values_hps, insert_num, false);
+        segments[1].key_hex_, segments[1].key_hex_index_, segments[1].value_,
+        segments[1].value_index_, segments[1].value_hp_, insert_num, false);
     gpu_mpt.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     plc_spin.stop();
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
-    printf("GPU plc-spin hash is: ");
+    printf("GPU plc-pin hash is: ");
     cutil::println_hex(hash, hash_size);
     CHECK_ERROR(cudaDeviceReset());
   }
