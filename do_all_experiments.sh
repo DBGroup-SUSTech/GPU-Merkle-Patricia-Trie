@@ -84,4 +84,4 @@ for n in $(seq 8); do
     export GMPT_YCSB_DATA_VOLUME=$n4
 done
 
-# bash do_sup_experiments.sh
+bash do_sup_experiments.sh

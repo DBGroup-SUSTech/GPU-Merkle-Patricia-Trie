@@ -1,10 +1,11 @@
 # GPU Merkle Patricia Trie
-## Dependency
+## Dependencies
 * crypto++ 8.7
 * libxml2
 * gtest
 * golang
-
+## Submodules
+Please download our modified go-ethereum and ycsb repo from [.gitmodules](./.gitmodules) before you start anything.
 ## Experiments
 ### Data
 You can load the ycsb and wiki dataset by runing our script
@@ -21,8 +22,6 @@ where
 The results need to be exported to one or multiple csv files and saved in `/ethereum/transactions/` folder.
 ### Build
 ```sh
-git clone https://github.com/TKONIY/GPU-Merkle-Patricia-Trie.git
-cd GPU-Merkle-Patricia-Trie
 mkdir build
 cd build
 cmake ../mpt-with-compress/
@@ -33,4 +32,4 @@ You can run unit tests in [go-ethereum/trie/experiments_test.go](./go-ethereum/t
 ``` sh
 bash do_all_experiments.sh
 ```
-* Ethereum experients in [go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go)
+* Run go-ethereum experients in [go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go)
