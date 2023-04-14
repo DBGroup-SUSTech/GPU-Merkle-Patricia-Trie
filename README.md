@@ -5,8 +5,9 @@
 * gtest
 * golang
 ## Submodules
-Please download our modified go-ethereum and ycsb repo from [.gitmodules](./.gitmodules) before you start anything.
-## Experiments
+We have two externel git submodules. One includes our modified go-ethereum implementation and experiments. Another includes our modified ycsb generator. They are forked from open-sourced branch. 
+
+For anonymity, we removed the `.gitmodules` and also make them anonymous. Please download [Geth](https://anonymous.4open.science/r/Accelerating-Merkle-Patricia-Trie-with-GPU-Geth/) and [YCSB](https://anonymous.4open.science/r/Accelerating-Merkle-Patricia-Trie-with-GPU-YCSB/) into current folder before you start to build.
 ### Data
 You can load the ycsb and wiki dataset by runing our script
 ```sh

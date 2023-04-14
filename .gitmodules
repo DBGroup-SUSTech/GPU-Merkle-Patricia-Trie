@@ -1,6 +1,0 @@
-[submodule "go-ethereum"]
-	path = go-ethereum
-	url = git@github.com:TKONIY/go-ethereum.git
-[submodule "YCSB-C"]
-	path = YCSB-C
-	url = git@github.com:TKONIY/YCSB-C.git
