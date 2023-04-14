@@ -65,6 +65,10 @@ class MPT {
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n);
 
+  std::tuple<Node **, int> puts_plc_with_valuehp_v2(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n, bool restart);
+
   /// @brief parallel puts, including split phase and compress phase
   std::tuple<Node **, int> puts_2phase(const uint8_t *keys_hexs,
                                        int *keys_indexs,
@@ -149,7 +153,8 @@ class MPT {
 //                              values_indexs, values_hps, n);
 // }
 
-// void MPT::puts_baseline_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
+// void MPT::puts_baseline_with_valuehp(const uint8_t *keys_hexs, int
+// *keys_indexs,
 //                                      const uint8_t *values_bytes,
 //                                      int64_t *values_indexs,
 //                                      const uint8_t **values_hps, int n) {
@@ -172,11 +177,12 @@ class MPT {
 //   CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
 //   CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
 
-//   CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
-//   CHECK_ERROR(
+//   CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs,
+//   keys_hexs_size)); CHECK_ERROR(
 //       gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
 //   CHECK_ERROR(
-//       gutil::CpyHostToDevice(d_values_bytes, values_bytes, values_bytes_size));
+//       gutil::CpyHostToDevice(d_values_bytes, values_bytes,
+//       values_bytes_size));
 //   CHECK_ERROR(gutil::CpyHostToDevice(d_values_indexs, values_indexs,
 //                                      values_indexs_size));
 //   CHECK_ERROR(
@@ -184,15 +190,17 @@ class MPT {
 
 //   // puts
 //   perf::CpuTimer<perf::us> timer_gpu_put_baseline;
-//   timer_gpu_put_baseline.start();  // timer start ------------------------------
+//   timer_gpu_put_baseline.start();  // timer start
+//   ------------------------------
 
-//   GKernel::puts_baseline<<<1, 1>>>(d_keys_hexs, d_keys_indexs, d_values_bytes,
-//                                    d_values_indexs, d_values_hps, n, d_root_p_,
-//                                    allocator_);
+//   GKernel::puts_baseline<<<1, 1>>>(d_keys_hexs, d_keys_indexs,
+//   d_values_bytes,
+//                                    d_values_indexs, d_values_hps, n,
+//                                    d_root_p_, allocator_);
 //   CHECK_ERROR(cudaDeviceSynchronize());
 
-//   timer_gpu_put_baseline.stop();  // timer stop -------------------------------
-//   printf(
+//   timer_gpu_put_baseline.stop();  // timer stop
+//   ------------------------------- printf(
 //       "\033[31m"
 //       "GPU put baseline kernel time: %d us, throughput %d qps\n"
 //       "\033[0m",
@@ -568,6 +576,91 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
   return {d_hash_target_nodes, n + other_hash_target_num};
 }
 
+std::tuple<Node **, int> MPT::puts_plc_with_valuehp_v2(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t **values_hps, int n, bool restart) {
+  // assert datas on CPU, first transfer to GPU
+  uint8_t *d_keys_hexs = nullptr;
+  int *d_keys_indexs = nullptr;
+  uint8_t *d_values_bytes = nullptr;
+  int64_t *d_values_indexs = nullptr;
+  const uint8_t **d_values_hps = nullptr;
+
+  int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
+  int keys_indexs_size = util::indexs_size_sum(n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int values_indexs_size = util::indexs_size_sum(n);
+  int values_hps_size = n;
+  perf::CpuMultiTimer<perf::us> trans_timer;
+  perf::GpuTimer<perf::us> trans_timer_gpu;
+  trans_timer.start();
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
+  trans_timer.stop();
+  CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+  trans_timer.stop();
+  trans_timer_gpu.start();
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_values_bytes, values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::CpyHostToDevice(d_values_indexs, values_indexs,
+                                     values_indexs_size));
+  trans_timer_gpu.stop();
+  trans_timer.stop();
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
+  trans_timer.stop();
+
+  printf(
+      "PLC Alloc %d us, key: %d us, value: %d us(CPU) %d us(GPU), hp: %d us\n",
+      trans_timer.get(0), trans_timer.get(1), trans_timer.get(2),
+      trans_timer_gpu.get(), trans_timer.get(3));
+
+  //   perf::CpuTimer<perf::us> timer_gpu_put_latching;
+  //   timer_gpu_put_latching.start();  // timer start
+  //   --------------------------
+
+  // hash targets
+  Node **d_hash_target_nodes;
+  CHECK_ERROR(gutil::DeviceAlloc(d_hash_target_nodes, 2 * n));
+  CHECK_ERROR(gutil::DeviceSet(d_hash_target_nodes, 0, 2 * n));
+  int *d_other_hash_target_num;
+  CHECK_ERROR(gutil::DeviceAlloc(d_other_hash_target_num, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_other_hash_target_num, 0, 1));
+
+  // puts
+  const int rpwarp_block_size = 1024;
+  const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
+                                rpwarp_block_size;  // one warp per request
+  perf::GpuTimer<perf::us> kernel_timer;
+  kernel_timer.start();
+  if (restart) {
+    GKernel::puts_plc_restart_v2<<<rpwarp_num_blocks, rpwarp_block_size>>>(
+        d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs,
+        d_values_hps, n, d_start_, allocator_, d_hash_target_nodes,
+        d_other_hash_target_num);
+  } else {
+    GKernel::puts_plc_spin_v2<<<rpwarp_num_blocks, rpwarp_block_size>>>(
+        d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs,
+        d_values_hps, n, d_start_, allocator_, d_hash_target_nodes,
+        d_other_hash_target_num);
+  }
+
+  int other_hash_target_num;
+  CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
+                                     d_other_hash_target_num, 1));
+  CHECK_ERROR(cudaDeviceSynchronize());  // synchronize all threads
+  kernel_timer.stop();
+  printf("plc-%s insert kernel response time %d us\n ",
+         restart ? "restart" : "spin", kernel_timer.get());
+
+  return {d_hash_target_nodes, n + other_hash_target_num};
+}
+
 std::tuple<Node **, int> MPT::puts_latching_pipeline_v2(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
     int64_t *values_indexs, const uint8_t **values_hps, int n) {
@@ -725,7 +818,7 @@ void MPT::hash_onepass_v2(Node **d_hash_nodes, int n) {
 
   perf::CpuTimer<perf::us> gpu_kernel;
   perf::CpuMultiTimer<perf::us> gpu_two_kernel;
-  gpu_kernel.start(); 
+  gpu_kernel.start();
   gpu_two_kernel.start();
   GKernel::
       hash_onepass_mark_phase_v2<<<rpthread_num_blocks, rpthread_block_size>>>(
@@ -743,7 +836,8 @@ void MPT::hash_onepass_v2(Node **d_hash_nodes, int n) {
   gpu_two_kernel.stop();
   gpu_kernel.stop();
   printf("hash kernel response time %d us\n", gpu_kernel.get());
-  printf("hash mark kernel time %d us, update kernel %d\n",gpu_two_kernel.get(0), gpu_two_kernel.get(1));
+  printf("hash mark kernel time %d us, update kernel %d\n",
+         gpu_two_kernel.get(0), gpu_two_kernel.get(1));
 }
 
 void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
@@ -883,65 +977,74 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   perf::GpuTimer<perf::us> kernel_timer;
   kernel_timer.start();
   GKernel::puts_2phase_get_split_phase<<<num_blocks, block_size>>>(
-      d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, d_split_num, n,
-      d_root_p_, d_start_, allocator_);
+      d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, d_split_num,
+      n, d_root_p_, d_start_, allocator_);
 
   //   CHECK_ERROR(cudaDeviceSynchronize());
-//   GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
-//   // put mark
+  //   GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
+  //   // put mark
   CHECK_ERROR(cudaDeviceSynchronize());
   sub_timer.stop();
   GKernel::puts_2phase_put_mark_phase<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
       n, d_compress_num, d_hash_target_nodes, d_root_p_, d_compress_nodes,
       d_start_, allocator_);
-//   GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
+  //   GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
 
   CUDA_SAFE_CALL(cudaDeviceSynchronize());
   sub_timer.stop();
-//       int *d_s_num1, h_s_num1;
-//   CHECK_ERROR(gutil::DeviceAlloc(d_s_num1, 1));
-//   CHECK_ERROR(gutil::DeviceSet(d_s_num1, 0, 1));
-//     int *d_f_num1, h_f_num1;
-//   CHECK_ERROR(gutil::DeviceAlloc(d_f_num1, 1));
-//   CHECK_ERROR(gutil::DeviceSet(d_f_num1, 0, 1));
-//     int *d_v_num1, h_v_num1;
-//   CHECK_ERROR(gutil::DeviceAlloc(d_v_num1, 1));
-//   CHECK_ERROR(gutil::DeviceSet(d_v_num1, 0, 1));
-//         GKernel::traverse_trie<<<num_blocks, block_size>>>(d_root_p_, d_keys_hexs, d_keys_indexs, n, d_s_num1,d_f_num1,d_v_num1, 0);
-//     CHECK_ERROR(gutil::CpyDeviceToHost(&h_s_num1, d_s_num1, 1));
-//       CHECK_ERROR(gutil::CpyDeviceToHost(&h_f_num1, d_f_num1, 1));
-//         CHECK_ERROR(gutil::CpyDeviceToHost(&h_v_num1, d_v_num1, 1));
-//   printf("after put full node: %d, short node %d, value node %d\n", h_f_num1, h_s_num1, h_v_num1);
+  //       int *d_s_num1, h_s_num1;
+  //   CHECK_ERROR(gutil::DeviceAlloc(d_s_num1, 1));
+  //   CHECK_ERROR(gutil::DeviceSet(d_s_num1, 0, 1));
+  //     int *d_f_num1, h_f_num1;
+  //   CHECK_ERROR(gutil::DeviceAlloc(d_f_num1, 1));
+  //   CHECK_ERROR(gutil::DeviceSet(d_f_num1, 0, 1));
+  //     int *d_v_num1, h_v_num1;
+  //   CHECK_ERROR(gutil::DeviceAlloc(d_v_num1, 1));
+  //   CHECK_ERROR(gutil::DeviceSet(d_v_num1, 0, 1));
+  //         GKernel::traverse_trie<<<num_blocks, block_size>>>(d_root_p_,
+  //         d_keys_hexs, d_keys_indexs, n, d_s_num1,d_f_num1,d_v_num1, 0);
+  //     CHECK_ERROR(gutil::CpyDeviceToHost(&h_s_num1, d_s_num1, 1));
+  //       CHECK_ERROR(gutil::CpyDeviceToHost(&h_f_num1, d_f_num1, 1));
+  //         CHECK_ERROR(gutil::CpyDeviceToHost(&h_v_num1, d_v_num1, 1));
+  //   printf("after put full node: %d, short node %d, value node %d\n",
+  //   h_f_num1, h_s_num1, h_v_num1);
   // // compress
   GKernel::puts_2phase_compress_phase<<<2 * num_blocks, block_size>>>(
       d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
-      d_hash_target_nodes, d_hash_target_num, allocator_, d_split_num, key_allocator_);
-    // GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
+      d_hash_target_nodes, d_hash_target_num, allocator_, d_split_num,
+      key_allocator_);
+  // GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
   CHECK_ERROR(cudaDeviceSynchronize());
   sub_timer.stop();
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
   kernel_timer.stop();
-//     int *d_s_num, h_s_num;
-//   CHECK_ERROR(gutil::DeviceAlloc(d_s_num, 1));
-//   CHECK_ERROR(gutil::DeviceSet(d_s_num, 0, 1));
-//     int *d_f_num, h_f_num;
-//   CHECK_ERROR(gutil::DeviceAlloc(d_f_num, 1));
-//   CHECK_ERROR(gutil::DeviceSet(d_f_num, 0, 1));
-//     int *d_v_num, h_v_num;
-//   CHECK_ERROR(gutil::DeviceAlloc(d_v_num, 1));
-//   CHECK_ERROR(gutil::DeviceSet(d_v_num, 0, 1));
-//         GKernel::traverse_trie<<<num_blocks, block_size>>>(d_root_p_, d_keys_hexs, d_keys_indexs, n, d_s_num,d_f_num,d_v_num,1);
-//     CHECK_ERROR(gutil::CpyDeviceToHost(&h_s_num, d_s_num, 1));
-//       CHECK_ERROR(gutil::CpyDeviceToHost(&h_f_num, d_f_num, 1));
-//         CHECK_ERROR(gutil::CpyDeviceToHost(&h_v_num, d_v_num, 1));
-//   printf("after compress full node: %d, short node %d, value node %d\n", h_f_num, h_s_num, h_v_num);
-//   printf("%d full nodes are compressed to short nodes\n", h_f_num1-h_f_num);
-  printf("2phase insert kernel response time %d us\n2phase ", kernel_timer.get());
-  printf("2phase insert kernel submodules response time %d us split, %d us put, %d us compress\n", sub_timer.get(0), sub_timer.get(1),sub_timer.get(2));
+  //     int *d_s_num, h_s_num;
+  //   CHECK_ERROR(gutil::DeviceAlloc(d_s_num, 1));
+  //   CHECK_ERROR(gutil::DeviceSet(d_s_num, 0, 1));
+  //     int *d_f_num, h_f_num;
+  //   CHECK_ERROR(gutil::DeviceAlloc(d_f_num, 1));
+  //   CHECK_ERROR(gutil::DeviceSet(d_f_num, 0, 1));
+  //     int *d_v_num, h_v_num;
+  //   CHECK_ERROR(gutil::DeviceAlloc(d_v_num, 1));
+  //   CHECK_ERROR(gutil::DeviceSet(d_v_num, 0, 1));
+  //         GKernel::traverse_trie<<<num_blocks, block_size>>>(d_root_p_,
+  //         d_keys_hexs, d_keys_indexs, n, d_s_num,d_f_num,d_v_num,1);
+  //     CHECK_ERROR(gutil::CpyDeviceToHost(&h_s_num, d_s_num, 1));
+  //       CHECK_ERROR(gutil::CpyDeviceToHost(&h_f_num, d_f_num, 1));
+  //         CHECK_ERROR(gutil::CpyDeviceToHost(&h_v_num, d_v_num, 1));
+  //   printf("after compress full node: %d, short node %d, value node %d\n",
+  //   h_f_num, h_s_num, h_v_num); printf("%d full nodes are compressed to short
+  //   nodes\n", h_f_num1-h_f_num);
+  printf("2phase insert kernel response time %d us\n2phase ",
+         kernel_timer.get());
+  printf(
+      "2phase insert kernel submodules response time %d us split, %d us put, "
+      "%d us compress\n",
+      sub_timer.get(0), sub_timer.get(1), sub_timer.get(2));
   h_hash_target_num += n;
-//   printf("target num :%d\n",h_hash_target_num);
+  //   printf("target num :%d\n",h_hash_target_num);
 
   return {d_hash_target_nodes, h_hash_target_num};
 }
@@ -1014,21 +1117,21 @@ std::tuple<Node **, int> MPT::puts_2phase_pipeline(
   // d_values_indexs += 2;
   // d_values_hps += 1;
   // n -= 1;
-//   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
-//                                           values_bytes_size, stream_cp_));
+  //   CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
+  //                                           values_bytes_size, stream_cp_));
   // split get
   const int block_size = 128;
   int num_blocks = (n + block_size - 1) / block_size;
   GKernel::puts_2phase_get_split_phase<<<2 * num_blocks, block_size, 0,
                                          stream_op_>>>(
-      d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, d_split_num, n,
-      d_root_p_, d_start_, allocator_);
+      d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, d_split_num,
+      n, d_root_p_, d_start_, allocator_);
 
   // CHECK_ERROR(cudaDeviceSynchronize());
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
   // put mark
   // CHECK_ERROR(cudaDeviceSynchronize());
-CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
+  CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
                                           values_bytes_size, stream_cp_));
   GKernel::
       puts_2phase_put_mark_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
@@ -1043,7 +1146,8 @@ CHECK_ERROR(gutil::CpyHostToDeviceAsync(d_values_bytes, values_bytes,
   GKernel::
       puts_2phase_compress_phase<<<2 * num_blocks, block_size, 0, stream_op_>>>(
           d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
-          d_hash_target_nodes, d_hash_target_num, allocator_, d_split_num, key_allocator_);
+          d_hash_target_nodes, d_hash_target_num, allocator_, d_split_num,
+          key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_);
 
   int h_hash_target_num;

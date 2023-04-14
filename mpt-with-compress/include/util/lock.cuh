@@ -7,6 +7,8 @@ __device__ bool try_acquire_lock(int *lock) {
     __threadfence();
     return true;
   }
+  __threadfence();
+  return false;
 }
 __device__ void acquire_lock(int *lock) {
   while (0 != atomicCAS(lock, 0, 1)) {
