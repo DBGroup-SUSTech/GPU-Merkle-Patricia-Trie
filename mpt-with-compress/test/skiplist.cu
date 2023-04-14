@@ -275,7 +275,7 @@ TEST(GpuSkipList, PutOLC) {
   const int *values_sizes = get_value_sizes(n, values_bytes_indexs);
 
   GpuSkiplist::SkipList sl;
-  sl.puts_olc_with_ksize(keys_hexs, keys_bytes_indexs, values_hps, values_sizes, n);
+  sl.puts_olc_with_ksize(keys_hexs, keys_hexs_indexs, values_hps, values_sizes, n);
 
   sl.gets_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, read_values_sizes);
   for (int i = 0; i < n; ++i) {
@@ -314,8 +314,8 @@ TEST(SkipList, InsertYCSB) {
   int insert_num_from_file;
   read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
                         values_bytes_indexs, insert_num_from_file);
-  // int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
-  int insert_num = 10000;
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::SKIPLIST_YCSB);
+  // int insert_num = 1280000;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -358,11 +358,11 @@ TEST(SkipList, InsertYCSB) {
       ASSERT_EQ(read_values_sizes[i], values_sizes[i]);
     }
   }
-
+  cpu.print();
   {
     CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_bytes, keys_bytes_size));
-    CHECK_ERROR(gutil::PinHost(keys_bytes_indexs, keys_bytes_size));
+    CHECK_ERROR(gutil::PinHost(keys_bytes_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
     CHECK_ERROR(gutil::PinHost(values_sizes, values_sizes_size));
     GpuSkiplist::SkipList gpu_skiplist;
@@ -381,6 +381,5 @@ TEST(SkipList, InsertYCSB) {
     }
   }
 
-  cpu.print();
   olc.print();
 }

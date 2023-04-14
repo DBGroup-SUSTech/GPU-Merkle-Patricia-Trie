@@ -2197,7 +2197,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
               updated = true;
             }
           // }
-        }
+        } 
         return;
       }
       case Node::Type::FULL: {
@@ -2213,7 +2213,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
               updated = true;
             }
             // }
-          }
+          } 
           return;
         }
         if (f_node->child_num() == 1) {
@@ -2225,18 +2225,18 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
             compressing_node->val = child;
             child->parent = compressing_node;
           }
-          // if (key_size == 8) {
-          //   const uint8_t *old_keys = cached_keys;
-          //   cached_keys = key_allocator.key_malloc(8);
-          //   memcpy(cached_keys + 24, old_keys, 8);
-          //   container_size = 32;
-          // }
-          // if (key_size == 32) {
-          //   const uint8_t *old_keys = cached_keys;
-          //   cached_keys = key_allocator.key_malloc(32);
-          //   memcpy(cached_keys + 224, old_keys, 32);
-          //   container_size = 256;
-          // }
+          if (key_size == 8) {
+            const uint8_t *old_keys = cached_keys;
+            cached_keys = key_allocator.key_malloc(8);
+            memcpy(cached_keys + 24, old_keys, 8);
+            container_size = 32;
+          }
+          if (key_size == 32) {
+            const uint8_t *old_keys = cached_keys;
+            cached_keys = key_allocator.key_malloc(32);
+            memcpy(cached_keys + 224, old_keys, 32);
+            container_size = 256;
+          }
           int new_key_pos = container_size - key_size -
                             1;  // position of new key in cached keys
           cached_keys[new_key_pos] = index;
@@ -2249,7 +2249,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
               updated = true;
             }
             // }
-          }
+          } 
           compressing_node = allocator.malloc<ShortNode>();
           compressing_node->type = Node::Type::SHORT;
           cached_keys = key_allocator.key_malloc(0);
@@ -2332,67 +2332,67 @@ __global__ void puts_2phase_compress_phase(
 //   }
 // }
 
-// __device__ __forceinline__ void loop_traverse(Node * root, const uint8_t *key, int* s_node_num, int * f_node_num, int *v_node_num, int flag) {
-//   Node * node = root;
-//   const uint8_t *key_router = key;
-//   while (node != nullptr) {
-//     int record;
-//     if (flag == 0)
-//       record = atomicCAS(&node->record0, 0, 1);
-//     else 
-//       record = atomicCAS(&node->record1, 0, 1); 
-//     switch (node->type)
-//     {
-//     case Node::Type::SHORT: {
-//       ShortNode *s_node = static_cast<ShortNode*>(node);
-//       if(record == 0 ) {
-//         atomicAdd(s_node_num,1);
-//       }
-//       node = s_node->val;
-//       key_router += s_node->key_size;
-//       break;
-//     }
-//     case Node::Type::FULL: {
-//       FullNode *f_node =static_cast<FullNode*>(node);
-//       if(record==0){
-//         atomicAdd(f_node_num, 1);
-//       }
-//       node = f_node->childs[static_cast<int>(key_router[0])];
-//       key_router ++;
-//       break;
-//     }
-//     case Node::Type::VALUE: {
-//       ValueNode *v_node = static_cast<ValueNode*>(node);
-//       if(record==0){
-//         atomicAdd(v_node_num, 1);
-//       }
-//       return;
-//     }
+__device__ __forceinline__ void loop_traverse(Node * root, const uint8_t *key, int* s_node_num, int * f_node_num, int *v_node_num, int flag) {
+  Node * node = root;
+  const uint8_t *key_router = key;
+  while (node != nullptr) {
+    int record;
+    if (flag == 0)
+      record = atomicCAS(&node->record0, 0, 1);
+    else 
+      record = atomicCAS(&node->record1, 0, 1); 
+    switch (node->type)
+    {
+    case Node::Type::SHORT: {
+      ShortNode *s_node = static_cast<ShortNode*>(node);
+      if(record == 0 ) {
+        atomicAdd(s_node_num,1);
+      }
+      node = s_node->val;
+      key_router += s_node->key_size;
+      break;
+    }
+    case Node::Type::FULL: {
+      FullNode *f_node =static_cast<FullNode*>(node);
+      if(record==0){
+        atomicAdd(f_node_num, 1);
+      }
+      node = f_node->childs[static_cast<int>(key_router[0])];
+      key_router ++;
+      break;
+    }
+    case Node::Type::VALUE: {
+      // ValueNode *v_node = static_cast<ValueNode*>(node);
+      if(record==0){
+        atomicAdd(v_node_num, 1);
+      }
+      return;
+    }
     
-//     default:
-//       assert(false);
-//       break;
-//     }
-//   }
+    default:
+      assert(false);
+      break;
+    }
+  }
   
-// }
+}
 
-// __global__ void traverse_trie(Node **root, uint8_t * keys_hexs, int *keys_indexs, int n, int * ssum, int *fsum, int *vsum, int flag) {
-//   // printf("one traverse\n");
-//   // start_node->print_self();
-//   // printf("start node child: %p\n", start_node->val);
-//   int tid = blockIdx.x * blockDim.x + threadIdx.x;
-//   if (tid >= n) {
-//     return;
-//   }
-//   // int *v_num, *s_num, *f_num;
-//   const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
-//   // dfs_traverse_trie(*root, v_num, f_num, s_num);
-//   loop_traverse(*root, key, ssum, fsum,vsum, flag);
-//   // atomicAdd(ssum, *s_num);
-//   // atomicAdd(fsum, *f_num);
-//   // atomicAdd(vsum, *v_num);
-// }
+__global__ void traverse_trie(Node **root, uint8_t * keys_hexs, int *keys_indexs, int n, int * ssum, int *fsum, int *vsum, int flag) {
+  // printf("one traverse\n");
+  // start_node->print_self();
+  // printf("start node child: %p\n", start_node->val);
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+  // int *v_num, *s_num, *f_num;
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  // dfs_traverse_trie(*root, v_num, f_num, s_num);
+  loop_traverse(*root, key, ssum, fsum,vsum, flag);
+  // atomicAdd(ssum, *s_num);
+  // atomicAdd(fsum, *f_num);
+  // atomicAdd(vsum, *v_num);
+}
 }  // namespace GKernel
 }  // namespace Compress
 }  // namespace GpuMPT

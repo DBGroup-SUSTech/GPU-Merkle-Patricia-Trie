@@ -73,6 +73,7 @@ namespace GpuSkiplist {
         GKernel::puts_olc<<<rpwarp_num_blocks, rpwarp_block_size>>>(
             d_keys_bytes, d_keys_indexs, d_values_sizes, d_values_hps, n,
             allocator_, d_start_node_, d_states);
+        // GKernel::traverse_list<<<1,1>>>(d_start_node_);
         CHECK_ERROR(cudaDeviceSynchronize());
     }
 
