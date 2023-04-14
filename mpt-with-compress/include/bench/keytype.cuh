@@ -64,9 +64,22 @@ void gen_sparse_data(int n, int key_size, int value_size, uint8_t *&keys,
       c = hex_map[h];
     }
     std::string str_byte = ethtxn::hex_to_string(str_hex);
+    // make sure str_byte is unique
+    if (key_size <9){
+    bool regen = false;
+    for (int j = 0; j < i; ++j) {
+      if (memcmp(keys + j * key_size, str_byte.c_str(), key_size) == 0) {
+        --i;
+        regen = true;
+        break;
+      }
+    }
+
+    if (regen) {
+      continue;
+    }}
     assert(str_byte.length() == key_size);
     memcpy(keys + i * key_size, str_byte.c_str(), key_size);
-
     // std::cout << str_hex << std::endl;
     // cutil::println_hex((const uint8_t *)str_byte.c_str(), str_byte.size());
   }
