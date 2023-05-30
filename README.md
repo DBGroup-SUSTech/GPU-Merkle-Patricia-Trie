@@ -29,12 +29,15 @@ cd build
 cmake ../mpt-with-compress/
 cmake --build . -j
 ```
-### Run
+## Run
+### Experiments
 You can run unit tests in [go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go) and 
 ``` sh
 bash do_all_experiments.sh
 ```
 * Run go-ethereum experients in [go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go)
+### Profiling
+You can run the experiments and generate profiling report by [profile.sh](./profile.sh). The Nsight Compute report will be stored in `./profile/`. If you'd like a csv version, just run [convert_to_csv.sh](./convert_to_csv.sh) and you will get all csv reports in `./profile/`.
 
 ## Code Structure
 ### Overview
