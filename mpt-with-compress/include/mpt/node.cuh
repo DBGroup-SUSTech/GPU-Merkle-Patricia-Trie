@@ -12,13 +12,23 @@ struct Node {
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
   Node *parent;
+  std::atomic<cutil::ull_t> version_lock_obsolete; 
+  std::atomic<int> visit_count;
+  std::atomic<int> parent_visit_count_added;
   const uint8_t *hash;
   int hash_size;
+
+  __forceinline__ void print_self() {
+    printf("Node %p , type:%d, its parent %p\n", this, (int)type, parent);
+  }
 };
 
 struct FullNode : public Node {
+  std::atomic<Node*> tbb_childs[17];
   Node *childs[17];
   int dirty;
+  std::atomic<int> need_compress = 0;
+  std::atomic<int> compressed = 0;
 
   uint8_t buffer[32];  // save hash or encoding
 
@@ -56,13 +66,67 @@ struct FullNode : public Node {
     }
     return size;
   }
+
+  __forceinline__ int tbb_encode_size() {
+    int size = 0;
+#pragma unroll
+    for (int i = 0; i < 17; ++i) {
+      if (tbb_childs[i]) {
+        size += tbb_childs[i].load()->hash_size;
+      }
+    }
+    return size;
+  }
+
+  __forceinline__ int tbb_encode(uint8_t *bytes) {
+    int bytes_size = 0;
+#pragma unroll
+    for (int i=0; i<17; ++i) {
+      Node *child = tbb_childs[i].load();
+      if (child != nullptr) {
+        assert(child->hash != nullptr && child->hash_size != 0);
+        memcpy(bytes, child->hash, child->hash_size);
+
+        bytes += child->hash_size;
+        bytes_size += child->hash_size;
+      }
+    }
+    return bytes_size;
+  }
+
+  __forceinline__ int tbb_child_num() {
+    int size = 0;
+#pragma unroll
+    for (int i = 0; i < 17; i++) {
+      Node *child = tbb_childs[i].load();
+      if (child) {
+        size++;
+      }
+    }
+    return size;
+  }
+
+  __forceinline__ int tbb_find_single_child() {
+    // assert(child_num()>1);
+#pragma unroll
+    for (int i = 0; i < 17; i++) {
+      Node *child = tbb_childs[i].load();
+      if (child) {
+        return i;
+      }
+    }
+    return -1;
+  }
 };
 
 struct ShortNode : public Node {
   const uint8_t *key;
-  int key_size;
+  int key_size = 0;
+  std::atomic<Node *> tbb_val;
   Node *val;
   int dirty;
+
+  std::atomic<int> to_split = 0;
 
   uint8_t buffer[32];  // save hash or encoding
 
@@ -95,6 +159,27 @@ struct ShortNode : public Node {
     int val_hash_size = val->hash_size;
     return key_compact_size + val_hash_size;
   }
+
+  __forceinline__ int tbb_encode_size() {
+    int key_compact_size = util::hex_to_compact_size(key, key_size);
+    int val_hash_size = tbb_val.load()->hash_size;
+    return key_compact_size + val_hash_size;
+  }
+
+  __forceinline__ int tbb_encode(uint8_t *bytes) {
+    int bytes_size = 0;
+
+    int key_compact_size = util::hex_to_compact(key, key_size, buffer);
+    // assert((key_size - 1) / 2 + 1 == key_compact_size);
+    bytes += key_compact_size;
+    bytes_size += key_compact_size;
+
+    assert(tbb_val.load() != nullptr && tbb_val.load()->hash != nullptr &&
+           tbb_val.load()->hash_size != 0);
+    memcpy(bytes, tbb_val.load()->hash, tbb_val.load()->hash_size);
+    bytes_size += tbb_val.load()->hash_size;
+    return bytes_size;
+  }
 };
 
 struct ValueNode : public Node {
@@ -108,6 +193,7 @@ struct ValueNode : public Node {
 
 }  // namespace Compress
 }  // namespace CpuMPT
+
 
 namespace GpuMPT {
 namespace Compress {

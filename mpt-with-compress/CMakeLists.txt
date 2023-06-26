@@ -11,6 +11,9 @@ set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
+# ---[ Using cmake scripts and modules
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
+
 # Enable ASAN only as you need. Please notice
 #       1. This project do not pass leak-santizer
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
@@ -19,6 +22,10 @@ find_package(GTest)
 find_package(LibXml2 REQUIRED)
 include(GoogleTest)
 find_library(CRYPTOPP_LIB cryptopp)
+find_package(TBB REQUIRED)
+
+# # ---[ Dependencies
+# include(cmake/Dependencies.cmake)
 
 add_compile_definitions(PROJECT_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\")
 
@@ -36,12 +43,16 @@ foreach(test_file IN LISTS TEST_FILES)
         target_include_directories(${test_name}
                 PUBLIC ${INC_PATH}
                 PUBLIC ${LIBXML2_INCLUDE_DIR}
-                PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})  
+                PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+                PUBLIC ${TBB_INCLUDE_DIRS}
+        )  
         target_link_libraries(${test_name} 
                 PRIVATE cuda 
                 PRIVATE GTest::gtest_main
                 PRIVATE ${CRYPTOPP_LIB}
                 PRIVATE ${LIBXML2_LIBRARIES}
+                PRIVATE TBB::tbb
+                PRIVATE TBB::tbbmalloc
         ) 
 
         gtest_discover_tests(${test_name})

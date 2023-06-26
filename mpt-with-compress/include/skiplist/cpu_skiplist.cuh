@@ -39,6 +39,10 @@ namespace CpuSkiplist
             }
         }
 
+        void puts_olc() {
+            // TODO
+        }
+
         void gets_baseline(const uint8_t *keys, const int *keys_indexs, const uint8_t **values_ptrs,
                            int *values_sizes, int n)
         {
@@ -112,6 +116,11 @@ namespace CpuSkiplist
                 node->forwards[i] = update[i]->forwards[i];
                 update[i]->forwards[i] = node;
             }
+        }
+
+        void put_olc(const uint8_t *key, int key_size, const uint8_t *value, int value_size)
+        {
+            // TODO
         }
 
         void get_baseline(const uint8_t *key, int key_size, const uint8_t *&value, int &value_size)

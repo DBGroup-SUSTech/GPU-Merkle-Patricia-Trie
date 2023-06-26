@@ -1,6 +1,8 @@
 #pragma once
 #include "btree/cpu_node.cuh"
 #include <stdint.h>
+#include <oneapi/tbb.h>
+
 namespace CpuBTree {
 class BTree {
 private:
@@ -8,6 +10,9 @@ private:
 
   void put_baseline(const uint8_t *key, int key_size, const uint8_t *value,
                     int value_size);
+  
+  void put_olc(const uint8_t *key, int key_size, const uint8_t *value,
+               int value_size);
 
   void get_baseline(const uint8_t *key, int key_size, const uint8_t *&value,
                     int &value_size) const;
@@ -21,6 +26,11 @@ public:
   void puts_baseline(const uint8_t *keys_bytes, const int *keys_indexs,
                      const uint8_t *values_bytes, const int64_t *values_indexs,
                      int n);
+
+  void puts_olc(const uint8_t *keys_bytes, const int *keys_indexs,
+                const uint8_t *values_bytes, const int64_t *values_indexs,
+                int n);    
+
   void gets_baseline(const uint8_t *keys_bytes, const int *keys_indexs, int n,
                      const uint8_t **values_ptrs, int *values_sizes) const;
 };

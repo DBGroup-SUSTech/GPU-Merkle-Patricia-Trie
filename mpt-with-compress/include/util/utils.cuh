@@ -9,11 +9,14 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <oneapi/tbb/scalable_allocator.h>
 
 #define MAX_LEVEL 20
 #define ROUNDS 24
 #define HASH_SIZE 32
 #define HASH_DATA_AREA 136
+
+#define INVALID_SIGN -1
 
 
 #define ALLOC_CAPACITY ((uint64_t(1) << 34))          // 24GB for node
@@ -421,6 +424,16 @@ struct Segment {
     return segments;
   }
 };
+
+template <typename T>
+void TBBAlloc(T *&data, size_t count) {
+  data = (T *)tbb::scalable_allocator<T>().allocate(count);
+}
+
+template <typename T> 
+void TBBSet(T *data, uint8_t value, size_t count) {
+  memset(data, value, sizeof(T) * count);
+}
 
 }  // namespace cutil
 
