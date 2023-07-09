@@ -190,6 +190,8 @@ namespace CpuMPT
       std::atomic<int> hash_target_num = 0;
       CKernel::puts_olc(keys_hexs, keys_indexs, values_bytes, values_indexs, n, start_, 
                    allocator_, hash_target_nodes, hash_target_num);
+      // CKernel::traverse_trie(start_,tbb_root_p_, keys_hexs, keys_indexs, n);
+      
       return {hash_target_nodes, hash_target_num + n} ;
     }
 
@@ -200,7 +202,7 @@ namespace CpuMPT
     }
 
     void MPT::get_root_hash_parallel(const uint8_t *&hash, int &hash_size) const {
-      assert(tbb_root_p_ != nullptr);
+      assert(start_->tbb_val.load() == (*tbb_root_p_).load());
       if ((*tbb_root_p_).load()==nullptr || (*tbb_root_p_).load()->hash_size == 0) {
         hash = nullptr;
         hash_size = 0;
@@ -398,6 +400,10 @@ namespace CpuMPT
           node->hash = snode->buffer;
         }
 
+        // node->print_self();
+        // printf("hash value:");
+        // cutil::print_hex(node->hash,node->hash_size);
+
         delete[] encoding;
         snode->dirty = false;
         return;
@@ -434,6 +440,10 @@ namespace CpuMPT
           node->hash_size = 32;
           node->hash = fnode->buffer;
         }
+
+        // node->print_self();
+        // printf("hash value:");
+        // cutil::print_hex(node->hash,node->hash_size);
 
         delete[] encoding;
         fnode->dirty = false; // hash has updated
@@ -979,6 +989,7 @@ namespace CpuMPT
     }
 
     void MPT::traverse_tree() { dfs_traverse_tree(root_); }
+
 
   } // namespace Compress
 } // namespace CpuMPT

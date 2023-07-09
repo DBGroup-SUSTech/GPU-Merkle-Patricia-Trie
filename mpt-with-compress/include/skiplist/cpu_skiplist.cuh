@@ -17,6 +17,17 @@ namespace CpuSkiplist
         SkipNode *forwards[MAX_LEVEL+1];
     };
 
+    struct TBBSkipNode
+    {
+        const uint8_t *key;
+        const uint8_t *value;
+        int key_size;
+        int value_size;
+        int level;
+        // pointers to successor nodes
+        TBBSkipNode *forwards[MAX_LEVEL+1];
+    };
+
     class SkipList
     {
     public:
@@ -140,5 +151,6 @@ namespace CpuSkiplist
         // data members
         float probability;
         SkipNode *head_ = nullptr;
+        TBBSkipNode *head_tbb_ = nullptr;
     };
 }

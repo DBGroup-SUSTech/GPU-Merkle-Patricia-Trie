@@ -169,7 +169,7 @@ struct ShortNode : public Node {
   __forceinline__ int tbb_encode(uint8_t *bytes) {
     int bytes_size = 0;
 
-    int key_compact_size = util::hex_to_compact(key, key_size, buffer);
+    int key_compact_size = util::hex_to_compact(key, key_size, bytes);
     // assert((key_size - 1) / 2 + 1 == key_compact_size);
     bytes += key_compact_size;
     bytes_size += key_compact_size;

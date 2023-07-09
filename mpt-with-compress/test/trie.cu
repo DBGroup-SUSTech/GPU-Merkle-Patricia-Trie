@@ -11,6 +11,7 @@
 #include "mpt/gpu_mpt.cuh"
 #include "mpt/node.cuh"
 #include "util/timer.cuh"
+#include "mpt/cpu_mpt_kernel.cuh"
 
 /// @brief generate data for testing
 /// @param keys_bytes   hex encoding
@@ -35,7 +36,7 @@ void data_gen(const uint8_t *&keys_bytes, int *&keys_bytes_indexs,
   keys_bytes = reinterpret_cast<uint8_t *>(keys);
 
   // generate random values
-  const int value_size = 10000;
+  const int value_size = 8;
   uint8_t *values = new uint8_t[value_size * n]{};
   for (int i = 0; i < value_size * n; ++i) {
     // values[i] = dist(g);
@@ -655,6 +656,94 @@ TEST(CpuMpt, HashsDirtyFlagFullTrie) {
   delete[] keys_hexs_indexs;
   delete[] values_ptrs;
   delete[] values_sizes;
+}
+
+TEST(CpuMpt, HashsOnePassFullTrie) {
+    GPUHashMultiThread::load_constants();
+
+  const uint8_t *keys_bytes = nullptr;
+  int *keys_bytes_indexs = nullptr;
+  const uint8_t *values_bytes = nullptr;
+  int64_t *values_bytes_indexs = nullptr;
+  int n;
+
+  data_gen(keys_bytes, keys_bytes_indexs, values_bytes, values_bytes_indexs, n);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  CpuMPT::Compress::MPT cpu_mpt_dirty_flag;
+  cpu_mpt_dirty_flag.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                                   values_bytes_indexs, n);
+  // cpu_mpt_dirty_flag.traverse_tree();
+  // CpuMPT::Compress::MPT cpu_mpt_ledgerdb;
+  // cpu_mpt_ledgerdb.puts_ledgerdb(keys_hexs, keys_hexs_indexs, values_bytes,
+  //                                values_bytes_indexs, n);
+
+  CpuMPT::Compress::MPT cpu_mpt_onepass;
+  auto [node, node_size] = cpu_mpt_onepass.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
+                              values_bytes_indexs, n);
+
+  perf::CpuTimer<perf::us> timer_cpu_hash_dirty_flag;  // timer start --
+  timer_cpu_hash_dirty_flag.start();
+  cpu_mpt_dirty_flag.hashs_dirty_flag();
+  timer_cpu_hash_dirty_flag.stop();  // timer end ----------------------
+
+  printf(
+      "\033[31m"
+      "CPU hash dirty flag execution time: %d us, throughput %d qps\n"
+      "\033[0m",
+      timer_cpu_hash_dirty_flag.get(),
+      (int)(n * 1000.0 / timer_cpu_hash_dirty_flag.get() * 1000.0));
+
+  // perf::CpuTimer<perf::ms> timer_cpu_hash_ledgerdb; // timer start --
+  // timer_cpu_hash_ledgerdb.start();
+  // cpu_mpt_ledgerdb.hashs_ledgerdb();
+  // timer_cpu_hash_ledgerdb.stop(); // timer end ----------------------
+
+  // printf("\033[31m"
+  //        "CPU hash ledgerdb execution time: %d ms, throughput %d qps\n"
+  //        "\033[0m",
+  //        timer_cpu_hash_dirty_flag.get(),
+  //        n * 1000 / timer_cpu_hash_dirty_flag.get());
+
+  perf::CpuTimer<perf::us> timer_cpu_hash_onepass;
+  timer_cpu_hash_onepass.start();
+  cpu_mpt_onepass.hashs_onepass(node, node_size);
+  timer_cpu_hash_onepass.stop();
+
+  printf(
+      "\033[31m"
+      "GPU hash onepass execution time: %d us, throughput %d qps\n"
+      "\033[0m",
+      timer_cpu_hash_onepass.get(),
+      (int)(n * 1000.0 / timer_cpu_hash_onepass.get() * 1000.0));
+
+  // check hash
+  const uint8_t *hash = nullptr;
+  int hash_size = 0;
+  cpu_mpt_dirty_flag.get_root_hash(hash, hash_size);
+  printf("CPU dirty flag root hash is: %p\n", hash);
+  cutil::println_hex(hash, hash_size);
+  std::vector<uint8_t> hash_cpu_mpt_dirty_flag(hash, hash + 32);
+  // cpu_mpt_ledgerdb.get_root_hash(hash, hash_size)
+  // printf("CPU ledgerdb root hash is: ");
+  cpu_mpt_onepass.get_root_hash_parallel(hash, hash_size);
+  printf("GPU onepass root Hash is: %p\n", hash);
+  cutil::println_hex(hash, hash_size);
+  std::vector<uint8_t> hash_gpu_mpt_onepass(hash, hash + 32);
+
+  // ASSERT_EQ(hash_cpu_mpt_dirty_flag, hash_gpu_mpt_onepass);
+
+  delete[] keys_bytes;
+  delete[] keys_bytes_indexs;
+  delete[] values_bytes;
+  delete[] values_bytes_indexs;
+  delete[] keys_hexs;
+  delete[] keys_hexs_indexs;
 }
 
 TEST(GpuMpt, PutsBaselineBasic) {
@@ -3890,7 +3979,7 @@ TEST(TrieV2, HashBenchmark) {
   //                                values_bytes_indexs, n);
 
   GpuMPT::Compress::MPT gpu_mpt_onepass;
-  auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_onepass.puts_latching_v2(
+  auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_onepass.puts_2phase(
       keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, n);
   printf("finish puts\n");
 

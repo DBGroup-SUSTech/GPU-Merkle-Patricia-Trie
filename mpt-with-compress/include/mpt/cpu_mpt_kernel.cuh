@@ -197,8 +197,9 @@ namespace CpuMPT
                             left_node->parent = branch;
                             // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, left_node,
                             //        left_node->key_size);
-                            left_node->tbb_val.store(snode->tbb_val.load());
-                            left_node->tbb_val.load()->parent = left_node;
+                            Node * left_child = snode->tbb_val.load();
+                            left_child->parent = left_node;
+                            left_node->tbb_val.store(left_child);
                             branch->tbb_childs[left_nibble].store(left_node);
 
                             // ! left node should hash
@@ -379,11 +380,14 @@ namespace CpuMPT
                     node = node->parent;
                 }
 
+                // static int i = 0;
                 if (node == nullptr)
                 {
-                    // assert(false);
+                    // printf("Mark %d as null\n", i);
+                    // // assert(false);
                     hash_node = nullptr;
                 }
+                // i++;
             }
 
             void hash_onepass_mark(Node **hash_nodes, int n,
@@ -394,13 +398,16 @@ namespace CpuMPT
                                   {
                                       for (int i = r.begin(); i < r.end(); i++)
                                       {
-                                          Node *hash_node = hash_nodes[i];
-                                          do_hash_onepass_mark(hash_node, (*root_p).load());
+                                          do_hash_onepass_mark(hash_nodes[i], (*root_p).load());
                                       }
                                   });
+                // for (int i = 0; i < n; i++)
+                // {
+                //     do_hash_onepass_mark(hash_nodes[i], (*root_p).load());
+                // }
             }
 
-            __forceinline__ void do_hash_onepass_update(Node *hash_node, TBBAllocator<ALLOC_CAPACITY> &allocator, const Node *start_node)
+            __forceinline__ void do_hash_onepass_update(Node *hash_node, TBBAllocator<ALLOC_CAPACITY> &allocator, Node *start_node)
             {
                 assert(hash_node != nullptr);
                 if (hash_node->type == Node::Type::VALUE)
@@ -427,6 +434,10 @@ namespace CpuMPT
                 while (hash_node != start_node)
                 {
                     assert(hash_node != nullptr);
+
+                    // if (hash_node == nullptr) {
+                    //     return;
+                    // }
 
                     assert(hash_node->type == Node::Type::FULL ||
                            hash_node->type == Node::Type::SHORT);
@@ -458,6 +469,7 @@ namespace CpuMPT
                         memset(buffer, 0, util::align_to<8>(encoding_size));
                         fnode->tbb_encode(buffer);
                         encoding = buffer;
+                        hash = fnode->buffer;
                     }
                     else
                     {
@@ -468,6 +480,7 @@ namespace CpuMPT
                         memset(buffer, 0, util::align_to<8>(encoding_size));
                         snode->tbb_encode(buffer);
                         encoding = buffer;
+                        hash = snode->buffer;
                     }
 
                     if (encoding_size < 32)
@@ -482,15 +495,29 @@ namespace CpuMPT
                         hash_node->hash = hash;
                         hash_node->hash_size = 32;
                     }
+                    // hash_node->print_self();
+                    // printf("hash value :");
+                    // cutil::print_hex(hash_node->hash, hash_node->hash_size);
 
                     std::atomic_thread_fence(std::memory_order_seq_cst);
+
+                    // if (hash_node->parent == nullptr) {
+                    //     hash_node->print_self();
+                    //     ShortNode *sstart = static_cast<ShortNode*>(start_node);
+                    //     if (sstart->tbb_val.load() == hash_node) {
+                    //         printf("root!");
+                    //     }
+
+                    // }
+
                     hash_node = hash_node->parent;
+
                 }
             }
 
             void hash_onepass_update(
                 Node *const *hash_nodes, int n, TBBAllocator<ALLOC_CAPACITY> allocator,
-                const Node *start_node)
+                Node *start_node)
             {
                 tbb::parallel_for(tbb::blocked_range<int>(0, n),
                                   [&](const tbb::blocked_range<int> &r)
@@ -500,11 +527,21 @@ namespace CpuMPT
                                           Node *hash_node = hash_nodes[i];
                                           if (hash_node == nullptr)
                                           {
-                                              return;
+                                              continue;
                                           }
                                           do_hash_onepass_update(hash_node, allocator, start_node);
                                       }
                                   });
+                // printf("n: %d\n", n);
+                // for (int i = 0; i < n; i++)
+                // {
+                //     Node *hash_node = hash_nodes[i];
+                //     if (hash_node == nullptr)
+                //     {
+                //         continue;
+                //     }
+                //     do_hash_onepass_update(hash_node, allocator, start_node);
+                // }
             }
 
             __forceinline__ void expand_node(ShortNode *snode, FullNode *&split_end, ShortNode *start_node,
@@ -772,6 +809,25 @@ namespace CpuMPT
                                           }
                                       }
                                   });
+                // for (int i = 0; i < n; i++)
+                // {
+                //     const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
+                //     int key_size = util::element_size(keys_indexs, i);
+                //     const uint8_t *value = util::element_start(values_indexs, i, values_bytes);
+                //     int value_size = util::element_size(values_indexs, i);
+                //     FullNode *compress_node = nullptr;
+                //     Node *hash_target_node = nullptr;
+                //     put_2phase_put(key, key_size, value, value_size, root_p, compress_node, hash_target_node, start_node, allocator);
+                //     if (compress_node != nullptr)
+                //     {
+                //         int compress_place = compress_num.fetch_add(1);
+                //         compress_nodes[compress_place] = compress_node;
+                //     }
+                //     if (hash_target_node != nullptr)
+                //     {
+                //         hash_target_nodes[i] = hash_target_node;
+                //     }
+                // }
             }
 
             __forceinline__ void late_compress(ShortNode *compressing_node, uint8_t *cached_keys, Node *compress_parent,
@@ -950,6 +1006,19 @@ namespace CpuMPT
                                           }
                                       }
                                   });
+                // for (int i = 0; i < compress_num.load(); i++)
+                // {
+                //     FullNode *compress_node = compress_nodes[i];
+                //     //   compress_node->print_self();
+                //     Node *hash_target_node = nullptr;
+                //     put_2phase_compress(compress_node, start_node, root_p, hash_target_node,
+                //                         allocator, key_allocator);
+                //     if (hash_target_node != nullptr)
+                //     {
+                //         int hash_target_place = hash_target_num.fetch_add(1);
+                //         hash_target_nodes[hash_target_place + n] = hash_target_node;
+                //     }
+                // }
             }
 
             __forceinline__ void loop_traverse(Node *root, const uint8_t *key, int key_size)
