@@ -17,6 +17,17 @@ namespace CpuSkiplist
         SkipNode *forwards[MAX_LEVEL+1];
     };
 
+    struct TBBSkipNode
+    {
+        const uint8_t *key;
+        const uint8_t *value;
+        int key_size;
+        int value_size;
+        int level;
+        // pointers to successor nodes
+        TBBSkipNode *forwards[MAX_LEVEL+1];
+    };
+
     class SkipList
     {
     public:
@@ -37,6 +48,10 @@ namespace CpuSkiplist
                 int value_size = util::element_size(values_indexs, i);
                 put_baseline(key, key_size, value, value_size);
             }
+        }
+
+        void puts_olc() {
+            // TODO
         }
 
         void gets_baseline(const uint8_t *keys, const int *keys_indexs, const uint8_t **values_ptrs,
@@ -114,6 +129,11 @@ namespace CpuSkiplist
             }
         }
 
+        void put_olc(const uint8_t *key, int key_size, const uint8_t *value, int value_size)
+        {
+            // TODO
+        }
+
         void get_baseline(const uint8_t *key, int key_size, const uint8_t *&value, int &value_size)
         {
             SkipNode *current = head_;
@@ -131,5 +151,6 @@ namespace CpuSkiplist
         // data members
         float probability;
         SkipNode *head_ = nullptr;
+        TBBSkipNode *head_tbb_ = nullptr;
     };
 }

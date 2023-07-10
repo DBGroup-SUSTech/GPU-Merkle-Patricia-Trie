@@ -2739,7 +2739,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
   compressing_node->type = Node::Type::SHORT;
   uint8_t *cached_keys = key_allocator.key_malloc(0);
   FullNode *cached_f_node;
-  int container_size = 64;
+  int container_size = 8;
   while (node != nullptr) {
     switch (node->type) {
       case Node::Type::SHORT: {
