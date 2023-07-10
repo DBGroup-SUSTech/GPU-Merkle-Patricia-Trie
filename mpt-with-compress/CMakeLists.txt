@@ -46,3 +46,15 @@ foreach(test_file IN LISTS TEST_FILES)
 
         gtest_discover_tests(${test_name})
 endforeach()
+
+# Static Library
+add_library(gmpt STATIC ${PROJECT_SOURCE_DIR}/lib/libgmpt.cu ${SRC_FILES})
+target_include_directories(gmpt
+        PUBLIC ${INC_PATH}
+        PUBLIC ${LIBXML2_INCLUDE_DIR}
+        PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})  
+target_link_libraries(gmpt
+        PUBLIC STATIC cuda 
+        PUBLIC STATIC GTest::gtest_main
+        PUBLIC STATIC ${CRYPTOPP_LIB}
+        PUBLIC STATIC ${LIBXML2_LIBRARIES}) 

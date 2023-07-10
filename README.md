@@ -29,6 +29,12 @@ cd build
 cmake ../mpt-with-compress/
 cmake --build . -j
 ```
+
+For Ethereum transaction processing case study:
+```sh
+bash geth_install_libgmpt.sh
+```
+
 ## Run
 ### Experiments
 You can run unit tests in [go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go) and 
@@ -59,4 +65,6 @@ You can run the experiments and generate profiling report by [profile.sh](./prof
 * **LockNU on SkipList**: `GpuSkiplist::SkipList::puts_olc_with_ksize` in [./mpt-with-compress/include/skiplist/gpu_skiplist.cuh](./mpt-with-compress/include/skiplist/gpu_skiplist.cuh)
 * **CPU baseline SkipList**: `CpuSkiplist::SkipList::puts_baseline` in [./mpt-with-compress/include/skiplist/cpu_skiplist.cuh] (./mpt-with-compress/include/skiplist/cpu_skiplist.cuh)
 ### Key experiments
-Please refer to [./do_all_experiments.sh](./do_all_experiments.sh) and [./go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go).
+Please refer to [./do_all_experiments.sh](./do_all_experiments.sh), [./go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go) and [./go-ethereum/miner/benchmark_test.go](./go-ethereum/miner/benchmark_test.go).
+
+
