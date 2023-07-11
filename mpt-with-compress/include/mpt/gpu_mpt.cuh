@@ -403,7 +403,7 @@ void MPT::puts_latching_with_valuehp(const uint8_t *keys_hexs, int *keys_indexs,
   //   --------------------------
 
   // puts
-  const int rpwarp_block_size = 1024;
+  const int rpwarp_block_size = 512;
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size;  // one warp per request
   GKernel::puts_latching<<<rpwarp_num_blocks, rpwarp_block_size>>>(
@@ -465,7 +465,7 @@ void MPT::puts_latching_pipeline(const uint8_t *keys_hexs, int *keys_indexs,
   // --------------------------
 
   // puts
-  const int rpwarp_block_size = 1024;
+  const int rpwarp_block_size = 512;
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size;  // one warp per request
   GKernel::
@@ -557,7 +557,7 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
   CHECK_ERROR(gutil::DeviceSet(d_other_hash_target_num, 0, 1));
 
   // puts
-  const int rpwarp_block_size = 1024;
+  const int rpwarp_block_size = 512;
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size;  // one warp per request
   perf::GpuTimer<perf::us> kernel_timer;
@@ -633,7 +633,7 @@ std::tuple<Node **, int> MPT::puts_plc_with_valuehp_v2(
   CHECK_ERROR(gutil::DeviceSet(d_other_hash_target_num, 0, 1));
 
   // puts
-  const int rpwarp_block_size = 1024;
+  const int rpwarp_block_size = 512;
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size;  // one warp per request
   perf::GpuTimer<perf::us> kernel_timer;
