@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-
+#include <cmath>
 #include <random>
 
 #include "bench/ethtxn.cuh"
@@ -111,8 +111,8 @@ TEST(EXPERIMENTS, InsertYCSB) {
   int insert_num_from_file;
   read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
                         values_bytes_indexs, insert_num_from_file);
-  int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
-  // int insert_num = 320000;
+  // int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  int insert_num = 320000;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -2137,4 +2137,98 @@ TEST(EXPERIMENTS, TrieSizeEthtxn) {
   gpu.print();
   two.print();
   olc.print();
+}
+
+TEST(EXPERIMENTS, ModelFitting) {
+  using namespace bench::keytype;
+
+    // allocate
+  uint8_t *keys_bytes;
+  int *keys_bytes_indexs;
+  uint8_t *values_bytes;
+  int64_t *values_bytes_indexs;
+
+  int insert_num = 100000;
+  int key_size = arg_util::get_record_num(arg_util::Dataset::KEYTYPE_LEN);
+  int step = arg_util::get_record_num(arg_util::Dataset::KEYTYPE_STEP);
+  int space = pow(16, key_size);
+  int value_size = 4;
+
+  gen_data_with_parameter(insert_num, key_size, step, value_size, keys_bytes,
+                          keys_bytes_indexs, values_bytes,
+                          values_bytes_indexs);
+
+  // transform keys
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num, keys_hexs,
+                     keys_hexs_indexs);
+
+  // get value in
+  const uint8_t **values_hps =
+      get_values_hps(insert_num, values_bytes_indexs, values_bytes);
+
+  // calculate size to pre-pin
+  int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(values_bytes_indexs, insert_num);
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
+
+  using T = perf::CpuTimer<perf::us>;
+  exp_util::InsertProfiler<T> two("GPU 2phase", insert_num, 0);
+  exp_util::InsertProfiler<T> olc("GPU olc", insert_num, 0);
+
+  {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    olc.start();
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num);
+    olc.stop();
+    gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+
+    auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
+    printf("GPU olc hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two;
+    two.start();
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
+        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+        values_hps, insert_num);
+    two.stop();
+    gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
+    printf("GPU two hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  olc.print();
+  two.print();
+
+  bool olc_better = olc.timer_.get() < two.timer_.get();
+  if (olc_better) {
+    arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(), two.timer_.get(),  "OLC");
+  } else {
+    arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(), two.timer_.get(), "TWO");
+  }
 }

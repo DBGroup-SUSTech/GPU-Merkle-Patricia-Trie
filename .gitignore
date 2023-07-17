@@ -6,4 +6,6 @@
 *prototype
 *.nsys-rep
 *.log
+*.csv
+*figure
 profile/
