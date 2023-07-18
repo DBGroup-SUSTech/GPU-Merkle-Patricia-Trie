@@ -12,6 +12,9 @@
 #include <vector>
 #include <oneapi/tbb/scalable_allocator.h>
 
+#define READ_FLAG 0
+#define WRITE_FLAG 1
+
 #define MAX_LEVEL 20
 #define ROUNDS 24
 #define HASH_SIZE 32

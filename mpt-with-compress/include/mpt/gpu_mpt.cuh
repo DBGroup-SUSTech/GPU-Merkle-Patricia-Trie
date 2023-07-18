@@ -61,6 +61,9 @@ class MPT {
   std::tuple<Node **, int> puts_latching_with_valuehp_v2(
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n);
+  std::tuple<Node **, int> puts_latching_with_valuehp_v2_with_read(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n);
   std::tuple<Node **, int> puts_latching_pipeline_v2(
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n);
@@ -77,6 +80,12 @@ class MPT {
   std::tuple<Node **, int> puts_2phase_with_valuehp(
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n);
+
+  std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
+    const uint8_t *keys_hexs, int *keys_indexs, 
+    const uint8_t *rw_flags, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t **values_hps, int n,
+    const uint8_t **read_values_hps, int *read_values_sizes);
 
   std::tuple<Node **, int> puts_2phase_pipeline(
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
@@ -1047,6 +1056,14 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
   //   printf("target num :%d\n",h_hash_target_num);
 
   return {d_hash_target_nodes, h_hash_target_num};
+}
+
+std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
+    const uint8_t *keys_hexs, int *keys_indexs, 
+    const uint8_t *rw_flags, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t **values_hps, int n,
+    const uint8_t **read_values_hps, int *read_values_sizes) {
+    
 }
 
 std::tuple<Node **, int> MPT::puts_2phase_pipeline(

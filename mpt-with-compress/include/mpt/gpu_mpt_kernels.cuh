@@ -1270,6 +1270,319 @@ __global__ void puts_latching_v2(
              other_hash_target_num);
 }
 
+// __device__ __forceinline__ void put_olc_v2_with_read(
+//     const uint8_t *const key_in, const int key_size_in, const uint8_t *value,
+//     int value_size, const uint8_t *value_hp, ShortNode *start_node,
+//     DynamicAllocator<ALLOC_CAPACITY> &node_allocator, ValueNode *leaf, int n,
+//     Node **other_hash_targets, int *other_hash_target_num) {
+//   assert(threadIdx.x % 32 == 0);
+
+// restart:  // TODO: replace goto with while
+//   // printf("[line:%d] thread %d restart\n", __LINE__, threadIdx.x);
+
+//   bool need_restart = false;
+//   const uint8_t *key = key_in;
+//   int key_size = key_size_in;
+
+//   Node *parent = start_node;
+//   Node **curr = &start_node->val;
+
+//   // printf("[line:%d] thread %d try read lock parent\n", __LINE__,
+//   // threadIdx.x);
+//   gutil::ull_t parent_v = parent->read_lock_or_restart(need_restart);
+//   if (need_restart) goto restart;
+//   // printf("[line:%d] thread %d success read lock parent: %ld\n", __LINE__,
+//   //        threadIdx.x, parent_v);
+
+//   while (*curr) {
+//     Node *node = *curr;
+
+//     // printf("[line:%d] thread %d try read lock\n", __LINE__, threadIdx.x);
+//     gutil::ull_t v = node->read_lock_or_restart(need_restart);
+//     if (need_restart) goto restart;
+//     // printf("[line:%d] thread %d success read lock: %ld\n", __LINE__,
+//     //        threadIdx.x, v);
+
+//     if (node->type == Node::Type::VALUE) {
+//       // printf("[line:%d] thread %d value node\n", __LINE__, threadIdx.x);
+//       // no need to handle conflict and obsolete of value node
+//       assert(key_size == 0);
+//       ValueNode *vnode_old = static_cast<ValueNode *>(node);
+//       ValueNode *vnode_new = leaf;
+//       bool dirty =
+//           !util::bytes_equal(vnode_old->d_value, vnode_old->value_size,
+//                              vnode_new->d_value, vnode_new->value_size);
+
+//       // leaf->parent = parent;
+//       // printf("[line:%d] thread %d try upgrade lock parent\n", __LINE__,
+//       //        threadIdx.x);
+
+//       parent->upgrade_to_write_lock_or_restart(parent_v, need_restart);
+//       if (need_restart) goto restart;
+
+//       // printf("[line:%d] thread %d success upgrade lock parent\n", __LINE__,
+//       //        threadIdx.x);
+//       // TODO: set parent to nullptr
+//       *curr = leaf;
+//       leaf->parent = parent;
+//       // printf("[line:%d] thread %d write unlock parent\n", __LINE__,
+//       //        threadIdx.x);
+//       parent->write_unlock();
+//       return;  // end
+//     }
+
+//     // handle short node and full node
+//     switch (node->type) {
+//       case Node::Type::SHORT: {
+//         // printf("[line:%d] thread %d short node\n", __LINE__, threadIdx.x);
+
+//         ShortNode *snode = static_cast<ShortNode *>(node);
+//         int matchlen =
+//             util::prefix_len(snode->key, snode->key_size, key, key_size);
+
+//         // printf("tid=%d\n snode matchlen = %d\n", threadIdx.x, matchlen);
+//         // fully match, no need to split
+//         if (matchlen == snode->key_size) {
+//           // printf("tid=%d\n snode fully match, release lock node %p\n",
+//           //        threadIdx.x, parent);
+//           parent->read_unlock_or_restart(parent_v, need_restart);
+//           if (need_restart) goto restart;
+
+//           key += matchlen;
+//           key_size -= matchlen;
+//           parent = snode;
+//           curr = &snode->val;
+
+//           parent_v = v;
+//           break;
+//         }
+
+//         // not match
+//         // split the node
+//         // printf("[line:%d] thread %d try upgrade lock parent\n", __LINE__,
+//         //        threadIdx.x);
+//         parent->upgrade_to_write_lock_or_restart(parent_v, need_restart);
+//         if (need_restart) goto restart;
+//         // printf("[line:%d] thread %d success upgrade lock parent\n", __LINE__,
+//         //        threadIdx.x);
+
+//         // printf("[line:%d] thread %d try upgrade lock curr\n", __LINE__,
+//         //        threadIdx.x);
+//         node->upgrade_to_write_lock_or_restart(v, need_restart);
+//         if (need_restart) {
+//           parent->write_unlock();
+//           goto restart;
+//         }
+//         // printf("[line:%d] thread %d success upgrade lock curr\n", __LINE__,
+//         //        threadIdx.x);
+
+//         FullNode *branch = node_allocator.malloc<FullNode>();
+//         branch->type = Node::Type::FULL;
+
+//         // construct 3 short nodes (or nil)
+//         //  1. branch.parent(upper)
+//         // 1. branch.old_child(left)
+//         //  3. contine -> branch.new_child(right)
+//         uint8_t left_nibble = snode->key[matchlen];
+//         const uint8_t *left_key = snode->key + (matchlen + 1);
+//         const int left_key_size = snode->key_size - (matchlen + 1);
+
+//         uint8_t right_nibble = key[matchlen];
+//         const uint8_t *right_key = key + (matchlen + 1);
+//         const int right_key_size = key_size - (matchlen + 1);
+
+//         const uint8_t *upper_key = snode->key;
+//         const int upper_key_size = matchlen;
+
+//         // 1) upper
+//         if (0 != upper_key_size) {
+//           ShortNode *upper_node = node_allocator.malloc<ShortNode>();
+//           upper_node->type = Node::Type::SHORT;
+//           upper_node->key = upper_key;
+//           upper_node->key_size = upper_key_size;
+//           // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, upper_node,
+//           //        upper_node->key_size);
+//           *curr = upper_node;  // set parent.child
+//           upper_node->parent = parent;
+//           upper_node->val = branch;
+//           branch->parent = upper_node;
+//         } else {
+//           *curr = branch;
+//           branch->parent = parent;
+//         }
+
+//         // !! parent is replaced, set to null
+//         node->parent = nullptr;
+
+//         // unlock parent, parent has linked to branch
+//         // lock child
+//         // printf("[line:%d] thread %d try read lock parent\n", __LINE__,
+//         //        threadIdx.x);
+
+//         v = branch->read_lock_or_restart(need_restart);
+//         // node->write_unlock_obsolete();
+//         if (need_restart) goto restart;
+
+//         // 2) left
+//         if (0 != left_key_size) {
+//           ShortNode *left_node = node_allocator.malloc<ShortNode>();
+//           left_node->type = Node::Type::SHORT;
+//           left_node->key = left_key;
+//           left_node->key_size = left_key_size;
+//           // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, left_node,
+//           //        left_node->key_size);
+//           branch->childs[left_nibble] = left_node;
+//           branch->childs[left_nibble]->parent = branch;
+//           left_node->val = snode->val;
+//           left_node->val->parent = left_node;
+
+//           // ! left node should hash
+//           int curr_index = atomicAdd(other_hash_target_num, 1);
+//           assert(curr_index < n);
+//           other_hash_targets[curr_index] = left_node;
+
+//         } else {
+//           branch->childs[left_nibble] = snode->val;
+//           branch->childs[left_nibble]->parent = branch;
+//         }
+
+//         // TODO: where to unlock
+//         parent->write_unlock();
+
+//         // printf("tid=%d\n splited, release lock node %p\n", threadIdx.x,
+//         // parent);
+
+//         // continue to insert right child
+//         curr = &branch->childs[right_nibble];
+
+//         key = right_key;
+//         key_size = right_key_size;
+//         parent = branch;
+
+//         // branch->check_or_restart(v, need_restart);
+//         // if (need_restart) goto restart;
+
+//         parent_v = v;
+//         break;
+//       }
+
+//       case Node::Type::FULL: {
+//         assert(key_size > 0);
+//         // printf("[line:%d] thread %d full node\n", __LINE__, threadIdx.x);
+
+//         // printf("[line:%d] thread %d try read unlock parent\n", __LINE__,
+//         //        threadIdx.x);
+//         parent->read_unlock_or_restart(parent_v, need_restart);
+//         if (need_restart) goto restart;
+
+//         FullNode *fnode = static_cast<FullNode *>(node);
+
+//         const uint8_t nibble = key[0];
+//         key = key + 1;
+//         key_size -= 1;
+//         parent = fnode;
+//         curr = &fnode->childs[nibble];
+
+//         // printf("[line:%d] thread %d check or restart\n", __LINE__,
+//         // threadIdx.x);
+//         // node->check_or_restart(v, need_restart);
+//         // if (need_restart) goto restart;
+
+//         parent_v = v;
+//         break;
+//       }
+//       default: {
+//         printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+//             assert(false);
+//         break;
+//       }
+//     }
+//   }
+
+//   // curr = NULL, try to insert a leaf
+
+//   // printf("[line:%d] thread %d nil node\n", __LINE__, threadIdx.x);
+
+//   // printf("[line:%d] thread %d try wlock parent %p\n", __LINE__, threadIdx.x,
+//   //        &parent);
+//   parent->upgrade_to_write_lock_or_restart(parent_v, need_restart);
+//   if (need_restart) goto restart;
+//   // printf("[line:%d] thread %d success wlock parent %p\n", __LINE__,
+//   // threadIdx.x,
+//   //        &parent);
+//   if (key_size == 0) {
+//     *curr = leaf;
+//     leaf->parent = parent;
+//   } else {
+//     ShortNode *snode = node_allocator.malloc<ShortNode>();
+//     snode->type = Node::Type::SHORT;
+//     snode->key = key;
+//     snode->key_size = key_size;
+
+//     // printf("tid=%d node %p .key_size = %d\n", threadIdx.x, snode,
+//     //        snode->key_size);
+//     snode->val = leaf;
+//     snode->val->parent = snode;
+
+//     *curr = snode;
+//     snode->parent = parent;
+//   }
+//   parent->write_unlock();
+//   // printf("tid=%d finish insert, release lock node %p\n", threadIdx.x,
+//   // parent);
+// }
+
+// /// @brief
+// /// @param hash_target_nodes save all hash targets, length >= n
+// /// @param other_hash_target_num number of none-leaf hash targets nodes
+// /// @note other_hash_target_num + n = (length of hash_target_nodes)
+// /// @return
+// __global__ void puts_latching_v2_with_read(
+//     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+//     int64_t *values_indexs, const uint8_t *const *values_hps, int write_n, 
+//     int read_n, const uint8_t **read_values_hps, int *read_values_sizes,
+//     ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator,
+//     Node **hash_target_nodes, int *other_hash_target_num) {
+//   int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
+//   // printf("wid %d\n", wid);
+//   if (wid >= write_n + read_n) {
+//     return;
+//   }
+//   int lid_w = threadIdx.x % 32;
+//   if (lid_w > 0) {  // TODO: warp sharing
+//     return;
+//   }
+//   const uint8_t *key = util::element_start(keys_indexs, wid, keys_hexs);
+//   int key_size = util::element_size(keys_indexs, wid);
+
+//   const uint8_t *value = nullptr;
+//   int value_size = 0;
+//   const uint8_t *value_hp = nullptr;
+
+//   uint8_t *read_values_bytes = nullptr;
+//   int read_values_bytes_size = 0;
+
+//   if (wid < write_n) {
+//     value = util::element_start(values_indexs, wid, values_bytes);
+//     value_size = util::element_size(values_indexs, wid);
+//     value_hp = values_hps[wid];
+//     ValueNode *leaf = node_allocator.malloc<ValueNode>();
+//     leaf->type = Node::Type::VALUE;
+//     leaf->h_value = value_hp;
+//     leaf->d_value = value;
+//     leaf->value_size = value_size;
+//     hash_target_nodes[wid] = leaf;
+//   } 
+//   // printf("wid %d\n", wid);
+//   // put_olc(key, key_size, value, value_size, value_hp, start_node,
+//   //         node_allocator);
+//   // put_olc_v2(key, key_size, value, value_size, value_hp, start_node,
+//   //            node_allocator, leaf, n, hash_target_nodes + n,
+//   //            other_hash_target_num);
+
+//   // put_olc_v2_with_read();
+// }
+
 __device__ __forceinline__ void put_plc_spin_v2(
     const uint8_t *const key_in, const int key_size_in, const uint8_t *value,
     int value_size, const uint8_t *value_hp, ShortNode *start_node,
@@ -2474,6 +2787,38 @@ __global__ void puts_2phase_get_split_phase(
     int ends_place = atomicAdd(end_num, 1);
     atomicAdd(split_num, 1);
     split_ends[ends_place] = split_end;
+  }
+}
+
+__global__ void puts_2phase_get_split_phase_with_read(
+    const uint8_t *keys_hexs, const int *keys_indexs, 
+    const uint8_t *rw_flags, FullNode **split_ends,
+    int *end_num, int *split_num, int n, const uint8_t **read_values_hps, 
+    int *read_values_sizes, Node **root_p, ShortNode *start_node,
+    DynamicAllocator<ALLOC_CAPACITY> allocator) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
+  if (tid >= n) {
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  uint8_t rw_flag = rw_flags[tid];
+
+  if (rw_flag == READ_FLAG) {
+    const uint8_t *&read_value_hp = read_values_hps[tid];
+    int &read_value_size = read_values_sizes[tid];
+    get(key, key_size, read_value_hp, read_value_size, *root_p);
+  } else if (rw_flag == WRITE_FLAG) {
+    FullNode *split_end = nullptr;
+    do_put_2phase_get_split_phase(key, key_size, root_p, split_end, start_node,
+                                  allocator);
+    if (split_end != nullptr) {
+      int ends_place = atomicAdd(end_num, 1);
+      atomicAdd(split_num, 1);
+      split_ends[ends_place] = split_end;
+    }
+  } else {
+    assert(false);
   }
 }
 

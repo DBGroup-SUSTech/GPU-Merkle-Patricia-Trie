@@ -2227,7 +2227,7 @@ TEST(EXPERIMENTS, ModelFitting) {
 
   bool olc_better = olc.timer_.get() < two.timer_.get();
   if (olc_better) {
-    arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(), two.timer_.get(),  "OLC");
+    arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(), two.timer_.get(), "OLC");
   } else {
     arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(), two.timer_.get(), "TWO");
   }
