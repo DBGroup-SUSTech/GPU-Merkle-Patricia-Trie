@@ -81,7 +81,7 @@ class MPT {
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n);
 
-  std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
+  std::tuple<Node **, int> puts_2phase_with_valuehp_with_read(
     const uint8_t *keys_hexs, int *keys_indexs, 
     const uint8_t *rw_flags, const uint8_t *values_bytes,
     int64_t *values_indexs, const uint8_t **values_hps, int n,

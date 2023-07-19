@@ -218,12 +218,14 @@ void read_ycsb_data_rw(
       } else {
         assert(false);
       }
-      std::getline(ss, key, ' ');
+      std::getline(ss, key);
 
       i++; 
     } 
   }
-
+  rw_num = i - build_trie_num;
+  // Close the file
+  file.close();
 }
 
 }  // namespace ycsb
