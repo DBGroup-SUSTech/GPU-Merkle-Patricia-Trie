@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "util/utils.cuh"
+
 enum class DataType { READ, INSERT };
 namespace bench {
 namespace ycsb {
@@ -40,7 +42,7 @@ void read_ycsb_data_insert(std::string file_name, uint8_t *out_key,
   }
   std::string line;
   int key_length = 0;
-  int value_length = 0;
+  int64_t value_length = 0;
   int i = 0;
   while (std::getline(file, line, '\n')) {
     // const char *split = ":";
@@ -118,7 +120,7 @@ void read_ycsb_data_insert_segmented(std::string file_name, uint8_t **out_key_se
   }
   std::string line;
   int key_length = 0;
-  int value_length = 0;
+  int64_t value_length = 0;
   int i = 0;
   int seg_i = 0;
   uint8_t * out_key_seg = out_key_segs[seg_i];
@@ -160,6 +162,68 @@ void read_ycsb_data_insert_segmented(std::string file_name, uint8_t **out_key_se
   last_seg_data_num = i;
   // Close the file
   file.close();
+}
+
+void read_ycsb_data_rw(
+  std::string file_name, uint8_t *build_trie_keys, int *build_trie_key_index, 
+  uint8_t *build_trie_values, int64_t *build_trie_value_index, int build_trie_num,
+  uint8_t *rw_keys, int *rw_key_index, uint8_t *rw_flags, uint8_t *rw_values,
+   int64_t *rw_value_index, int &rw_num) {
+  std::string match_operation_read = "READ";
+  std::string match_operation_insert = "INSERT";
+  std::ifstream file;
+  file.open(file_name, std::ios::in);
+  if (!file) {
+    printf("no file\n");
+    assert(false);
+  }
+  std::string line;
+  int i = 0;
+  int build_trie_key_length = 0;
+  int64_t build_trie_value_length = 0;
+  while (std::getline(file, line, '\n')) {
+    if (i < build_trie_num) {
+      std::string operation;
+      std::string key;
+      std::string fields;
+      std::stringstream ss(line);
+      std::getline(ss, operation, ' ');
+      if (operation != match_operation_insert) {
+        assert(false);
+      }
+      std::getline(ss, key, ' ');
+      std::getline(ss, fields);
+      memcpy(build_trie_keys + build_trie_key_length, (uint8_t *)key.c_str(), key.size());
+      build_trie_key_index[2 * i] = build_trie_key_length;
+      build_trie_key_length += key.size();
+      build_trie_key_index[2 * i + 1] = build_trie_key_length - 1;
+      memcpy(build_trie_values + build_trie_value_length, (uint8_t *)fields.c_str(), fields.size());
+      build_trie_value_index[2 * i] = build_trie_value_length;
+      build_trie_value_length += fields.size();
+      build_trie_value_index[2 * i + 1] = build_trie_value_length - 1;
+      i++;
+    } else {
+      std::string operation;
+      std::string key;
+      std::stringstream ss(line);
+      std::getline(ss, operation, ' ');
+      if (operation != match_operation_read && operation != match_operation_insert) {
+        assert(false);
+      }
+      int rw_place = i - build_trie_num;
+      if (operation == match_operation_insert) {
+        rw_flags[rw_place] = WRITE_FLAG;
+      } else if (operation == match_operation_read) {
+        rw_flags[rw_place] = READ_FLAG;
+      } else {
+        assert(false);
+      }
+      std::getline(ss, key, ' ');
+
+      i++; 
+    } 
+  }
+
 }
 
 }  // namespace ycsb
