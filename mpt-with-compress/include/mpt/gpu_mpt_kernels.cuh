@@ -1537,51 +1537,59 @@ __global__ void puts_latching_v2(
 // /// @param other_hash_target_num number of none-leaf hash targets nodes
 // /// @note other_hash_target_num + n = (length of hash_target_nodes)
 // /// @return
-// __global__ void puts_latching_v2_with_read(
-//     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
-//     int64_t *values_indexs, const uint8_t *const *values_hps, int write_n, 
-//     int read_n, const uint8_t **read_values_hps, int *read_values_sizes,
-//     ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator,
-//     Node **hash_target_nodes, int *other_hash_target_num) {
-//   int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
-//   // printf("wid %d\n", wid);
-//   if (wid >= write_n + read_n) {
-//     return;
-//   }
-//   int lid_w = threadIdx.x % 32;
-//   if (lid_w > 0) {  // TODO: warp sharing
-//     return;
-//   }
-//   const uint8_t *key = util::element_start(keys_indexs, wid, keys_hexs);
-//   int key_size = util::element_size(keys_indexs, wid);
+__global__ void puts_latching_v2_with_read(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *rw_flags, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t *const *values_hps,
+    const uint8_t **read_values_hps, int *read_values_sizes,
+    ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator,
+    Node **hash_target_nodes, int *other_hash_target_num) {
+  int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
+  // printf("wid %d\n", wid);
+  if (wid >= write_n + read_n) {
+    return;
+  }
+  int lid_w = threadIdx.x % 32;
+  if (lid_w > 0) {  // TODO: warp sharing
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, wid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, wid);
+  uint8_t rw_flag = rw_flags[wid];
+  if (rw_flag == READ_FLAG) {
 
-//   const uint8_t *value = nullptr;
-//   int value_size = 0;
-//   const uint8_t *value_hp = nullptr;
+  } else if (rw_flag == WRITE_FLAG) {
 
-//   uint8_t *read_values_bytes = nullptr;
-//   int read_values_bytes_size = 0;
+  } else {
+    assert(false);
+  }
 
-//   if (wid < write_n) {
-//     value = util::element_start(values_indexs, wid, values_bytes);
-//     value_size = util::element_size(values_indexs, wid);
-//     value_hp = values_hps[wid];
-//     ValueNode *leaf = node_allocator.malloc<ValueNode>();
-//     leaf->type = Node::Type::VALUE;
-//     leaf->h_value = value_hp;
-//     leaf->d_value = value;
-//     leaf->value_size = value_size;
-//     hash_target_nodes[wid] = leaf;
-//   } 
-//   // printf("wid %d\n", wid);
-//   // put_olc(key, key_size, value, value_size, value_hp, start_node,
-//   //         node_allocator);
-//   // put_olc_v2(key, key_size, value, value_size, value_hp, start_node,
-//   //            node_allocator, leaf, n, hash_target_nodes + n,
-//   //            other_hash_target_num);
+  const uint8_t *value = nullptr;
+  int value_size = 0;
+  const uint8_t *value_hp = nullptr;
 
-//   // put_olc_v2_with_read();
-// }
+  uint8_t *read_values_bytes = nullptr;
+  int read_values_bytes_size = 0;
+
+  if (wid < write_n) {
+    value = util::element_start(values_indexs, wid, values_bytes);
+    value_size = util::element_size(values_indexs, wid);
+    value_hp = values_hps[wid];
+    ValueNode *leaf = node_allocator.malloc<ValueNode>();
+    leaf->type = Node::Type::VALUE;
+    leaf->h_value = value_hp;
+    leaf->d_value = value;
+    leaf->value_size = value_size;
+    hash_target_nodes[wid] = leaf;
+  } 
+  // printf("wid %d\n", wid);
+  // put_olc(key, key_size, value, value_size, value_hp, start_node,
+  //         node_allocator);
+  // put_olc_v2(key, key_size, value, value_size, value_hp, start_node,
+  //            node_allocator, leaf, n, hash_target_nodes + n,
+  //            other_hash_target_num);
+
+  // put_olc_v2_with_read();
+}
 
 __device__ __forceinline__ void put_plc_spin_v2(
     const uint8_t *const key_in, const int key_size_in, const uint8_t *value,
