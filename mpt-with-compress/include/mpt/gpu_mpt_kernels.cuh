@@ -1229,7 +1229,75 @@ restart:  // TODO: replace goto with while
   // parent);
 }
 
-// other_hash_target_num + n = all inserted nodes
+__device__ __forceinline__ void read_with_olc(ShortNode * start, const uint8_t *key, int key_size,
+                                    const uint8_t *&value_hp, int &value_size) {
+  restart:
+  bool need_restart = false;
+  
+  const Node *node = start->val;
+  int pos = 0;
+  while (true) {
+    if (node == nullptr) {
+      // printf("tid=%d, nullptr\n", threadIdx.x);
+      value_hp = nullptr;
+      value_size = 0;
+      return;
+    }
+    gutil::ull_t v = node->read_lock_or_restart(need_restart);
+    if (need_restart) goto restart;
+    switch (node->type) {
+      case Node::Type::VALUE: {
+        // printf("tid=%d, VALUE node\n", threadIdx.x);
+        node->read_unlock_or_restart(v, need_restart);
+        if(need_restart) goto restart;
+        const ValueNode *vnode = static_cast<const ValueNode *>(node);
+        value_hp = vnode->h_value;
+        value_size = vnode->value_size;
+        return;
+      }
+      case Node::Type::SHORT: {
+        const ShortNode *snode = static_cast<const ShortNode *>(node);
+        // printf("tid=%d, Short node keysize=%d\n", threadIdx.x,
+        // snode->key_size);
+        if (key_size - pos < snode->key_size ||
+            !util::bytes_equal(snode->key, snode->key_size, key + pos,
+                               snode->key_size)) {
+          // key not found in the trie
+          // printf("tid=%d, Short node keysize=%d\n", threadIdx.x,
+          // snode->key_size);
+          value_hp = nullptr;
+          value_size = 0;
+          return;
+        }
+
+        node->read_unlock_or_restart(v, need_restart);
+        if (need_restart) goto restart;
+        node = snode->val;
+        pos += snode->key_size;
+        continue;
+      }
+      case Node::Type::FULL: {
+        assert(pos < key_size);
+
+        const FullNode *fnode = static_cast<const FullNode *>(node);
+        // printf("tid=%d, Full node nibble=0x%x\n", threadIdx.x, key[pos]);
+        node->read_unlock_or_restart(v, need_restart);
+        if(need_restart) goto restart;
+        node = fnode->childs[key[pos]];
+
+        pos += 1;
+        continue;
+      }
+      default: {
+        printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+            assert(false);
+        return;
+      }
+    }
+    printf("ERROR ON INSERT\n"), assert(false);
+    return;
+  }
+}
 
 /// @brief
 /// @param hash_target_nodes save all hash targets, length >= n
@@ -1268,6 +1336,74 @@ __global__ void puts_latching_v2(
   put_olc_v2(key, key_size, value, value_size, value_hp, start_node,
              node_allocator, leaf, n, hash_target_nodes + n,
              other_hash_target_num);
+}
+
+/// @brief
+/// @param hash_target_nodes save all hash targets, length >= n
+/// @param other_hash_target_num number of none-leaf hash targets nodes
+/// @note other_hash_target_num + n = (length of hash_target_nodes)
+/// @return
+__global__ void puts_latching_v2_with_read(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *rw_flags, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t *const *values_hps, int * read_num, int n,
+    const uint8_t **read_values_hps, int *read_values_sizes,
+    ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator,
+    Node **hash_target_nodes, int *other_hash_target_num) {
+  int wid = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
+  // printf("wid %d\n", wid);
+  if (wid >= n) {
+    return;
+  }
+  int lid_w = threadIdx.x % 32;
+  if (lid_w > 0) {  // TODO: warp sharing
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, wid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, wid);
+  const uint8_t *value = util::element_start(values_indexs, wid, values_bytes);
+  int value_size = util::element_size(values_indexs, wid);
+  const uint8_t *value_hp = values_hps[wid];  
+  uint8_t rw_flag = rw_flags[wid];
+  if (rw_flag == READ_FLAG) {
+    hash_target_nodes[wid] = start_node;
+    int read_place = atomicAdd(read_num, 1);
+    const uint8_t *&read_value_hp = read_values_hps[read_place];
+    int &read_value_size = read_values_sizes[read_place];
+    read_with_olc(start_node, key, key_size, read_value_hp, read_value_size);
+  } else if (rw_flag == WRITE_FLAG) {
+    ValueNode *leaf = node_allocator.malloc<ValueNode>();
+    leaf->type = Node::Type::VALUE;
+    leaf->h_value = value_hp;
+    leaf->d_value = value;
+    leaf->value_size = value_size;
+    hash_target_nodes[wid] = leaf;
+    put_olc_v2(key, key_size, value, value_size, value_hp, start_node,
+              node_allocator, leaf, n, hash_target_nodes + n,
+              other_hash_target_num);
+  } else {
+    assert(false);
+  }
+
+
+  // if (wid < write_n) {
+  //   value = util::element_start(values_indexs, wid, values_bytes);
+  //   value_size = util::element_size(values_indexs, wid);
+  //   value_hp = values_hps[wid];
+  //   ValueNode *leaf = node_allocator.malloc<ValueNode>();
+  //   leaf->type = Node::Type::VALUE;
+  //   leaf->h_value = value_hp;
+  //   leaf->d_value = value;
+  //   leaf->value_size = value_size;
+  //   hash_target_nodes[wid] = leaf;
+  // } 
+  // // printf("wid %d\n", wid);
+  // // put_olc(key, key_size, value, value_size, value_hp, start_node,
+  // //         node_allocator);
+  // // put_olc_v2(key, key_size, value, value_size, value_hp, start_node,
+  // //            node_allocator, leaf, n, hash_target_nodes + n,
+  // //            other_hash_target_num);
+
+  // // put_olc_v2_with_read();
 }
 
 __device__ __forceinline__ void put_plc_spin_v2(
@@ -2477,6 +2613,39 @@ __global__ void puts_2phase_get_split_phase(
   }
 }
 
+__global__ void puts_2phase_get_split_phase_with_read(
+    const uint8_t *keys_hexs, const int *keys_indexs, 
+    const uint8_t *rw_flags, FullNode **split_ends,
+    int *end_num, int *split_num, int *read_num, int n, const uint8_t **read_values_hps, 
+    int *read_values_sizes, Node **root_p, ShortNode *start_node,
+    DynamicAllocator<ALLOC_CAPACITY> allocator) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
+  if (tid >= n) {
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  uint8_t rw_flag = rw_flags[tid];
+
+  if (rw_flag == READ_FLAG) {
+    int read_place = atomicAdd(read_num, 1);
+    const uint8_t *&read_value_hp = read_values_hps[read_place];
+    int &read_value_size = read_values_sizes[read_place];
+    get(key, key_size, read_value_hp, read_value_size, *root_p);
+  } else if (rw_flag == WRITE_FLAG) {
+    FullNode *split_end = nullptr;
+    do_put_2phase_get_split_phase(key, key_size, root_p, split_end, start_node,
+                                  allocator);
+    if (split_end != nullptr) {
+      int ends_place = atomicAdd(end_num, 1);
+      atomicAdd(split_num, 1);
+      split_ends[ends_place] = split_end;
+    }
+  } else {
+    assert(false);
+  }
+}
+
 __device__ __forceinline__ void do_put_2phase_put_mark_phase(
     const uint8_t *key, int key_size, const uint8_t *value, int value_size,
     const uint8_t *value_hp, Node **root_p, FullNode *&compress_node,
@@ -2593,6 +2762,50 @@ __global__ void puts_2phase_put_mark_phase(
     hash_target_nodes[tid] = hash_target_node;
     // ValueNode *v = static_cast<ValueNode*>(hash_target_node);
     // v->print_self();
+  }
+}
+
+__global__ void puts_2phase_put_mark_phase_with_read(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *rw_flags,
+    const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t *const *values_hps, int n,
+    int *compress_num, Node **hash_target_nodes, Node **root_p,
+    FullNode **compress_nodes, ShortNode *start_node,
+    DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  uint8_t rw_flag = rw_flags[tid];
+
+  if (rw_flag == READ_FLAG) {
+    hash_target_nodes[tid] = start_node;
+    return;
+  } else if (rw_flag == WRITE_FLAG) {
+    const uint8_t *value = util::element_start(values_indexs, tid, values_bytes);
+    int value_size = util::element_size(values_indexs, tid);
+    const uint8_t *value_hp = values_hps[tid]; 
+    FullNode *compress_node = nullptr;
+    Node *hash_target_node = nullptr;
+    do_put_2phase_put_mark_phase(key, key_size, value, value_size, value_hp,
+                                root_p, compress_node, hash_target_node,
+                                start_node, node_allocator);
+    if (compress_node != nullptr) {
+      int compress_place = atomicAdd(compress_num, 1);
+      compress_nodes[compress_place] = compress_node;
+    }
+    if (hash_target_node != nullptr) {
+      // assert(false);
+      // printf("tid%d\n",tid);
+      hash_target_nodes[tid] = hash_target_node;
+      // ValueNode *v = static_cast<ValueNode*>(hash_target_node);
+      // v->print_self();
+    }
+  } else {
+    assert(false);
   }
 }
 
