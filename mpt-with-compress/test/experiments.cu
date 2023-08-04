@@ -2232,3 +2232,106 @@ TEST(EXPERIMENTS, ModelFitting) {
     arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(), two.timer_.get(), "TWO");
   }
 }
+
+TEST(EXPERIMENTS, RW) {
+  using namespace bench::ycsb;
+
+  //build trie allocate
+  uint8_t *build_trie_keys_bytes = new uint8_t[1000000000];
+  int *build_trie_keys_bytes_indexs = new int[10000000];
+  uint8_t *build_trie_values_bytes = new uint8_t[2000000000];
+  int64_t *build_trie_values_bytes_indexs = new int64_t[10000000];
+
+  uint8_t *rw_keys_bytes = new uint8_t[1000000000];
+  int *rw_keys_bytes_indexs = new int[10000000];
+  uint8_t *rw_values_bytes = new uint8_t[2000000000];
+  int64_t *rw_values_bytes_indexs = new int64_t[10000000];
+  uint8_t *rw_flags = new uint8_t[1000000];
+
+  int build_trie_data_num = 100000;
+  int rw_data_num = 0;
+  read_ycsb_data_rw(YCSB_PATH, build_trie_keys_bytes,
+                    build_trie_keys_bytes_indexs, build_trie_values_bytes,
+                    build_trie_values_bytes_indexs, build_trie_data_num,
+                    rw_keys_bytes, rw_keys_bytes_indexs, rw_flags,
+                    rw_values_bytes, rw_values_bytes_indexs, rw_data_num);
+
+  const uint8_t * build_keys_hexs = nullptr;
+  int * build_keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(build_trie_keys_bytes, build_trie_keys_bytes_indexs, build_trie_data_num,
+                     build_keys_hexs, build_keys_hexs_indexs); 
+  
+  const uint8_t ** build_values_hps = get_values_hps(build_trie_data_num, build_trie_values_bytes_indexs, build_trie_values_bytes);
+
+  const uint8_t * rw_keys_hexs = nullptr;
+  int * rw_keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(rw_keys_bytes, rw_keys_bytes_indexs, rw_data_num, rw_keys_hexs, rw_keys_hexs_indexs);
+
+  const uint8_t ** rw_values_hps = get_values_hps(rw_data_num, rw_values_bytes_indexs, rw_values_bytes);
+
+  const uint8_t ** rw_read_values_hps = new const uint8_t *[rw_data_num]; 
+  int * rw_read_values_sizes = new int [rw_data_num];
+
+  using T = perf::CpuTimer<perf::us>;
+  exp_util::InsertProfiler<T> two("GPU 2phase", rw_data_num, build_trie_data_num);
+  exp_util::InsertProfiler<T> olc("GPU olc", rw_data_num, build_trie_data_num);
+
+  {
+    //build trie
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    auto [d_record_hash_nodes, record_hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(
+            build_keys_hexs, build_keys_hexs_indexs, build_trie_values_bytes, build_trie_values_bytes_indexs,
+            build_values_hps, build_trie_data_num);
+    gpu_mpt_olc.hash_onepass_v2(d_record_hash_nodes, record_hash_nodes_num);
+    auto [old_hash, old_hash_size] = gpu_mpt_olc.get_root_hash();
+    printf("GPU olc build hash is: ");
+    cutil::println_hex(old_hash, old_hash_size);
+    // test rw data on build trie
+    int read_num = 0;
+    olc.start();
+    auto [d_rw_hash_nodes, rw_hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2_with_read(
+          rw_keys_hexs, rw_keys_hexs_indexs, read_num, rw_flags, rw_values_bytes, rw_values_bytes_indexs,
+          rw_values_hps, rw_data_num, rw_read_values_hps, rw_read_values_sizes);
+    olc.stop();
+    gpu_mpt_olc.hash_onepass_v2(d_rw_hash_nodes, rw_hash_nodes_num);
+    auto [new_hash, new_hash_size] = gpu_mpt_olc.get_root_hash();
+    printf("read num is %d\n", read_num);
+    printf("GPU olc rw hash is: ");
+    cutil::println_hex(new_hash, new_hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    //build trie
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two;
+    auto [d_record_hash_nodes, record_hash_nodes_num] =
+        gpu_mpt_two.puts_2phase_with_valuehp(
+            build_keys_hexs, build_keys_hexs_indexs, build_trie_values_bytes, build_trie_values_bytes_indexs,
+            build_values_hps, build_trie_data_num);
+    gpu_mpt_two.hash_onepass_v2(d_record_hash_nodes, record_hash_nodes_num);
+    auto [old_hash, old_hash_size] = gpu_mpt_two.get_root_hash();
+    printf("GPU two build hash is: ");
+    cutil::println_hex(old_hash, old_hash_size);
+    // test rw data on build trie
+    int read_num = 0;
+    two.start();
+    auto [d_rw_hash_nodes, rw_hash_nodes_num] =
+        gpu_mpt_two.puts_2phase_with_valuehp_with_read(
+          rw_keys_hexs, rw_keys_hexs_indexs, read_num, rw_flags, rw_values_bytes, rw_values_bytes_indexs,
+          rw_values_hps, rw_data_num, rw_read_values_hps, rw_read_values_sizes);
+    two.stop();
+    gpu_mpt_two.hash_onepass_v2(d_rw_hash_nodes, rw_hash_nodes_num);
+    auto [new_hash, new_hash_size] = gpu_mpt_two.get_root_hash();
+    printf("read num is %d\n", read_num);
+    printf("GPU two rw hash is: ");
+    cutil::println_hex(new_hash, new_hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  two.print();
+  olc.print();
+}

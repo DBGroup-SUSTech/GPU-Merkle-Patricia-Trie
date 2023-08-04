@@ -62,8 +62,10 @@ class MPT {
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n);
   std::tuple<Node **, int> puts_latching_with_valuehp_v2_with_read(
-      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
-      int64_t *values_indexs, const uint8_t **values_hps, int n);
+       const uint8_t *keys_hexs, int *keys_indexs, int & read_num,
+    const uint8_t *rw_flags, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t **values_hps, int n,
+    const uint8_t **read_values_hps, int *read_values_sizes);
   std::tuple<Node **, int> puts_latching_pipeline_v2(
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n);
@@ -82,7 +84,7 @@ class MPT {
       int64_t *values_indexs, const uint8_t **values_hps, int n);
 
   std::tuple<Node **, int> puts_2phase_with_valuehp_with_read(
-    const uint8_t *keys_hexs, int *keys_indexs, 
+    const uint8_t *keys_hexs, int *keys_indexs, int & read_num,
     const uint8_t *rw_flags, const uint8_t *values_bytes,
     int64_t *values_indexs, const uint8_t **values_hps, int n,
     const uint8_t **read_values_hps, int *read_values_sizes);
@@ -585,6 +587,81 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
   return {d_hash_target_nodes, n + other_hash_target_num};
 }
 
+std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2_with_read(
+     const uint8_t *keys_hexs, int *keys_indexs, int & read_num,
+    const uint8_t *rw_flags, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t **values_hps, int n,
+    const uint8_t **read_values_hps, int *read_values_sizes) {
+  uint8_t *d_keys_hexs = nullptr;
+  int *d_keys_indexs = nullptr;
+
+  // rw variables
+  uint8_t *d_rw_flags = nullptr;
+  const uint8_t **d_read_values_hps = nullptr;
+  int *d_read_values_sizes = nullptr;
+  int *d_read_num;
+  CHECK_ERROR(gutil::DeviceAlloc(d_rw_flags, n));
+  CHECK_ERROR(gutil::DeviceAlloc(d_read_values_hps, n));
+  CHECK_ERROR(gutil::DeviceAlloc(d_read_values_sizes, n));
+  CHECK_ERROR(gutil::DeviceAlloc(d_read_num, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_read_num, 0, 1));
+
+  uint8_t *d_values_bytes = nullptr;
+  int64_t *d_values_indexs = nullptr;
+  const uint8_t **d_values_hps = nullptr;
+
+  int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
+  int keys_indexs_size = util::indexs_size_sum(n);
+  int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
+  int values_indexs_size = util::indexs_size_sum(n);
+  int values_hps_size = n;
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_indexs, values_indexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, values_hps_size));
+  
+  CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_values_bytes, values_bytes, values_bytes_size));
+  CHECK_ERROR(gutil::CpyHostToDevice(d_values_indexs, values_indexs,
+                                     values_indexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
+
+  // rw transport
+    CHECK_ERROR(gutil::CpyHostToDevice(d_rw_flags, rw_flags, n));
+
+  Node **d_hash_target_nodes;
+  CHECK_ERROR(gutil::DeviceAlloc(d_hash_target_nodes, 2 * n));
+  CHECK_ERROR(gutil::DeviceSet(d_hash_target_nodes, 0, 2 * n));
+
+  int *d_other_hash_target_num;
+  CHECK_ERROR(gutil::DeviceAlloc(d_other_hash_target_num, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_other_hash_target_num, 0, 1));
+
+  const int rpwarp_block_size = 512;
+  const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
+                                rpwarp_block_size;
+  
+  GKernel::puts_latching_v2_with_read<<<rpwarp_num_blocks, rpwarp_block_size>>>(
+       d_keys_hexs, d_keys_indexs, d_rw_flags, d_values_bytes, d_values_indexs, d_values_hps,
+       d_read_num, n, d_read_values_hps, d_read_values_sizes, d_start_, allocator_, d_hash_target_nodes,
+    d_other_hash_target_num);
+
+  int other_hash_target_num;
+  CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
+                                     d_other_hash_target_num, 1));
+  CHECK_ERROR(cudaDeviceSynchronize()); 
+  CHECK_ERROR(gutil::CpyDeviceToHost(&read_num, d_read_num, 1));
+  CHECK_ERROR(gutil::CpyDeviceToHost(read_values_hps, d_read_values_hps, read_num));
+  CHECK_ERROR(gutil::CpyDeviceToHost(read_values_sizes, d_read_values_sizes, read_num));
+  return {d_hash_target_nodes, n + other_hash_target_num};
+}
+
 std::tuple<Node **, int> MPT::puts_plc_with_valuehp_v2(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
     int64_t *values_indexs, const uint8_t **values_hps, int n, bool restart) {
@@ -1059,7 +1136,7 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
 }
 
 std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
-    const uint8_t *keys_hexs, int *keys_indexs, 
+    const uint8_t *keys_hexs, int *keys_indexs, int & read_num,
     const uint8_t *rw_flags, const uint8_t *values_bytes,
     int64_t *values_indexs, const uint8_t **values_hps, int n,
     const uint8_t **read_values_hps, int *read_values_sizes) {
@@ -1083,8 +1160,6 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
   int *d_compress_num;
   int *d_split_num;
 
-  CHECK_ERROR(gutil::DeviceAlloc(d_split_num, 1));
-  CHECK_ERROR(gutil::DeviceSet(d_split_num, 0, 1));
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n);
   int keys_indexs_size = util::indexs_size_sum(n);
   int64_t values_bytes_size = util::elements_size_sum(values_indexs, n);
@@ -1149,7 +1224,6 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
   h_hash_target_num += n;
-  int read_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&read_num, d_read_num, 1));
   CHECK_ERROR(gutil::CpyDeviceToHost(read_values_hps, d_read_values_hps, read_num));
   CHECK_ERROR(gutil::CpyDeviceToHost(read_values_sizes, d_read_values_sizes, read_num));

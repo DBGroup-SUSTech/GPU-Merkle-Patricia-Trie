@@ -198,7 +198,7 @@ TEST(Util, YCSBRW) {
       rw_values_bytes_indexs, rw_data_num);
   cutil::println_str(build_trie_keys_bytes, total_build_trie_length);
   cutil::println_str(build_trie_values_bytes, total_build_trie_value_length);
-  // cutil::println_str(rw_keys_bytes, total_rw_length);
-  // cutil::println_str(rw_flags, rw_data_num);
-  // cutil::println_str(rw_values_bytes, total_rw_value_length);
+  cutil::println_str(rw_keys_bytes, total_rw_length);
+  cutil::print_hex(rw_flags, rw_data_num);
+  cutil::println_str(rw_values_bytes, total_rw_value_length);
 }

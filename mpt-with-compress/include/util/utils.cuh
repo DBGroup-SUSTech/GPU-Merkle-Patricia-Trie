@@ -12,8 +12,10 @@
 #include <vector>
 #include <oneapi/tbb/scalable_allocator.h>
 
+//---- rw-experiments ---
 #define READ_FLAG 0
 #define WRITE_FLAG 1
+#define READ_DATA_VALUE "EOF"
 
 #define MAX_LEVEL 20
 #define ROUNDS 24

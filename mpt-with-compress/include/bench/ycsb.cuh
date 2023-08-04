@@ -14,7 +14,7 @@
 enum class DataType { READ, INSERT };
 namespace bench {
 namespace ycsb {
-constexpr const char *YCSB_PATH{PROJECT_SOURCE_DIR "/../dataset/ycsb/workloada.txt"};
+constexpr const char *YCSB_PATH{PROJECT_SOURCE_DIR "/../dataset/ycsb/data.txt"};
 void getFiles(std::string path, std::vector<std::string> &filenames) {
   DIR *pDir;
   struct dirent *ptr;
@@ -179,8 +179,11 @@ void read_ycsb_data_rw(
   }
   std::string line;
   int i = 0;
+  int j = 0;
   int build_trie_key_length = 0;
   int64_t build_trie_value_length = 0;
+  int rw_key_length = 0;
+  int64_t rw_value_length = 0;
   while (std::getline(file, line, '\n')) {
     if (i < build_trie_num) {
       std::string operation;
@@ -205,25 +208,36 @@ void read_ycsb_data_rw(
     } else {
       std::string operation;
       std::string key;
+      std::string fields;
       std::stringstream ss(line);
       std::getline(ss, operation, ' ');
       if (operation != match_operation_read && operation != match_operation_insert) {
         assert(false);
       }
-      int rw_place = i - build_trie_num;
+      int rw_place = j;
       if (operation == match_operation_insert) {
         rw_flags[rw_place] = WRITE_FLAG;
+        std::getline(ss, key, ' ');
+        std::getline(ss, fields); 
       } else if (operation == match_operation_read) {
         rw_flags[rw_place] = READ_FLAG;
+        std::getline(ss, key);
+        fields = READ_DATA_VALUE;
       } else {
         assert(false);
       }
-      std::getline(ss, key);
-
-      i++; 
+      memcpy(rw_keys + rw_key_length, (uint8_t *)key.c_str(), key.size());
+      rw_key_index[2 * j] = rw_key_length;
+      rw_key_length += key.size();
+      rw_key_index[2 * j + 1] = rw_key_length - 1;
+      memcpy(rw_values + rw_value_length, (uint8_t *)fields.c_str(), fields.size());
+      rw_value_index[2 * j] = rw_value_length;
+      rw_value_length += fields.size();
+      rw_value_index[2 * j + 1] = rw_value_length - 1;
+      j++;
     } 
   }
-  rw_num = i - build_trie_num;
+  rw_num = j;
   // Close the file
   file.close();
 }
