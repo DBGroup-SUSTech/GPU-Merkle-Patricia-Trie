@@ -5,11 +5,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 // #include <string.h>
+#include <oneapi/tbb/scalable_allocator.h>
 #include <stdlib.h>
+
 #include <iostream>
 #include <string>
 #include <vector>
-#include <oneapi/tbb/scalable_allocator.h>
 
 #define MAX_LEVEL 20
 #define ROUNDS 24
@@ -18,10 +19,15 @@
 
 #define INVALID_SIGN -1
 
-
+// for geth
+#ifdef GETH
+#define ALLOC_CAPACITY ((uint64_t(1) << 32))      // 24GB for node
+#define KEY_ALLOC_CAPACITY ((uint64_t(1) << 30))  // 3 GB for key
+#else
+// for experiments
 #define ALLOC_CAPACITY ((uint64_t(1) << 34))          // 24GB for node
-#define KEY_ALLOC_CAPACITY (3*(uint64_t(1) << 30))  // 3 GB for key
-
+#define KEY_ALLOC_CAPACITY (3 * (uint64_t(1) << 30))  // 3 GB for key
+#endif
 
 #define MAX_NODES 1 << 18
 #define MAX_REQUEST 1 << 20
@@ -46,55 +52,55 @@ enum class Dataset {
 int get_record_num(Dataset dataset) {
   const char *data_num_str;
   switch (dataset) {
-  case Dataset::WIKI: {
-    data_num_str = getenv("GMPT_WIKI_DATA_VOLUME");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  case Dataset::YCSB: {
-    data_num_str = getenv("GMPT_YCSB_DATA_VOLUME");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  case Dataset::ETH: {
-    data_num_str = getenv("GMPT_ETH_DATA_VOLUME");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  case Dataset::LOOKUP: {
-    data_num_str = getenv("GMPT_DATA_LOOKUP_VOLUME");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  case Dataset::TRIESIZE: {
-    data_num_str = getenv("GMPT_TRIESIZE");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  case Dataset::KEYTYPE_LEN: {
-    data_num_str = getenv("GMPT_KEYTYPE_LEN");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  case Dataset::KEYTYPE_NUM: {
-    data_num_str = getenv("GMPT_KEYTYPE_NUM");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  case Dataset::BTREE_YCSB: {
-    data_num_str = getenv("GPU_BTREE_SIZE");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  case Dataset::SKIPLIST_YCSB: {
-    data_num_str = getenv("GPU_SKIPLIST_SIZE");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  default:
-    printf("Wrong dataset type\n");
-    assert(false);
-    break;
+    case Dataset::WIKI: {
+      data_num_str = getenv("GMPT_WIKI_DATA_VOLUME");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::YCSB: {
+      data_num_str = getenv("GMPT_YCSB_DATA_VOLUME");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::ETH: {
+      data_num_str = getenv("GMPT_ETH_DATA_VOLUME");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::LOOKUP: {
+      data_num_str = getenv("GMPT_DATA_LOOKUP_VOLUME");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::TRIESIZE: {
+      data_num_str = getenv("GMPT_TRIESIZE");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::KEYTYPE_LEN: {
+      data_num_str = getenv("GMPT_KEYTYPE_LEN");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::KEYTYPE_NUM: {
+      data_num_str = getenv("GMPT_KEYTYPE_NUM");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::BTREE_YCSB: {
+      data_num_str = getenv("GPU_BTREE_SIZE");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::SKIPLIST_YCSB: {
+      data_num_str = getenv("GPU_SKIPLIST_SIZE");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    default:
+      printf("Wrong dataset type\n");
+      assert(false);
+      break;
   }
   int data_num = std::atoi(data_num_str);
   return data_num;
@@ -114,13 +120,15 @@ enum class Device { CPU, GPU };
  * len(indexs) = 2 * n
  * each element is represented by 2 index in indexs
  */
-__host__ __device__ __forceinline__ bool key_cmp(const uint8_t * key1,
-  const int key_size1, const uint8_t * key2, const int key_size2) {
+__host__ __device__ __forceinline__ bool key_cmp(const uint8_t *key1,
+                                                 const int key_size1,
+                                                 const uint8_t *key2,
+                                                 const int key_size2) {
   int i = 0;
   while (i < key_size1 && i < key_size2) {
-    if(key1[i]<key2[i]) {
+    if (key1[i] < key2[i]) {
       return true;
-    } else if (key1[i]>key2[i]) {
+    } else if (key1[i] > key2[i]) {
       return false;
     } else {
       i++;
@@ -143,6 +151,11 @@ __host__ __device__ __forceinline__ int element_size(const int64_t *indexs,
   return int(indexs[2 * i + 1] - indexs[2 * i] + 1);
 }
 
+__host__ __device__ __forceinline__ int element_size(
+    const unsigned long long *indexs, int i) {
+  return int(indexs[2 * i + 1] - indexs[2 * i] + 1);
+}
+
 __host__ __device__ __forceinline__ const uint8_t *element_start(
     const int *indexs, int i, const uint8_t *all_bytes) {
   return &all_bytes[indexs[2 * i]];
@@ -150,6 +163,12 @@ __host__ __device__ __forceinline__ const uint8_t *element_start(
 
 __host__ __device__ __forceinline__ const uint8_t *element_start(
     const int64_t *indexs, int i, const uint8_t *all_bytes) {
+  return &all_bytes[indexs[2 * i]];
+}
+
+__host__ __device__ __forceinline__ const uint8_t *element_start(
+    const unsigned long long *indexs, unsigned long long i,
+    const uint8_t *all_bytes) {
   return &all_bytes[indexs[2 * i]];
 }
 
@@ -266,8 +285,9 @@ __host__ __device__ __forceinline__ int bytes_cmp(const uint8_t *l, int llen,
 }
 
 // dest >= src
-__host__ __device__ __forceinline__ void
-memmove_forward(void *dest, const void *src, size_t n) {
+__host__ __device__ __forceinline__ void memmove_forward(void *dest,
+                                                         const void *src,
+                                                         size_t n) {
   assert(dest > src);
   if (n == 0) {
     return;
@@ -279,16 +299,16 @@ memmove_forward(void *dest, const void *src, size_t n) {
     dest_[n] = src_[n];
   } while (n > 0);
 }
-} // namespace util
+}  // namespace util
 
-#define CHECK_ERROR(call)                                                      \
-  do {                                                                         \
-    cudaError_t err = call;                                                    \
-    if (err != cudaSuccess) {                                                  \
-      printf("CUDA error at %s %d: %s\n", __FILE__, __LINE__,                  \
-             cudaGetErrorString(err));                                         \
-      exit(EXIT_FAILURE);                                                      \
-    }                                                                          \
+#define CHECK_ERROR(call)                                     \
+  do {                                                        \
+    cudaError_t err = call;                                   \
+    if (err != cudaSuccess) {                                 \
+      printf("CUDA error at %s %d: %s\n", __FILE__, __LINE__, \
+             cudaGetErrorString(err));                        \
+      exit(EXIT_FAILURE);                                     \
+    }                                                         \
   } while (0)
 
 namespace cutil {
@@ -430,7 +450,7 @@ void TBBAlloc(T *&data, size_t count) {
   data = (T *)tbb::scalable_allocator<T>().allocate(count);
 }
 
-template <typename T> 
+template <typename T>
 void TBBSet(T *data, uint8_t value, size_t count) {
   memset(data, value, sizeof(T) * count);
 }
@@ -476,6 +496,7 @@ cudaError_t UnpinHost(T *src) {
 
 template <typename T>
 cudaError_t DeviceAlloc(T *&data, size_t count) {
+  // printf("DeviceAlloc: %lu\n", sizeof(T) * count);
   return cudaMalloc((void **)&data, sizeof(T) * count);
 }
 

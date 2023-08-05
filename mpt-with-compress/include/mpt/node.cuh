@@ -12,7 +12,7 @@ struct Node {
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
   Node *parent;
-  std::atomic<cutil::ull_t> version_lock_obsolete; 
+  std::atomic<cutil::ull_t> version_lock_obsolete;
   std::atomic<int> visit_count;
   std::atomic<int> parent_visit_count_added;
   const uint8_t *hash;
@@ -24,7 +24,7 @@ struct Node {
 };
 
 struct FullNode : public Node {
-  std::atomic<Node*> tbb_childs[17];
+  std::atomic<Node *> tbb_childs[17];
   Node *childs[17];
   int dirty;
   std::atomic<int> need_compress = 0;
@@ -81,7 +81,7 @@ struct FullNode : public Node {
   __forceinline__ int tbb_encode(uint8_t *bytes) {
     int bytes_size = 0;
 #pragma unroll
-    for (int i=0; i<17; ++i) {
+    for (int i = 0; i < 17; ++i) {
       Node *child = tbb_childs[i].load();
       if (child != nullptr) {
         assert(child->hash != nullptr && child->hash_size != 0);
@@ -194,7 +194,6 @@ struct ValueNode : public Node {
 }  // namespace Compress
 }  // namespace CpuMPT
 
-
 namespace GpuMPT {
 namespace Compress {
 
@@ -203,7 +202,6 @@ struct Node {
   // TODO compress all nodes into one might gain performance
   enum class Type : int { NONE = 0, FULL, SHORT, VALUE, HASH };
   Type type;
-
   int hash_size;
   const uint8_t *hash;
 
@@ -217,6 +215,9 @@ struct Node {
   int lock;
   // 60b version, 1b lock, 1b obsolete
   gutil::ull_t version_lock_obsolete;
+
+  // count
+  int flush_flag;
 
   // optimistic lock
   __device__ __forceinline__ gutil::ull_t read_lock_or_restart(

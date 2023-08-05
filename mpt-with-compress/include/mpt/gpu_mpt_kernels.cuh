@@ -1897,6 +1897,239 @@ __global__ void gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   get(key, key_size, value_hp, value_size, *root_p);
 }
 
+__device__ __forceinline__ void get_dirty_nodes_count(const uint8_t *key,
+                                                      int key_size, Node *root,
+                                                      gutil::ull_t *n_nodes,
+                                                      gutil::ull_t *encs_size) {
+  // Requires all keys existed in the trie
+  Node *node = root;
+  int pos = 0;
+  while (true) {
+    // printf("Encounter empty node\n");
+    assert(node != nullptr);
+    if (node->type == Node::Type::VALUE) {
+      return;
+    }
+    // flag
+    int old = atomicCAS(&node->flush_flag, 0, 1);
+    // 1. add to node counters
+    if (old == 0) {
+      atomicAdd(n_nodes, 1);
+    }
+    // 2. add to encoding sizes
+    if (node->type == Node::Type::SHORT) {
+      ShortNode *snode = static_cast<ShortNode *>(node);
+      assert(key_size - pos >= snode->key_size &&
+             util::bytes_equal(snode->key, snode->key_size, key + pos,
+                               snode->key_size));
+
+      if (old == 0) {
+        gutil::ull_t enc_size = snode->encode_size();
+        atomicAdd(encs_size, enc_size);
+      }
+
+      node = snode->val;
+      pos += snode->key_size;
+
+    } else if (node->type == Node::Type::FULL) {
+      FullNode *fnode = static_cast<FullNode *>(node);
+
+      if (old == 0) {
+        gutil::ull_t enc_size = fnode->encode_size();
+        atomicAdd(encs_size, enc_size);
+      }
+
+      node = fnode->childs[key[pos]];
+      pos += 1;
+
+    } else {
+      printf("Wrong node type\n");
+      assert(false);
+    }
+  }
+}
+
+/// @brief count for pre allocation
+/// @param [in] keys_hexs
+/// @param [in] keys_indexs
+/// @param [in] n_keys
+/// @param [in] root_p
+/// @param [out] n_nodes
+/// @param [out] encs_size
+/// @return
+__global__ void gets_dirty_nodes_count(const uint8_t *keys_hexs,
+                                       int *keys_indexs, int n_keys,
+                                       Node *const *root_p,
+                                       gutil::ull_t *n_nodes,
+                                       gutil::ull_t *encs_size) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n_keys) {
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  get_dirty_nodes_count(key, key_size, *root_p, n_nodes, encs_size);
+}
+
+__device__ __forceinline__ void get_dirty_nodes(
+    const uint8_t *key, int key_size, Node *root, uint8_t *d_hashs,
+    uint8_t *d_encs, gutil::ull_t *d_encs_indexs,
+    DynamicAllocator<ALLOC_CAPACITY> &allocator) {
+  // TODO
+  int idxs_ptr = 0;  // writes to the i-th slot in d_encs_indexs
+
+  Node *node = root;
+  int pos = 0;
+  while (true) {
+    assert(node != nullptr);
+    if (node->type == Node::Type::VALUE) {
+      return;
+    }
+
+    int old = atomicCAS(&node->flush_flag, 1, 0);
+    if (node->type == Node::Type::SHORT) {
+      ShortNode *snode = static_cast<ShortNode *>(node);
+      assert(key_size - pos >= snode->key_size &&
+             util::bytes_equal(snode->key, snode->key_size, key + pos,
+                               snode->key_size));
+      if (old == 1) {
+        gutil::ull_t enc_size = snode->encode_size();
+        assert(enc_size != 0);
+
+        // Try to occupy
+        gutil::ull_t iend = enc_size - 1;
+        while (true) {
+          // old_end == 0 -> write iend
+          // old_end != 0 -> iend = old_end + enc_size
+          gutil::ull_t old_end =
+              atomicCAS(&d_encs_indexs[idxs_ptr * 2 + 1], 0, iend);
+          if (old_end == 0) {
+            gutil::ull_t istart = iend - (enc_size - 1);
+            d_encs_indexs[idxs_ptr * 2] = istart;
+            assert(node->hash_size == HASH_SIZE);
+            memcpy(&d_hashs[idxs_ptr * HASH_SIZE], node->hash, node->hash_size);
+            // TODO encode
+            uint8_t *buffer_global =
+                allocator.malloc(util::align_to<8>(enc_size));
+            memset(buffer_global, 0, util::align_to<8>(enc_size));
+            snode->encode(buffer_global);
+            memcpy(d_encs + istart, buffer_global, enc_size);
+            printf("snode encode size %d\n", enc_size);
+            // cutil::println_hex(buffer_global, enc_size);
+            break;
+          } else {
+            iend = old_end + enc_size;
+            idxs_ptr++;
+          }
+        }
+      }
+
+      node = snode->val;
+      pos += snode->key_size;
+    } else if (node->type == Node::Type::FULL) {
+      FullNode *fnode = static_cast<FullNode *>(node);
+
+      if (old == 1) {
+        gutil::ull_t enc_size = fnode->encode_size();
+        assert(enc_size != 0);
+
+        // Try to occupy
+        gutil::ull_t iend = enc_size - 1;
+        while (true) {
+          // old_end == 0 -> write iend
+          // old_end != 0 -> iend = old_end + enc_size
+          gutil::ull_t old_end =
+              atomicCAS(&d_encs_indexs[idxs_ptr * 2 + 1], 0, iend);
+          if (old_end == 0) {
+            gutil::ull_t istart = iend - (enc_size - 1);
+            d_encs_indexs[idxs_ptr * 2] = istart;
+            assert(node->hash_size == HASH_SIZE);
+            memcpy(&d_hashs[idxs_ptr * HASH_SIZE], node->hash, node->hash_size);
+            // TODO encode
+            uint8_t *buffer_global =
+                allocator.malloc(util::align_to<8>(enc_size));
+            memset(buffer_global, 0, util::align_to<8>(enc_size));
+            fnode->encode(buffer_global);
+            memcpy(d_encs + istart, buffer_global, enc_size);
+            printf("fnode encode size %d\n", enc_size);
+            // cutil::println_hex(buffer_global, enc_size);
+            break;
+          } else {
+            iend = old_end + enc_size;
+            idxs_ptr++;
+          }
+        }
+      }
+
+      node = fnode->childs[key[pos]];
+      pos += 1;
+    } else {
+      printf("Wrong node type\n");
+      assert(false);
+    }
+  }
+
+  // Requires all keys existed in the trie
+  // Node *node = root;
+  // int pos = 0;
+  // while (true) {
+  //   // printf("Encounter empty node\n");
+  //   assert(node != nullptr);
+  //   if (node->type == Node::Type::VALUE) {
+  //     return;
+  //   }
+  //   // flag
+  //   int old = atomicCAS(&node->flush_flag, 0, 1);
+  //   // 1. add to node counters
+  //   atomicAdd(n_nodes, 1);
+  //   // 2. add to encoding sizes
+  //   if (node->type == Node::Type::SHORT) {
+  //     ShortNode *snode = static_cast<ShortNode *>(node);
+  //     assert(key_size - pos >= snode->key_size &&
+  //            util::bytes_equal(snode->key, snode->key_size, key + pos,
+  //                              snode->key_size));
+
+  //     if (old == 0) {
+  //       gutil::ull_t enc_size = snode->encode_size();
+  //       atomicAdd(encs_size, enc_size);
+  //     }
+
+  //     node = snode->val;
+  //     pos += snode->key_size;
+
+  //   } else if (node->type == Node::Type::FULL) {
+  //     FullNode *fnode = static_cast<FullNode *>(node);
+
+  //     if (old == 0) {
+  //       gutil::ull_t enc_size = fnode->encode_size();
+  //       atomicAdd(encs_size, enc_size);
+  //     }
+
+  //     node = fnode->childs[key[pos]];
+  //     pos += 1;
+
+  //   } else {
+  //     printf("Wrong node type\n");
+  //     assert(false);
+  //   }
+}
+
+__global__ void gets_dirty_nodes(const uint8_t *keys_hexs, int *keys_indexs,
+                                 int n_keys, Node *const *root_p,
+                                 uint8_t *d_hashs, uint8_t *d_encs,
+                                 gutil::ull_t *d_encs_indexs,
+                                 DynamicAllocator<ALLOC_CAPACITY> allocator) {
+  // TODO:
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n_keys) {
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  get_dirty_nodes(key, key_size, *root_p, d_hashs, d_encs, d_encs_indexs,
+                  allocator);
+}
+
 __global__ void get_root_hash(const Node *const *root_p, uint8_t *hash,
                               int *hash_size_p) {
   assert(blockDim.x == 32 && gridDim.x == 1);
@@ -2753,7 +2986,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
             updated = true;
           }
           // }
-        } 
+        }
         return;
       }
       case Node::Type::FULL: {
@@ -2769,7 +3002,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
               updated = true;
             }
             // }
-          } 
+          }
           return;
         }
         if (f_node->child_num() == 1) {
@@ -2805,7 +3038,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
               updated = true;
             }
             // }
-          } 
+          }
           compressing_node = allocator.malloc<ShortNode>();
           compressing_node->type = Node::Type::SHORT;
           cached_keys = key_allocator.key_malloc(0);
@@ -2890,52 +3123,54 @@ __global__ void puts_2phase_compress_phase(
 //   }
 // }
 
-__device__ __forceinline__ void loop_traverse(Node * root, const uint8_t *key, int* s_node_num, int * f_node_num, int *v_node_num, int flag) {
-  Node * node = root;
+__device__ __forceinline__ void loop_traverse(Node *root, const uint8_t *key,
+                                              int *s_node_num, int *f_node_num,
+                                              int *v_node_num, int flag) {
+  Node *node = root;
   const uint8_t *key_router = key;
   while (node != nullptr) {
     int record;
     if (flag == 0)
       record = atomicCAS(&node->record0, 0, 1);
-    else 
-      record = atomicCAS(&node->record1, 0, 1); 
-    switch (node->type)
-    {
-    case Node::Type::SHORT: {
-      ShortNode *s_node = static_cast<ShortNode*>(node);
-      if(record == 0 ) {
-        atomicAdd(s_node_num,1);
+    else
+      record = atomicCAS(&node->record1, 0, 1);
+    switch (node->type) {
+      case Node::Type::SHORT: {
+        ShortNode *s_node = static_cast<ShortNode *>(node);
+        if (record == 0) {
+          atomicAdd(s_node_num, 1);
+        }
+        node = s_node->val;
+        key_router += s_node->key_size;
+        break;
       }
-      node = s_node->val;
-      key_router += s_node->key_size;
-      break;
-    }
-    case Node::Type::FULL: {
-      FullNode *f_node =static_cast<FullNode*>(node);
-      if(record==0){
-        atomicAdd(f_node_num, 1);
+      case Node::Type::FULL: {
+        FullNode *f_node = static_cast<FullNode *>(node);
+        if (record == 0) {
+          atomicAdd(f_node_num, 1);
+        }
+        node = f_node->childs[static_cast<int>(key_router[0])];
+        key_router++;
+        break;
       }
-      node = f_node->childs[static_cast<int>(key_router[0])];
-      key_router ++;
-      break;
-    }
-    case Node::Type::VALUE: {
-      // ValueNode *v_node = static_cast<ValueNode*>(node);
-      if(record==0){
-        atomicAdd(v_node_num, 1);
+      case Node::Type::VALUE: {
+        // ValueNode *v_node = static_cast<ValueNode*>(node);
+        if (record == 0) {
+          atomicAdd(v_node_num, 1);
+        }
+        return;
       }
-      return;
-    }
-    
-    default:
-      assert(false);
-      break;
+
+      default:
+        assert(false);
+        break;
     }
   }
-  
 }
 
-__global__ void traverse_trie(Node **root, uint8_t * keys_hexs, int *keys_indexs, int n, int * ssum, int *fsum, int *vsum, int flag) {
+__global__ void traverse_trie(Node **root, uint8_t *keys_hexs, int *keys_indexs,
+                              int n, int *ssum, int *fsum, int *vsum,
+                              int flag) {
   // printf("one traverse\n");
   // start_node->print_self();
   // printf("start node child: %p\n", start_node->val);
@@ -2946,7 +3181,7 @@ __global__ void traverse_trie(Node **root, uint8_t * keys_hexs, int *keys_indexs
   // int *v_num, *s_num, *f_num;
   const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
   // dfs_traverse_trie(*root, v_num, f_num, s_num);
-  loop_traverse(*root, key, ssum, fsum,vsum, flag);
+  loop_traverse(*root, key, ssum, fsum, vsum, flag);
   // atomicAdd(ssum, *s_num);
   // atomicAdd(fsum, *f_num);
   // atomicAdd(vsum, *v_num);

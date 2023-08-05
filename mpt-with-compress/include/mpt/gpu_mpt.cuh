@@ -107,6 +107,13 @@ class MPT {
   void gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
                      const uint8_t **values_hps, int *values_sizes) const;
 
+  /// @brief gets all dirties nodes and its encoding
+  /// @param [out] hashs array (32 per node)x`
+  void flush_dirty_nodes(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
+                         const uint8_t *&hashs, const uint8_t *&encs,
+                         const gutil::ull_t *&encs_indexs,
+                         gutil::ull_t &n_nodes);
+
  public:
   // utils that need test
   void get_root_hash(const uint8_t *&hash, int &hash_size) const;
@@ -539,10 +546,10 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
       gutil::CpyHostToDevice(d_values_hps, values_hps, values_hps_size));
   trans_timer.stop();
 
-  printf(
-      "OLC Alloc %d us, key: %d us, value: %d us(CPU) %d us(GPU), hp: %d us\n",
-      trans_timer.get(0), trans_timer.get(1), trans_timer.get(2),
-      trans_timer_gpu.get(), trans_timer.get(3));
+  //   printf(
+  //       "OLC Alloc %d us, key: %d us, value: %d us(CPU) %d us(GPU), hp: %d
+  //       us\n", trans_timer.get(0), trans_timer.get(1), trans_timer.get(2),
+  //       trans_timer_gpu.get(), trans_timer.get(3));
 
   //   perf::CpuTimer<perf::us> timer_gpu_put_latching;
   //   timer_gpu_put_latching.start();  // timer start
@@ -565,13 +572,13 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
   GKernel::puts_latching_v2<<<rpwarp_num_blocks, rpwarp_block_size>>>(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
       n, d_start_, allocator_, d_hash_target_nodes, d_other_hash_target_num);
+  kernel_timer.stop();
 
   int other_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
                                      d_other_hash_target_num, 1));
   CHECK_ERROR(cudaDeviceSynchronize());  // synchronize all threads
-  kernel_timer.stop();
-  printf("olc insert kernel response time %d us\nolc ", kernel_timer.get());
+  printf("olc insert kernel response time %d us\n", kernel_timer.get());
 
   return {d_hash_target_nodes, n + other_hash_target_num};
 }
@@ -772,6 +779,82 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   printf("gets_parallel transout time %d us\n", trans_out.get());
 }
 
+/// @brief gets all dirties nodes and its encoding
+void MPT::flush_dirty_nodes(const uint8_t *keys_hexs, int *keys_indexs,
+                            int n_keys, const uint8_t *&hashs,
+                            const uint8_t *&encs,
+                            const gutil::ull_t *&encs_indexs,
+                            gutil::ull_t &n_nodes) {
+  // TODO: Support flushing only dirty nodes (modify insert function)
+  /// @note currently all nodes are dirty nodes,
+  ///       all clearn & dirty nodes will be flushed out.
+  // Check return values
+  assert(hashs == nullptr && encs == nullptr && encs_indexs == nullptr);
+
+  // Keys
+  uint8_t *d_keys_hexs = nullptr;
+  int *d_keys_indexs = nullptr;
+  int keys_hexs_size = util::elements_size_sum(keys_indexs, n_keys);
+  int keys_indexs_size = util::indexs_size_sum(n_keys);
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+  CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+
+  gutil::ull_t *d_n_nodes = nullptr;
+  gutil::ull_t *d_encs_size = nullptr;
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_n_nodes, 1));
+  CHECK_ERROR(gutil::DeviceAlloc(d_encs_size, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_n_nodes, 0, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_encs_size, 0, 1));
+
+  const int block_size = 128;
+  const int num_blocks = (n_keys + block_size - 1) / block_size;
+  GKernel::gets_dirty_nodes_count<<<num_blocks, block_size>>>(
+      d_keys_hexs, d_keys_indexs, n_keys, d_root_p_, d_n_nodes, d_encs_size);
+  CHECK_ERROR(cudaDeviceSynchronize());
+
+  gutil::ull_t encs_size = 0;
+  CHECK_ERROR(gutil::CpyDeviceToHost(&n_nodes, d_n_nodes, 1));
+  CHECK_ERROR(gutil::CpyDeviceToHost(&encs_size, d_encs_size, 1));
+  printf("There are %llu nodes with %llu bytes encodings\n", n_nodes,
+         encs_size);
+
+  // Get Nodes
+  uint8_t *d_hashs = nullptr;
+  uint8_t *d_encs = nullptr;
+  gutil::ull_t *d_encs_indexs = nullptr;
+  CHECK_ERROR(gutil::DeviceAlloc(d_hashs, HASH_SIZE * n_nodes));
+  CHECK_ERROR(gutil::DeviceAlloc(d_encs, encs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_encs_indexs, 2 * n_nodes));
+
+  // reset as pivot
+  CHECK_ERROR(gutil::DeviceSet(d_encs_size, 0, 1));
+  CHECK_ERROR(gutil::DeviceSet(d_n_nodes, 0, 1));
+
+  // TODO: atomic write,
+  GKernel::gets_dirty_nodes<<<num_blocks, block_size>>>(
+      d_keys_hexs, d_keys_indexs, n_keys, d_root_p_, d_hashs, d_encs,
+      d_encs_indexs, allocator_);
+
+  uint8_t *h_hashs = new uint8_t[HASH_SIZE * n_nodes];
+  uint8_t *h_encs = new uint8_t[encs_size];
+  gutil::ull_t *h_encs_indexs = new gutil::ull_t[2 * n_nodes];
+  CHECK_ERROR(gutil::CpyDeviceToHost(h_hashs, d_hashs, HASH_SIZE * n_nodes));
+  CHECK_ERROR(gutil::CpyDeviceToHost(h_encs, d_encs, encs_size));
+  CHECK_ERROR(
+      gutil::CpyDeviceToHost(h_encs_indexs, d_encs_indexs, 2 * n_nodes));
+
+  hashs = h_hashs;
+  encs = h_encs;
+  encs_indexs = h_encs_indexs;
+
+  return;
+}
+
 void MPT::hash_onepass(const uint8_t *keys_hexs, int *keys_indexs, int n) {
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
@@ -835,9 +918,10 @@ void MPT::hash_onepass_v2(Node **d_hash_nodes, int n) {
   CHECK_ERROR(cudaDeviceSynchronize());
   gpu_two_kernel.stop();
   gpu_kernel.stop();
-  printf("hash kernel response time %d us\n", gpu_kernel.get());
-  printf("hash mark kernel time %d us, update kernel %d\n",
-         gpu_two_kernel.get(0), gpu_two_kernel.get(1));
+
+  //   printf("hash kernel response time %d us\n", gpu_kernel.get());
+  //   printf("hash mark kernel time %d us, update kernel %d\n",
+  //          gpu_two_kernel.get(0), gpu_two_kernel.get(1));
 }
 
 void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {
