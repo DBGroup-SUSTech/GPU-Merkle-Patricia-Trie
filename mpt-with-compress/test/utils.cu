@@ -165,3 +165,40 @@ TEST(Util, Eth) {
       util::elements_size_sum(values_bytes_indexs, insert_num);
   printf("avg key length:%d, avg value length:%d\n",keys_hexs_size/insert_num, int(values_bytes_size/insert_num));
 }
+
+TEST(Util, YCSBRW) {
+  using namespace bench::ycsb;
+
+  // allocate
+  uint8_t *build_trie_keys_bytes = new uint8_t[1000000000];
+  int *build_trie_keys_bytes_indexs = new int[10000000];
+  uint8_t *build_trie_values_bytes = new uint8_t[2000000000];
+  int64_t *build_trie_values_bytes_indexs = new int64_t[10000000];
+
+  uint8_t *rw_keys_bytes = new uint8_t[1000000000];
+  int *rw_keys_bytes_indexs = new int[10000000];
+  uint8_t *rw_values_bytes = new uint8_t[2000000000];
+  int64_t *rw_values_bytes_indexs = new int64_t[10000000];
+  uint8_t *rw_flags = new uint8_t[1000000];
+
+  int build_trie_data_num = 5;
+  int rw_data_num = 0;
+  read_ycsb_data_rw(YCSB_PATH, build_trie_keys_bytes,
+                    build_trie_keys_bytes_indexs, build_trie_values_bytes,
+                    build_trie_values_bytes_indexs, build_trie_data_num,
+                    rw_keys_bytes, rw_keys_bytes_indexs, rw_flags,
+                    rw_values_bytes, rw_values_bytes_indexs, rw_data_num);
+
+  int total_build_trie_length = util::elements_size_sum(
+      build_trie_keys_bytes_indexs, build_trie_data_num);
+  int total_rw_length = util::elements_size_sum(rw_keys_bytes_indexs, rw_data_num);
+  int total_build_trie_value_length = util::elements_size_sum(
+      build_trie_values_bytes_indexs, build_trie_data_num);
+  int total_rw_value_length = util::elements_size_sum(
+      rw_values_bytes_indexs, rw_data_num);
+  cutil::println_str(build_trie_keys_bytes, total_build_trie_length);
+  cutil::println_str(build_trie_values_bytes, total_build_trie_value_length);
+  cutil::println_str(rw_keys_bytes, total_rw_length);
+  cutil::print_hex(rw_flags, rw_data_num);
+  cutil::println_str(rw_values_bytes, total_rw_value_length);
+}

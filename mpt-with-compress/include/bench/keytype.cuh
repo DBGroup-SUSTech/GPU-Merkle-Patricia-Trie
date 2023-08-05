@@ -93,5 +93,35 @@ void gen_sparse_data(int n, int key_size, int value_size, uint8_t *&keys,
   }
 }
 
+void gen_data_with_parameter (
+  int n, int key_size, int step, int value_size, 
+  uint8_t *&keys, int *&keys_indexs, uint8_t *&values,
+  int64_t *&values_indexs) {
+  keys = new uint8_t[n * key_size]{};
+  keys_indexs = new int[n * 2]{};
+  values = new uint8_t[n * value_size]{};
+  values_indexs = new int64_t[n * 2]{};
+
+  for (int i = 0; i < n; ++i) {
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(key_size * 2) << std::hex << i*step;
+    std::string str_hex = ss.str();
+    std::string str_byte = ethtxn::hex_to_string(str_hex);
+    assert(str_byte.length() == key_size);
+    memcpy(keys + i * key_size, str_byte.c_str(), key_size);
+
+    // std::cout << str_hex << std::endl;
+    // cutil::println_hex((const uint8_t *)str_byte.c_str(), str_byte.size());
+  }
+
+  // values are set to zero
+  for (int i = 0; i < n; ++i) {
+    keys_indexs[2 * i] = key_size * i;
+    keys_indexs[2 * i + 1] = key_size * (i + 1) - 1;
+    values_indexs[2 * i] = value_size * i;
+    values_indexs[2 * i + 1] = value_size * (i + 1) - 1;
+  }
+}
+
 }  // namespace keytype
 }  // namespace bench

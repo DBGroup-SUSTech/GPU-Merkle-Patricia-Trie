@@ -9,8 +9,15 @@
 #include <stdlib.h>
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
+#include <oneapi/tbb/scalable_allocator.h>
+
+//---- rw-experiments ---
+#define READ_FLAG 0
+#define WRITE_FLAG 1
+#define READ_DATA_VALUE "EOF"
 
 #define MAX_LEVEL 20
 #define ROUNDS 24
@@ -46,9 +53,31 @@ enum class Dataset {
   TRIESIZE,
   KEYTYPE_NUM,
   KEYTYPE_LEN,
+  KEYTYPE_STEP,
   BTREE_YCSB,
   SKIPLIST_YCSB,
 };
+
+void record_data(const std::string& filename, int key_size, int step,int time1, int time2, std::string label) {
+    std::ifstream infile(filename);
+    std::ofstream file;
+    // judge the file is or not empty
+    if (infile.peek() == std::ifstream::traits_type::eof()) {
+      file = std::ofstream(filename, std::ios::out);
+      file << "key_size,step,olc_time,two_time,label\n";
+    } else {
+      file = std::ofstream(filename, std::ios::app);
+    }
+
+    if (file.is_open()) {
+      file << key_size <<","<<step<<"," << time1 <<","<<time2<<","<<label<<"\n";
+      file.close();
+      std::cout << "CSV file written successfully." << std::endl;
+    } else {
+      std::cout << "Error opening the file." << std::endl;
+    }
+}
+
 int get_record_num(Dataset dataset) {
   const char *data_num_str;
   switch (dataset) {
@@ -87,7 +116,12 @@ int get_record_num(Dataset dataset) {
       assert(data_num_str != nullptr);
       break;
     }
-    case Dataset::BTREE_YCSB: {
+    case Dataset::KEYTYPE_STEP: {
+    data_num_str = getenv("GMPT_KEYTYPE_STEP");
+    assert(data_num_str != nullptr);
+    break;
+  }
+  case Dataset::BTREE_YCSB: {
       data_num_str = getenv("GPU_BTREE_SIZE");
       assert(data_num_str != nullptr);
       break;
