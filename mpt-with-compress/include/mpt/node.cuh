@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include "util/lock.cuh"
+#include "util/rlp.cuh"
 #include "util/utils.cuh"
 namespace CpuMPT {
 namespace Compress {
@@ -33,65 +34,147 @@ struct FullNode : public Node {
   uint8_t buffer[32];  // save hash or encoding
 
   /// @brief encode current node into bytes, prepare data for hash
-  /// @param bytes require at most 17 * 32 bytes
+  /// @param [in]   size_buf require 9 bytes
+  /// @param [in]   payload_size returned from encode_size
+  /// @param [out]  bytes require at most 17 * 32 bytes
   /// @return encoding length
   /// @note
   ///   different from ethereum, this encoding use childrens current hash
   ///   instead of recursively call child.encode.
   // TODO: currently not support RLP encoding
-  __host__ __forceinline__ int encode(uint8_t *bytes) {
+  // TODO:
+  __host__ __forceinline__ int encode(uint8_t *enc_buf, int payload_size) {
     // encode
-    int bytes_size = 0;
+    //     int bytes_size = 0;
+    // #pragma unroll
+    //     for (int i = 0; i < 17; ++i) {
+    //       Node *child = childs[i];
+    //       if (child != nullptr) {
+    //         assert(child->hash != nullptr && child->hash_size != 0);
+    //         memcpy(bytes, child->hash, child->hash_size);
+
+    //         bytes += child->hash_size;
+    //         bytes_size += child->hash_size;
+    //       }
+    //     }
+    //     return bytes_size;
+
+    int enc_size = 0;
+
+    // LIST HEADER: head.size = payload_size
+    int hsize = rlp::puthead(enc_buf, 0xC0, 0xF7, uint64_t(payload_size));
+    enc_buf += hsize;
+    enc_size += hsize;
+
+    // LIST BODY
 #pragma unroll
     for (int i = 0; i < 17; ++i) {
-      Node *child = childs[i];
-      if (child != nullptr) {
-        assert(child->hash != nullptr && child->hash_size != 0);
-        memcpy(bytes, child->hash, child->hash_size);
-
-        bytes += child->hash_size;
-        bytes_size += child->hash_size;
+      Node *c = childs[i];
+      if (c != nullptr) {
+        assert(c->hash != nullptr && c->hash_size != 0);
+        int csize = rlp::write_bytes(enc_buf, c->hash, c->hash_size);
+        enc_buf += csize;
+        enc_size += csize;
+      } else {
+        enc_buf[0] = rlp::EMPTY_STRING;
+        enc_buf += 1;
+        enc_size += 1;
       }
     }
-    return bytes_size;
+    return enc_size;
   }
 
-  __host__ __forceinline__ int encode_size() {
-    int size = 0;
-#pragma unroll
+  __host__ __forceinline__ void encode_size(int &enc_size, int &payload_size) {
+    //     int size = 0;
+    // #pragma unroll
+    //     for (int i = 0; i < 17; ++i) {
+    //       if (childs[i]) {
+    //         size += childs[i]->hash_size;
+    //       }
+    //     }
+    //     return size;
+    enc_size = 0;
+    // calculate payload size
     for (int i = 0; i < 17; ++i) {
-      if (childs[i]) {
-        size += childs[i]->hash_size;
+      Node *c = childs[i];
+      if (c != nullptr) {
+        assert(c->hash != nullptr && c->hash_size != 0);
+        int csize = rlp::write_bytes_size(c->hash, c->hash_size);
+        enc_size += csize;
+      } else {
+        enc_size += 1;
       }
     }
-    return size;
+    payload_size = enc_size;
+    int hsize = rlp::puthead_size(uint64_t(enc_size));
+    enc_size += hsize;
+    return;
   }
 
-  __forceinline__ int tbb_encode_size() {
-    int size = 0;
-#pragma unroll
+  __forceinline__ void tbb_encode_size(int &enc_size, int &payload_size) {
+    //     int size = 0;
+    // #pragma unroll
+    //     for (int i = 0; i < 17; ++i) {
+    //       if (tbb_childs[i]) {
+    //         size += tbb_childs[i].load()->hash_size;
+    //       }
+    //     }
+    //     return size;
+    enc_size = 0;
     for (int i = 0; i < 17; ++i) {
-      if (tbb_childs[i]) {
-        size += tbb_childs[i].load()->hash_size;
+      Node *c = tbb_childs[i].load();
+      if (c != nullptr) {
+        assert(c->hash != nullptr && c->hash_size != 0);
+        int csize = rlp::write_bytes_size(c->hash, c->hash_size);
+        enc_size += csize;
+      } else {
+        enc_size += 1;
       }
     }
-    return size;
+    payload_size = enc_size;
+    int hsize = rlp::puthead_size(uint64_t(enc_size));
+    enc_size += hsize;
+    return;
   }
 
-  __forceinline__ int tbb_encode(uint8_t *bytes) {
-    int bytes_size = 0;
+  __forceinline__ int tbb_encode(uint8_t *enc_buf, int payload_size) {
+    //     int bytes_size = 0;
+    // #pragma unroll
+    //     for (int i = 0; i < 17; ++i) {
+    //       Node *child = tbb_childs[i].load();
+    //       if (child != nullptr) {
+    //         assert(child->hash != nullptr && child->hash_size != 0);
+    //         memcpy(bytes, child->hash, child->hash_size);
+
+    //         bytes += child->hash_size;
+    //         bytes_size += child->hash_size;
+    //       }
+    //     }
+    //     return bytes_size;
+
+    int enc_size = 0;
+
+    // LIST HEADER: head.size = payload_size
+    int hsize = rlp::puthead(enc_buf, 0xC0, 0xF7, uint64_t(payload_size));
+    enc_buf += hsize;
+    enc_size += hsize;
+
+    // LIST BODY
 #pragma unroll
     for (int i = 0; i < 17; ++i) {
-      Node *child = tbb_childs[i].load();
-      if (child != nullptr) {
-        assert(child->hash != nullptr && child->hash_size != 0);
-        memcpy(bytes, child->hash, child->hash_size);
-
-        bytes += child->hash_size;
-        bytes_size += child->hash_size;
+      Node *c = tbb_childs[i].load();
+      if (c != nullptr) {
+        assert(c->hash != nullptr && c->hash_size != 0);
+        int csize = rlp::write_bytes(enc_buf, c->hash, c->hash_size);
+        enc_buf += csize;
+        enc_size += csize;
+      } else {
+        enc_buf[0] = rlp::EMPTY_STRING;
+        enc_buf += 1;
+        enc_size += 1;
       }
     }
-    return bytes_size;
+    return enc_size;
   }
 
   __forceinline__ int tbb_child_num() {
@@ -130,6 +213,9 @@ struct ShortNode : public Node {
 
   uint8_t buffer[32];  // save hash or encoding
 
+  // for encoding
+  const uint8_t *key_compact = nullptr;
+
   /// @brief  encode current nodes into bytes, prepare data for hash
   /// @param bytes require at most key_size + 32 bytes
   /// @return encoding length
@@ -137,48 +223,101 @@ struct ShortNode : public Node {
   ///   different from ethereum, this encoding use child's current hash
   ///   instead of recursively call val.encode.
   // TODO: currently not support RLP encoding
-  __host__ __forceinline__ int encode(uint8_t *bytes) {
-    int bytes_size = 0;
+  __host__ __forceinline__ int encode(uint8_t *enc_buf, int payload_size) {
+    // int bytes_size = 0;
 
-    int key_compact_size = util::hex_to_compact(key, key_size, bytes);
-    // assert((key_size - 1) / 2 + 1 == key_compact_size);
-    // TODO: key may not be ended with 16
+    // int key_compact_size = util::hex_to_compact(key, key_size, bytes);
+    // // assert((key_size - 1) / 2 + 1 == key_compact_size);
 
-    bytes += key_compact_size;
-    bytes_size += key_compact_size;
+    // bytes += key_compact_size;
+    // bytes_size += key_compact_size;
 
+    // assert(val != nullptr && val->hash != nullptr && val->hash_size != 0);
+    // memcpy(bytes, val->hash, val->hash_size);
+
+    // bytes_size += val->hash_size;
+    // return bytes_size;
+    int enc_size = 0;
+    int hsize = rlp::puthead(enc_buf, 0xC0, 0xF7, uint64_t(payload_size));
+    enc_buf += hsize;
+    enc_size += hsize;
+
+    // key
+    assert(key_compact != nullptr);
+    int key_compact_size = util::hex_to_compact_size(key, key_size);
+    int ksize = rlp::write_bytes(enc_buf, key_compact, key_compact_size);
+    enc_buf += ksize;
+    enc_size += ksize;
+
+    // value
     assert(val != nullptr && val->hash != nullptr && val->hash_size != 0);
-    memcpy(bytes, val->hash, val->hash_size);
+    int vsize = rlp::write_bytes(enc_buf, val->hash, val->hash_size);
+    enc_buf += vsize;
+    enc_size += vsize;
 
-    bytes_size += val->hash_size;
-    return bytes_size;
+    return enc_size;
   }
 
-  __host__ __forceinline__ int encode_size() {
+  __host__ __forceinline__ void encode_size(int &enc_size, int &payload_size) {
+    enc_size = 0;
     int key_compact_size = util::hex_to_compact_size(key, key_size);
-    int val_hash_size = val->hash_size;
-    return key_compact_size + val_hash_size;
+    enc_size += rlp::write_bytes_size(key_compact, key_compact_size);
+    enc_size += rlp::write_bytes_size(val->hash, val->hash_size);
+    payload_size = enc_size;
+    int hsize = rlp::puthead_size(uint64_t(enc_size));
+    enc_size += hsize;
+    return;
   }
 
-  __forceinline__ int tbb_encode_size() {
+  __forceinline__ void tbb_encode_size(int &enc_size, int &payload_size) {
+    // int key_compact_size = util::hex_to_compact_size(key, key_size);
+    // int val_hash_size = tbb_val.load()->hash_size;
+    // return key_compact_size + val_hash_size;
+    enc_size = 0;
     int key_compact_size = util::hex_to_compact_size(key, key_size);
-    int val_hash_size = tbb_val.load()->hash_size;
-    return key_compact_size + val_hash_size;
+    enc_size += rlp::write_bytes_size(key_compact, key_compact_size);
+    Node *tval = tbb_val.load();
+    enc_size += rlp::write_bytes_size(tval->hash, tval->hash_size);
+    payload_size = enc_size;
+    int hsize = rlp::puthead_size(uint64_t(enc_size));
+    enc_size += hsize;
+    return ;
   }
 
-  __forceinline__ int tbb_encode(uint8_t *bytes) {
-    int bytes_size = 0;
+  __forceinline__ int tbb_encode(uint8_t *enc_buf, int payload_size) {
+    // int bytes_size = 0;
 
-    int key_compact_size = util::hex_to_compact(key, key_size, bytes);
-    // assert((key_size - 1) / 2 + 1 == key_compact_size);
-    bytes += key_compact_size;
-    bytes_size += key_compact_size;
+    // int key_compact_size = util::hex_to_compact(key, key_size, bytes);
+    // // assert((key_size - 1) / 2 + 1 == key_compact_size);
+    // bytes += key_compact_size;
+    // bytes_size += key_compact_size;
 
-    assert(tbb_val.load() != nullptr && tbb_val.load()->hash != nullptr &&
-           tbb_val.load()->hash_size != 0);
-    memcpy(bytes, tbb_val.load()->hash, tbb_val.load()->hash_size);
-    bytes_size += tbb_val.load()->hash_size;
-    return bytes_size;
+    // assert(tbb_val.load() != nullptr && tbb_val.load()->hash != nullptr &&
+    //        tbb_val.load()->hash_size != 0);
+    // memcpy(bytes, tbb_val.load()->hash, tbb_val.load()->hash_size);
+    // bytes_size += tbb_val.load()->hash_size;
+    // return bytes_size;
+    int enc_size = 0;
+    int hsize = rlp::puthead(enc_buf, 0xC0, 0xF7, uint64_t(payload_size));
+    enc_buf += hsize;
+    enc_size += hsize;
+
+    // key
+    assert(key_compact != nullptr);
+    int key_compact_size = util::hex_to_compact_size(key, key_size);
+    int ksize = rlp::write_bytes(enc_buf, key_compact, key_compact_size);
+    enc_buf += ksize;
+    enc_size += ksize;
+
+    Node *tval = tbb_val.load();
+
+    // value
+    assert(tval != nullptr && tval->hash != nullptr && tval->hash_size != 0);
+    int vsize = rlp::write_bytes(enc_buf, tval->hash, tval->hash_size);
+    enc_buf += vsize;
+    enc_size += vsize;
+
+    return enc_size;
   }
 };
 
@@ -274,32 +413,71 @@ struct FullNode : public Node {
   ///   different from ethereum, this encoding use childrens current hash
   ///   instead of recursively call child.encode.
   // TODO: currently not support RLP encoding
-  __device__ __forceinline__ int encode(uint8_t *bytes) {
+  __device__ __forceinline__ int encode(uint8_t *enc_buf, int payload_size) {
     // encode
-    int bytes_size = 0;
+    //     int bytes_size = 0;
+    // #pragma unroll
+    //     for (int i = 0; i < 17; ++i) {
+    //       Node *child = childs[i];
+    //       if (child != nullptr) {
+    //         assert(child->hash != nullptr && child->hash_size != 0);
+    //         memcpy(bytes, child->hash, child->hash_size);
+
+    //         bytes += child->hash_size;
+    //         bytes_size += child->hash_size;
+    //       }
+    //     }
+    //     return bytes_size;
+    int enc_size = 0;
+
+    // LIST HEADER: head.size = payload_size
+    int hsize = rlp::puthead(enc_buf, 0xC0, 0xF7, uint64_t(payload_size));
+    enc_buf += hsize;
+    enc_size += hsize;
+
+    // LIST BODY
 #pragma unroll
     for (int i = 0; i < 17; ++i) {
-      Node *child = childs[i];
-      if (child != nullptr) {
-        assert(child->hash != nullptr && child->hash_size != 0);
-        memcpy(bytes, child->hash, child->hash_size);
-
-        bytes += child->hash_size;
-        bytes_size += child->hash_size;
+      Node *c = childs[i];
+      if (c != nullptr) {
+        assert(c->hash != nullptr && c->hash_size != 0);
+        int csize = rlp::write_bytes(enc_buf, c->hash, c->hash_size);
+        enc_buf += csize;
+        enc_size += csize;
+      } else {
+        enc_buf[0] = rlp::EMPTY_STRING;
+        enc_buf += 1;
+        enc_size += 1;
       }
     }
-    return bytes_size;
+    return enc_size;
   }
 
-  __device__ __forceinline__ int encode_size() {
-    int size = 0;
-#pragma unroll
+  __device__ __forceinline__ int encode_size(int &enc_size, int &payload_size) {
+    //     int size = 0;
+    // #pragma unroll
+    //     for (int i = 0; i < 17; ++i) {
+    //       if (childs[i]) {
+    //         size += childs[i]->hash_size;
+    //       }
+    //     }
+    //     return size;
+    enc_size = 0;
+    // calculate payload size
     for (int i = 0; i < 17; ++i) {
-      if (childs[i]) {
-        size += childs[i]->hash_size;
+      Node *c = childs[i];
+      if (c != nullptr) {
+        assert(c->hash != nullptr && c->hash_size != 0);
+        int csize = rlp::write_bytes_size(c->hash, c->hash_size);
+        enc_size += csize;
+      } else {
+        enc_size += 1;
       }
     }
-    return size;
+    payload_size = enc_size;
+    int hsize = rlp::puthead_size(uint64_t(enc_size));
+    enc_size += hsize;
+    return;
   }
 
   __device__ __forceinline__ int child_num() {
@@ -337,6 +515,9 @@ struct ShortNode : public Node {
   int dirty;
   int to_split = 0;
 
+  // for encoding
+  const uint8_t *key_compact = nullptr;
+
   /// @brief  encode current nodes into bytes, prepare data for hash
   /// @param bytes require at most key_size + 32 bytes
   /// @return encoding length
@@ -344,26 +525,54 @@ struct ShortNode : public Node {
   ///   different from ethereum, this encoding use child's current hash
   ///   instead of recursively call val.encode.
   // TODO: currently not support RLP encoding
-  __device__ __forceinline__ int encode(uint8_t *bytes) {
-    int bytes_size = 0;
+  __device__ __forceinline__ int encode(uint8_t *enc_buf, int payload_size) {
+    // int bytes_size = 0;
 
-    int key_compact_size = util::hex_to_compact(key, key_size, bytes);
-    // assert((key_size - 1) / 2 + 1 == key_compact_size);
+    // int key_compact_size = util::hex_to_compact(key, key_size, bytes);
+    // // assert((key_size - 1) / 2 + 1 == key_compact_size);
 
-    bytes += key_compact_size;
-    bytes_size += key_compact_size;
+    // bytes += key_compact_size;
+    // bytes_size += key_compact_size;
 
+    // assert(val != nullptr && val->hash != nullptr && val->hash_size != 0);
+    // memcpy(bytes, val->hash, val->hash_size);
+
+    // bytes_size += val->hash_size;
+    // return bytes_size;
+    int enc_size = 0;
+    int hsize = rlp::puthead(enc_buf, 0xC0, 0xF7, uint64_t(payload_size));
+    enc_buf += hsize;
+    enc_size += hsize;
+
+    // key
+    assert(key_compact != nullptr);
+    int key_compact_size = util::hex_to_compact_size(key, key_size);
+    int ksize = rlp::write_bytes(enc_buf, key_compact, key_compact_size);
+    enc_buf += ksize;
+    enc_size += ksize;
+
+    // value
     assert(val != nullptr && val->hash != nullptr && val->hash_size != 0);
-    memcpy(bytes, val->hash, val->hash_size);
+    int vsize = rlp::write_bytes(enc_buf, val->hash, val->hash_size);
+    enc_buf += vsize;
+    enc_size += vsize;
 
-    bytes_size += val->hash_size;
-    return bytes_size;
+    return enc_size;
   }
 
-  __device__ __forceinline__ int encode_size() {
+  __device__ __forceinline__ int encode_size(int &enc_size, int &payload_size) {
+    // int key_compact_size = util::hex_to_compact_size(key, key_size);
+    // int val_hash_size = val->hash_size;
+    // return key_compact_size + val_hash_size;
+    assert(key_compact != nullptr);
+    enc_size = 0;
     int key_compact_size = util::hex_to_compact_size(key, key_size);
-    int val_hash_size = val->hash_size;
-    return key_compact_size + val_hash_size;
+    enc_size += rlp::write_bytes_size(key_compact, key_compact_size);
+    enc_size += rlp::write_bytes_size(val->hash, val->hash_size);
+    payload_size = enc_size;
+    int hsize = rlp::puthead_size(uint64_t(enc_size));
+    enc_size += hsize;
+    return;
   }
 
   __device__ __forceinline__ void print_self() {

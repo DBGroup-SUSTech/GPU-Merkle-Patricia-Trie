@@ -5249,7 +5249,7 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
       read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
                            values_bytes, values_bytes_indexs);
   // int insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
-  int insert_num = 10;
+  int insert_num = 100;
   assert(insert_num <= insert_num_from_file);
   printf("Inserting %d k-v pairs\n", insert_num);
 
@@ -5279,11 +5279,12 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu.start();
-    cpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+    auto [hash_nodes, hash_nodes_num] = cpu_mpt.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
                           values_bytes_indexs, insert_num);
-    cpu_mpt.hashs_dirty_flag();
+    printf("finish onepass: %p , %d\n", hash_nodes, hash_nodes_num);
+    cpu_mpt.hashs_onepass(hash_nodes, hash_nodes_num);
     cpu.stop();
-    cpu_mpt.get_root_hash(hash, hash_size);
+    cpu_mpt.get_root_hash_parallel(hash, hash_size);
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
     CHECK_ERROR(cudaDeviceReset());
@@ -5316,8 +5317,8 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
       const uint8_t *hash = &hashs[i * HASH_SIZE];
       const uint8_t *enc = util::element_start(encs_indexs, i, encs);
       int enc_size = util::element_size(encs_indexs, i);
-      printf("enc size = %d\n", enc_size);
-      cutil::println_hex(enc, util::element_size(encs_indexs, i));
+      // printf("enc size = %d\n", enc_size);
+      // cutil::println_hex(enc, util::element_size(encs_indexs, i));
     }
     CHECK_ERROR(cudaDeviceReset());
   }
