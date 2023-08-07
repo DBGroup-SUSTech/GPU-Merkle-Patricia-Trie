@@ -3,6 +3,9 @@
 #include <iostream>
 #include <random>
 #include <sstream>
+#include <unordered_set>
+
+#include "util/utils.cuh"
 
 #include "bench/ethtxn.cuh"
 
@@ -123,5 +126,58 @@ void gen_data_with_parameter (
   }
 }
 
+// Box-Muller transform to generate standard normal random variables
+std::pair<double, double> box_muller_transform(double u1, double u2) {
+    double z1 = std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
+    double z2 = std::sqrt(-2.0 * std::log(u1)) * std::sin(2.0 * M_PI * u2);
+    return std::make_pair(z1, z2);
+}
+
+// Function to generate Gaussian data with a given mean and standard deviation
+void generate_gaussian_data(
+  uint8_t *&keys, int *&keys_indexs, uint8_t *&values, int key_size, int value_size,
+  int64_t *&values_indexs, double mean, double std_dev, int n) {
+  keys = new uint8_t[n * key_size]{};
+  keys_indexs = new int[n * 2]{};
+  values = new uint8_t[n * value_size]{};
+  values_indexs = new int64_t[n * 2]{};
+
+  std::unordered_set<int64_t> unique_set;
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_real_distribution<double> dis(0.0, 1.0);
+
+  for (int i = 0; i < n; ++i) {
+    double u1 = dis(gen);
+    double u2 = dis(gen);
+    auto [z1, z2] = box_muller_transform(u1, u2);
+
+    int64_t value = int64_t(mean + std_dev * z1);
+    if (unique_set.find(value) != unique_set.end()) {
+      --i;
+      continue;
+    } else {
+      unique_set.insert(value);
+    }
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(key_size * 2) << std::hex << value;
+    std::string str_hex = ss.str();
+    std::string str_byte = ethtxn::hex_to_string(str_hex);
+    
+    assert(str_byte.length() == key_size);
+    memcpy(keys + i * key_size, str_byte.c_str(), key_size); 
+    if (i< 100) {
+    std::cout << ss.str() << " ";
+    std::cout << int64_t(mean + std_dev * z1) << " ";}
+  }
+
+  for (int i = 0; i < n; ++i) {
+    keys_indexs[2 * i] = key_size * i;
+    keys_indexs[2 * i + 1] = key_size * (i + 1) - 1;
+    values_indexs[2 * i] = value_size * i;
+    values_indexs[2 * i + 1] = value_size * (i + 1) - 1;
+  }
+}
 }  // namespace keytype
 }  // namespace bench
