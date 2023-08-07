@@ -1229,11 +1229,13 @@ restart:  // TODO: replace goto with while
   // parent);
 }
 
-__device__ __forceinline__ void read_with_olc(ShortNode * start, const uint8_t *key, int key_size,
-                                    const uint8_t *&value_hp, int &value_size) {
-  restart:
+__device__ __forceinline__ void read_with_olc(ShortNode *start,
+                                              const uint8_t *key, int key_size,
+                                              const uint8_t *&value_hp,
+                                              int &value_size) {
+restart:
   bool need_restart = false;
-  
+
   const Node *node = start->val;
   int pos = 0;
   while (true) {
@@ -1249,7 +1251,7 @@ __device__ __forceinline__ void read_with_olc(ShortNode * start, const uint8_t *
       case Node::Type::VALUE: {
         // printf("tid=%d, VALUE node\n", threadIdx.x);
         node->read_unlock_or_restart(v, need_restart);
-        if(need_restart) goto restart;
+        if (need_restart) goto restart;
         const ValueNode *vnode = static_cast<const ValueNode *>(node);
         value_hp = vnode->h_value;
         value_size = vnode->value_size;
@@ -1282,7 +1284,7 @@ __device__ __forceinline__ void read_with_olc(ShortNode * start, const uint8_t *
         const FullNode *fnode = static_cast<const FullNode *>(node);
         // printf("tid=%d, Full node nibble=0x%x\n", threadIdx.x, key[pos]);
         node->read_unlock_or_restart(v, need_restart);
-        if(need_restart) goto restart;
+        if (need_restart) goto restart;
         node = fnode->childs[key[pos]];
 
         pos += 1;
@@ -1344,8 +1346,9 @@ __global__ void puts_latching_v2(
 /// @note other_hash_target_num + n = (length of hash_target_nodes)
 /// @return
 __global__ void puts_latching_v2_with_read(
-    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *rw_flags, const uint8_t *values_bytes,
-    int64_t *values_indexs, const uint8_t *const *values_hps, int * read_num, int n,
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *rw_flags,
+    const uint8_t *values_bytes, int64_t *values_indexs,
+    const uint8_t *const *values_hps, int *read_num, int n,
     const uint8_t **read_values_hps, int *read_values_sizes,
     ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator,
     Node **hash_target_nodes, int *other_hash_target_num) {
@@ -1362,7 +1365,7 @@ __global__ void puts_latching_v2_with_read(
   int key_size = util::element_size(keys_indexs, wid);
   const uint8_t *value = util::element_start(values_indexs, wid, values_bytes);
   int value_size = util::element_size(values_indexs, wid);
-  const uint8_t *value_hp = values_hps[wid];  
+  const uint8_t *value_hp = values_hps[wid];
   uint8_t rw_flag = rw_flags[wid];
   if (rw_flag == READ_FLAG) {
     hash_target_nodes[wid] = start_node;
@@ -1378,12 +1381,11 @@ __global__ void puts_latching_v2_with_read(
     leaf->value_size = value_size;
     hash_target_nodes[wid] = leaf;
     put_olc_v2(key, key_size, value, value_size, value_hp, start_node,
-              node_allocator, leaf, n, hash_target_nodes + n,
-              other_hash_target_num);
+               node_allocator, leaf, n, hash_target_nodes + n,
+               other_hash_target_num);
   } else {
     assert(false);
   }
-
 
   // if (wid < write_n) {
   //   value = util::element_start(values_indexs, wid, values_bytes);
@@ -1395,7 +1397,7 @@ __global__ void puts_latching_v2_with_read(
   //   leaf->d_value = value;
   //   leaf->value_size = value_size;
   //   hash_target_nodes[wid] = leaf;
-  // } 
+  // }
   // // printf("wid %d\n", wid);
   // // put_olc(key, key_size, value, value_size, value_hp, start_node,
   // //         node_allocator);
@@ -2033,6 +2035,251 @@ __global__ void gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   get(key, key_size, value_hp, value_size, *root_p);
 }
 
+__device__ __forceinline__ void get_dirty_nodes_count(const uint8_t *key,
+                                                      int key_size, Node *root,
+                                                      gutil::ull_t *n_nodes,
+                                                      gutil::ull_t *encs_size) {
+  // Requires all keys existed in the trie
+  Node *node = root;
+  int pos = 0;
+  while (true) {
+    // printf("Encounter empty node\n");
+    assert(node != nullptr);
+    if (node->type == Node::Type::VALUE) {
+      return;
+    }
+    // flag
+    int old = atomicCAS(&node->flush_flag, 0, 1);
+    // 1. add to node counters
+    if (old == 0) {
+      atomicAdd(n_nodes, 1);
+    }
+    // 2. add to encoding sizes
+    if (node->type == Node::Type::SHORT) {
+      ShortNode *snode = static_cast<ShortNode *>(node);
+      assert(key_size - pos >= snode->key_size &&
+             util::bytes_equal(snode->key, snode->key_size, key + pos,
+                               snode->key_size));
+
+      if (old == 0) {
+        int enc_size = 0, payload_size = 0;
+        snode->encode_size(enc_size, payload_size);
+        atomicAdd(encs_size, enc_size);
+      }
+
+      node = snode->val;
+      pos += snode->key_size;
+
+    } else if (node->type == Node::Type::FULL) {
+      FullNode *fnode = static_cast<FullNode *>(node);
+
+      if (old == 0) {
+        int enc_size = 0, payload_size = 0;
+        fnode->encode_size(enc_size, payload_size);
+        atomicAdd(encs_size, enc_size);
+      }
+
+      node = fnode->childs[key[pos]];
+      pos += 1;
+
+    } else {
+      printf("Wrong node type\n");
+      assert(false);
+    }
+  }
+}
+
+/// @brief count for pre allocation
+/// @param [in] keys_hexs
+/// @param [in] keys_indexs
+/// @param [in] n_keys
+/// @param [in] root_p
+/// @param [out] n_nodes
+/// @param [out] encs_size
+/// @return
+__global__ void gets_dirty_nodes_count(const uint8_t *keys_hexs,
+                                       int *keys_indexs, int n_keys,
+                                       Node *const *root_p,
+                                       gutil::ull_t *n_nodes,
+                                       gutil::ull_t *encs_size) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n_keys) {
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  get_dirty_nodes_count(key, key_size, *root_p, n_nodes, encs_size);
+}
+
+__device__ __forceinline__ void get_dirty_nodes(
+    const uint8_t *key, int key_size, Node *root, uint8_t *d_hashs,
+    uint8_t *d_encs, gutil::ull_t *d_encs_indexs,
+    DynamicAllocator<ALLOC_CAPACITY> &allocator) {
+  // TODO
+  int idxs_ptr = 0;  // writes to the i-th slot in d_encs_indexs
+
+  Node *node = root;
+  int pos = 0;
+  while (true) {
+    assert(node != nullptr);
+    if (node->type == Node::Type::VALUE) {
+      return;
+    }
+
+    int old = atomicCAS(&node->flush_flag, 1, 0);
+    if (node->type == Node::Type::SHORT) {
+      ShortNode *snode = static_cast<ShortNode *>(node);
+      assert(key_size - pos >= snode->key_size &&
+             util::bytes_equal(snode->key, snode->key_size, key + pos,
+                               snode->key_size));
+      if (old == 1) {
+        int enc_size = 0, payload_size = 0;
+        snode->encode_size(enc_size, payload_size);
+        assert(enc_size != 0);
+
+        // Try to occupy
+        gutil::ull_t iend = enc_size - 1;
+        while (true) {
+          // old_end == 0 -> write iend
+          // old_end != 0 -> iend = old_end + enc_size
+          gutil::ull_t old_end =
+              atomicCAS(&d_encs_indexs[idxs_ptr * 2 + 1], 0, iend);
+          if (old_end == 0) {
+            // hash
+            assert(node->hash_size == HASH_SIZE);
+            memcpy(&d_hashs[idxs_ptr * HASH_SIZE], node->hash, node->hash_size);
+
+            // encode (value)
+            gutil::ull_t istart = iend - (enc_size - 1);
+            d_encs_indexs[idxs_ptr * 2] = istart;
+
+            uint8_t *buffer_global =
+                allocator.malloc(util::align_to<8>(enc_size));
+            memset(buffer_global, 0, util::align_to<8>(enc_size));
+            snode->encode(buffer_global, payload_size);
+            memcpy(d_encs + istart, buffer_global, enc_size);
+
+            // printf("snode encode size %d\n", enc_size);
+            // cutil::println_hex(buffer_global, enc_size);
+            break;
+          } else {
+            iend = old_end + enc_size;
+            idxs_ptr++;
+          }
+        }
+      }
+
+      node = snode->val;
+      pos += snode->key_size;
+    } else if (node->type == Node::Type::FULL) {
+      FullNode *fnode = static_cast<FullNode *>(node);
+
+      if (old == 1) {
+        int enc_size = 0, payload_size = 0;
+        fnode->encode_size(enc_size, payload_size);
+        assert(enc_size != 0);
+
+        // Try to occupy
+        gutil::ull_t iend = enc_size - 1;
+        while (true) {
+          // old_end == 0 -> write iend
+          // old_end != 0 -> iend = old_end + enc_size
+          gutil::ull_t old_end =
+              atomicCAS(&d_encs_indexs[idxs_ptr * 2 + 1], 0, iend);
+          if (old_end == 0) {
+            // hash
+            assert(node->hash_size == HASH_SIZE);
+            memcpy(&d_hashs[idxs_ptr * HASH_SIZE], node->hash, node->hash_size);
+
+            // encode (value)
+            gutil::ull_t istart = iend - (enc_size - 1);
+            d_encs_indexs[idxs_ptr * 2] = istart;
+
+            uint8_t *buffer_global =
+                allocator.malloc(util::align_to<8>(enc_size));
+            memset(buffer_global, 0, util::align_to<8>(enc_size));
+            fnode->encode(buffer_global, payload_size);
+            memcpy(d_encs + istart, buffer_global, enc_size);
+
+            // printf("fnode encode size %d\n", enc_size);
+            // cutil::println_hex(buffer_global, enc_size);
+            break;
+          } else {
+            iend = old_end + enc_size;
+            idxs_ptr++;
+          }
+        }
+      }
+
+      node = fnode->childs[key[pos]];
+      pos += 1;
+    } else {
+      printf("Wrong node type\n");
+      assert(false);
+    }
+  }
+
+  // Requires all keys existed in the trie
+  // Node *node = root;
+  // int pos = 0;
+  // while (true) {
+  //   // printf("Encounter empty node\n");
+  //   assert(node != nullptr);
+  //   if (node->type == Node::Type::VALUE) {
+  //     return;
+  //   }
+  //   // flag
+  //   int old = atomicCAS(&node->flush_flag, 0, 1);
+  //   // 1. add to node counters
+  //   atomicAdd(n_nodes, 1);
+  //   // 2. add to encoding sizes
+  //   if (node->type == Node::Type::SHORT) {
+  //     ShortNode *snode = static_cast<ShortNode *>(node);
+  //     assert(key_size - pos >= snode->key_size &&
+  //            util::bytes_equal(snode->key, snode->key_size, key + pos,
+  //                              snode->key_size));
+
+  //     if (old == 0) {
+  //       gutil::ull_t enc_size = snode->encode_size();
+  //       atomicAdd(encs_size, enc_size);
+  //     }
+
+  //     node = snode->val;
+  //     pos += snode->key_size;
+
+  //   } else if (node->type == Node::Type::FULL) {
+  //     FullNode *fnode = static_cast<FullNode *>(node);
+
+  //     if (old == 0) {
+  //       gutil::ull_t enc_size = fnode->encode_size();
+  //       atomicAdd(encs_size, enc_size);
+  //     }
+
+  //     node = fnode->childs[key[pos]];
+  //     pos += 1;
+
+  //   } else {
+  //     printf("Wrong node type\n");
+  //     assert(false);
+  //   }
+}
+
+__global__ void gets_dirty_nodes(const uint8_t *keys_hexs, int *keys_indexs,
+                                 int n_keys, Node *const *root_p,
+                                 uint8_t *d_hashs, uint8_t *d_encs,
+                                 gutil::ull_t *d_encs_indexs,
+                                 DynamicAllocator<ALLOC_CAPACITY> allocator) {
+  // TODO:
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n_keys) {
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  get_dirty_nodes(key, key_size, *root_p, d_hashs, d_encs, d_encs_indexs,
+                  allocator);
+}
+
 __global__ void get_root_hash(const Node *const *root_p, uint8_t *hash,
                               int *hash_size_p) {
   assert(blockDim.x == 32 && gridDim.x == 1);
@@ -2207,45 +2454,56 @@ __device__ __forceinline__ void do_hash_onepass_update_phase(
     uint8_t *hash_0 = nullptr;
 
     if (lane_id == 0) {
-      // TODO: may encode be parallel?
       // TODO: is global buffer enc faster or share-memory enc-hash faster?
       if (leaf->type == Node::Type::FULL) {
         FullNode *fnode = static_cast<FullNode *>(leaf);
-        encoding_size_0 = fnode->encode_size();
-        if (encoding_size_0 > 17 * 32) {  // encode into global memory
+        // encoding_size_0 = fnode->encode_size();
 
-          // TODO: delete aligned
+        // rlp
+        int payload_size = 0;
+        fnode->encode_size(encoding_size_0, payload_size);
+
+        if (encoding_size_0 > 17 * 32) {  // encode into global memory
           uint8_t *buffer_global =
               allocator.malloc(util::align_to<8>(encoding_size_0));
           memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
 
-          fnode->encode(buffer_global);
+          fnode->encode(buffer_global, payload_size);
           encoding_0 = buffer_global;
 
         } else {  // encode into shared memory
           memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
 
-          fnode->encode(buffer_shared);
+          fnode->encode(buffer_shared, payload_size);
           encoding_0 = buffer_shared;
         }
         hash_0 = fnode->buffer;
 
       } else {
         ShortNode *snode = static_cast<ShortNode *>(leaf);
-        encoding_size_0 = snode->encode_size();
-        if (encoding_size_0 > 17 * 32) {  // encode into global memory
+        // encoding_size_0 = snode->encode_size();
 
-          // TODO: delete aligned
+        // rlp
+        int kc_size = util::hex_to_compact_size(snode->key, snode->key_size);
+        uint8_t *kc = allocator.malloc(util::align_to<8>(kc_size));
+        assert(kc_size ==
+               util::hex_to_compact(snode->key, snode->key_size, kc));
+        snode->key_compact = kc;
+
+        int payload_size = 0;
+        snode->encode_size(encoding_size_0, payload_size);
+
+        if (encoding_size_0 > 17 * 32) {  // encode into global memory
           uint8_t *buffer_global =
               allocator.malloc(util::align_to<8>(encoding_size_0));
           memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
 
-          snode->encode(buffer_global);
+          snode->encode(buffer_global, payload_size);
           encoding_0 = buffer_global;
         } else {  // encode into shared memory
           memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
 
-          snode->encode(buffer_shared);
+          snode->encode(buffer_shared, payload_size);
           encoding_0 = buffer_shared;
         }
         hash_0 = snode->buffer;
@@ -2381,32 +2639,46 @@ __device__ __forceinline__ void do_hash_onepass_update_phase_v2(
     uint8_t *hash_0 = nullptr;
 
     if (lane_id == 0) {
-      // TODO: may encode be parallel?
       // TODO: is global buffer enc faster or share-memory enc-hash faster?
       if (hash_node->type == Node::Type::FULL) {
         FullNode *fnode = static_cast<FullNode *>(hash_node);
-        encoding_size_0 = fnode->encode_size();
+        // encoding_size_0 = fnode->encode_size();
+
+        // rlp
+        int payload_size = 0;
+        fnode->encode_size(encoding_size_0, payload_size);
+
         if (encoding_size_0 > 17 * 32) {  // encode into global memory
 
-          // TODO: delete aligned
           uint8_t *buffer_global =
               allocator.malloc(util::align_to<8>(encoding_size_0));
           memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
 
-          fnode->encode(buffer_global);
+          fnode->encode(buffer_global, payload_size);
           encoding_0 = buffer_global;
 
         } else {  // encode into shared memory
           memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
 
-          fnode->encode(buffer_shared);
+          fnode->encode(buffer_shared, payload_size);
           encoding_0 = buffer_shared;
         }
         hash_0 = fnode->buffer;
 
       } else {
         ShortNode *snode = static_cast<ShortNode *>(hash_node);
-        encoding_size_0 = snode->encode_size();
+        // encoding_size_0 = snode->encode_size();
+
+        // rlp
+        int kc_size = util::hex_to_compact_size(snode->key, snode->key_size);
+        uint8_t *kc = allocator.malloc(util::align_to<8>(kc_size));
+        assert(kc_size ==
+               util::hex_to_compact(snode->key, snode->key_size, kc));
+        snode->key_compact = kc;
+
+        int payload_size = 0;
+        snode->encode_size(encoding_size_0, payload_size);
+
         if (encoding_size_0 > 17 * 32) {  // encode into global memory
 
           // TODO: delete aligned
@@ -2414,12 +2686,12 @@ __device__ __forceinline__ void do_hash_onepass_update_phase_v2(
               allocator.malloc(util::align_to<8>(encoding_size_0));
           memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
 
-          snode->encode(buffer_global);
+          snode->encode(buffer_global, payload_size);
           encoding_0 = buffer_global;
         } else {  // encode into shared memory
           memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
 
-          snode->encode(buffer_shared);
+          snode->encode(buffer_shared, payload_size);
           encoding_0 = buffer_shared;
         }
         hash_0 = snode->buffer;
@@ -2614,11 +2886,10 @@ __global__ void puts_2phase_get_split_phase(
 }
 
 __global__ void puts_2phase_get_split_phase_with_read(
-    const uint8_t *keys_hexs, const int *keys_indexs, 
-    const uint8_t *rw_flags, FullNode **split_ends,
-    int *end_num, int *split_num, int *read_num, int n, const uint8_t **read_values_hps, 
-    int *read_values_sizes, Node **root_p, ShortNode *start_node,
-    DynamicAllocator<ALLOC_CAPACITY> allocator) {
+    const uint8_t *keys_hexs, const int *keys_indexs, const uint8_t *rw_flags,
+    FullNode **split_ends, int *end_num, int *split_num, int *read_num, int n,
+    const uint8_t **read_values_hps, int *read_values_sizes, Node **root_p,
+    ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
   if (tid >= n) {
     return;
@@ -2767,11 +3038,10 @@ __global__ void puts_2phase_put_mark_phase(
 
 __global__ void puts_2phase_put_mark_phase_with_read(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *rw_flags,
-    const uint8_t *values_bytes,
-    int64_t *values_indexs, const uint8_t *const *values_hps, int n,
-    int *compress_num, Node **hash_target_nodes, Node **root_p,
-    FullNode **compress_nodes, ShortNode *start_node,
-    DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
+    const uint8_t *values_bytes, int64_t *values_indexs,
+    const uint8_t *const *values_hps, int n, int *compress_num,
+    Node **hash_target_nodes, Node **root_p, FullNode **compress_nodes,
+    ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
     return;
@@ -2785,14 +3055,15 @@ __global__ void puts_2phase_put_mark_phase_with_read(
     hash_target_nodes[tid] = start_node;
     return;
   } else if (rw_flag == WRITE_FLAG) {
-    const uint8_t *value = util::element_start(values_indexs, tid, values_bytes);
+    const uint8_t *value =
+        util::element_start(values_indexs, tid, values_bytes);
     int value_size = util::element_size(values_indexs, tid);
-    const uint8_t *value_hp = values_hps[tid]; 
+    const uint8_t *value_hp = values_hps[tid];
     FullNode *compress_node = nullptr;
     Node *hash_target_node = nullptr;
     do_put_2phase_put_mark_phase(key, key_size, value, value_size, value_hp,
-                                root_p, compress_node, hash_target_node,
-                                start_node, node_allocator);
+                                 root_p, compress_node, hash_target_node,
+                                 start_node, node_allocator);
     if (compress_node != nullptr) {
       int compress_place = atomicAdd(compress_num, 1);
       compress_nodes[compress_place] = compress_node;
@@ -2966,7 +3237,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
             updated = true;
           }
           // }
-        } 
+        }
         return;
       }
       case Node::Type::FULL: {
@@ -2982,7 +3253,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
               updated = true;
             }
             // }
-          } 
+          }
           return;
         }
         if (f_node->child_num() == 1) {
@@ -3018,7 +3289,7 @@ __device__ __forceinline__ void new_do_put_2phase_compress_phase(
               updated = true;
             }
             // }
-          } 
+          }
           compressing_node = allocator.malloc<ShortNode>();
           compressing_node->type = Node::Type::SHORT;
           cached_keys = key_allocator.key_malloc(0);
@@ -3103,52 +3374,54 @@ __global__ void puts_2phase_compress_phase(
 //   }
 // }
 
-__device__ __forceinline__ void loop_traverse(Node * root, const uint8_t *key, int* s_node_num, int * f_node_num, int *v_node_num, int flag) {
-  Node * node = root;
+__device__ __forceinline__ void loop_traverse(Node *root, const uint8_t *key,
+                                              int *s_node_num, int *f_node_num,
+                                              int *v_node_num, int flag) {
+  Node *node = root;
   const uint8_t *key_router = key;
   while (node != nullptr) {
     int record;
     if (flag == 0)
       record = atomicCAS(&node->record0, 0, 1);
-    else 
-      record = atomicCAS(&node->record1, 0, 1); 
-    switch (node->type)
-    {
-    case Node::Type::SHORT: {
-      ShortNode *s_node = static_cast<ShortNode*>(node);
-      if(record == 0 ) {
-        atomicAdd(s_node_num,1);
+    else
+      record = atomicCAS(&node->record1, 0, 1);
+    switch (node->type) {
+      case Node::Type::SHORT: {
+        ShortNode *s_node = static_cast<ShortNode *>(node);
+        if (record == 0) {
+          atomicAdd(s_node_num, 1);
+        }
+        node = s_node->val;
+        key_router += s_node->key_size;
+        break;
       }
-      node = s_node->val;
-      key_router += s_node->key_size;
-      break;
-    }
-    case Node::Type::FULL: {
-      FullNode *f_node =static_cast<FullNode*>(node);
-      if(record==0){
-        atomicAdd(f_node_num, 1);
+      case Node::Type::FULL: {
+        FullNode *f_node = static_cast<FullNode *>(node);
+        if (record == 0) {
+          atomicAdd(f_node_num, 1);
+        }
+        node = f_node->childs[static_cast<int>(key_router[0])];
+        key_router++;
+        break;
       }
-      node = f_node->childs[static_cast<int>(key_router[0])];
-      key_router ++;
-      break;
-    }
-    case Node::Type::VALUE: {
-      // ValueNode *v_node = static_cast<ValueNode*>(node);
-      if(record==0){
-        atomicAdd(v_node_num, 1);
+      case Node::Type::VALUE: {
+        // ValueNode *v_node = static_cast<ValueNode*>(node);
+        if (record == 0) {
+          atomicAdd(v_node_num, 1);
+        }
+        return;
       }
-      return;
-    }
-    
-    default:
-      assert(false);
-      break;
+
+      default:
+        assert(false);
+        break;
     }
   }
-  
 }
 
-__global__ void traverse_trie(Node **root, uint8_t * keys_hexs, int *keys_indexs, int n, int * ssum, int *fsum, int *vsum, int flag) {
+__global__ void traverse_trie(Node **root, uint8_t *keys_hexs, int *keys_indexs,
+                              int n, int *ssum, int *fsum, int *vsum,
+                              int flag) {
   // printf("one traverse\n");
   // start_node->print_self();
   // printf("start node child: %p\n", start_node->val);
@@ -3159,7 +3432,7 @@ __global__ void traverse_trie(Node **root, uint8_t * keys_hexs, int *keys_indexs
   // int *v_num, *s_num, *f_num;
   const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
   // dfs_traverse_trie(*root, v_num, f_num, s_num);
-  loop_traverse(*root, key, ssum, fsum,vsum, flag);
+  loop_traverse(*root, key, ssum, fsum, vsum, flag);
   // atomicAdd(ssum, *s_num);
   // atomicAdd(fsum, *f_num);
   // atomicAdd(vsum, *v_num);

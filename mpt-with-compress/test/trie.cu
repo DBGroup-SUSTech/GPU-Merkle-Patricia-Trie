@@ -8,10 +8,10 @@
 #include "bench/wiki.cuh"
 #include "bench/ycsb.cuh"
 #include "mpt/cpu_mpt.cuh"
+#include "mpt/cpu_mpt_kernel.cuh"
 #include "mpt/gpu_mpt.cuh"
 #include "mpt/node.cuh"
 #include "util/timer.cuh"
-#include "mpt/cpu_mpt_kernel.cuh"
 
 /// @brief generate data for testing
 /// @param keys_bytes   hex encoding
@@ -217,7 +217,8 @@ TEST(CpuMpt, Puts2PhaseBasic) {
   CpuMPT::Compress::MPT mpt;
   mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
                   values_bytes_indexs, n);
-  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs,
+                             values_sizes);
 
   for (int i = 0; i < n; ++i) {
     ASSERT_TRUE(util::bytes_equal(
@@ -261,9 +262,10 @@ TEST(CpuMpt, PutsOLCBasic) {
                      keys_hexs_indexs);
 
   CpuMPT::Compress::MPT mpt;
-  mpt.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
-                  values_bytes_indexs, n);
-  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+  mpt.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+                n);
+  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs,
+                             values_sizes);
 
   for (int i = 0; i < n; ++i) {
     ASSERT_TRUE(util::bytes_equal(
@@ -346,7 +348,8 @@ TEST(CpuMpt, Puts2PhaseOverride) {
   CpuMPT::Compress::MPT mpt;
   mpt.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
                   values_bytes_indexs, n);
-  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs,
+                             values_sizes);
 
   ASSERT_TRUE(util::bytes_equal(values_ptrs[0], values_sizes[0],
                                 reinterpret_cast<const uint8_t *>("puppy"),
@@ -381,9 +384,10 @@ TEST(CpuMpt, PutsOLCOverride) {
                      keys_hexs_indexs);
 
   CpuMPT::Compress::MPT mpt;
-  mpt.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
-                  values_bytes_indexs, n);
-  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+  mpt.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+                n);
+  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs,
+                             values_sizes);
 
   ASSERT_TRUE(util::bytes_equal(values_ptrs[0], values_sizes[0],
                                 reinterpret_cast<const uint8_t *>("puppy"),
@@ -473,7 +477,8 @@ TEST(CpuMpt, Puts2PhaseFullTrie) {
   const uint8_t **values_ptrs = new const uint8_t *[n] {};
   int *values_sizes = new int[n]{};
 
-  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs,
+                             values_sizes);
 
   for (int i = 0; i < n; ++i) {
     ASSERT_TRUE(util::bytes_equal(
@@ -520,13 +525,14 @@ TEST(CpuMpt, PutsOLCFullTrie) {
                      keys_hexs_indexs);
 
   CpuMPT::Compress::MPT mpt;
-  mpt.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
-                  values_bytes_indexs, n);
+  mpt.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+                n);
 
   const uint8_t **values_ptrs = new const uint8_t *[n] {};
   int *values_sizes = new int[n]{};
 
-  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+  mpt.gets_baseline_parallel(keys_hexs, keys_hexs_indexs, n, values_ptrs,
+                             values_sizes);
 
   for (int i = 0; i < n; ++i) {
     ASSERT_TRUE(util::bytes_equal(
@@ -659,7 +665,7 @@ TEST(CpuMpt, HashsDirtyFlagFullTrie) {
 }
 
 TEST(CpuMpt, HashsOnePassFullTrie) {
-    GPUHashMultiThread::load_constants();
+  GPUHashMultiThread::load_constants();
 
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
@@ -684,8 +690,8 @@ TEST(CpuMpt, HashsOnePassFullTrie) {
   //                                values_bytes_indexs, n);
 
   CpuMPT::Compress::MPT cpu_mpt_onepass;
-  auto [node, node_size] = cpu_mpt_onepass.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
-                              values_bytes_indexs, n);
+  auto [node, node_size] = cpu_mpt_onepass.puts_lock(
+      keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, n);
 
   perf::CpuTimer<perf::us> timer_cpu_hash_dirty_flag;  // timer start --
   timer_cpu_hash_dirty_flag.start();
@@ -828,6 +834,7 @@ TEST(GpuMpt, PutsBaselineOverride) {
   delete[] keys_hexs;
   delete[] keys_hexs_indexs;
 }
+
 TEST(GpuMpt, PutsBaselineFullTrie) {
   const uint8_t *keys_bytes = nullptr;
   int *keys_bytes_indexs = nullptr;
@@ -3291,8 +3298,7 @@ TEST(Trie, ETEYCSBBench) {
 
   read_ycsb_data_insert(YCSB_PATH, key, key_index, value, value_index,
                         data_number);
-  read_ycsb_data_read(YCSB_PATH, read_key, read_key_index,
-                      read_data_number);
+  read_ycsb_data_read(YCSB_PATH, read_key, read_key_index, read_data_number);
   printf("Inserting %d k-v pairs, then Reading %d k-v pairs \n", data_number,
          read_data_number);
 
@@ -4056,9 +4062,8 @@ TEST(TrieV2, LookupYCSBBench) {
   int lookup_num_from_file;
 
   // load data
-  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
-                        values_bytes, values_bytes_indexs,
-                        record_num_from_file);
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
+                        values_bytes_indexs, record_num_from_file);
   read_ycsb_data_read(YCSB_PATH, read_keys_bytes, read_keys_bytes_indexs,
                       lookup_num_from_file);
 
@@ -4371,9 +4376,8 @@ TEST(TrieV2, ETEInsertYCSBBench) {
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   int record_num = 0;
   int insert_num_from_file;
-  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
-                        values_bytes, values_bytes_indexs,
-                        insert_num_from_file);
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
+                        values_bytes_indexs, insert_num_from_file);
   int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
   assert(insert_num <= insert_num_from_file);
 
@@ -4782,8 +4786,8 @@ TEST(TrieV2Pin, ETEInsertProfileYCSB) {
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   int record_num = 0;
   int insert_num;
-  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
-                        values_bytes, values_bytes_indexs, insert_num);
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
+                        values_bytes_indexs, insert_num);
 
   printf("Inserting %d k-v pairs\n", insert_num);
 
@@ -4995,8 +4999,8 @@ TEST(TrieV2Pin, PipelineProfile) {
   int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
   // int record_num = 0;
   int insert_num;
-  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs,
-                        values_bytes, values_bytes_indexs, insert_num);
+  read_ycsb_data_insert(YCSB_PATH, keys_bytes, keys_bytes_indexs, values_bytes,
+                        values_bytes_indexs, insert_num);
 
   printf("Inserting %d k-v pairs\n", insert_num);
 
@@ -5062,4 +5066,288 @@ TEST(TrieV2Pin, PipelineProfile) {
     // cutil::println_hex(hash, hash_size);
     CHECK_ERROR(cudaDeviceReset());
   }
+}
+
+TEST(CaseStudy, HashRlpEncoding) {
+  const int n = 3;
+  const uint8_t *keys_bytes =
+      reinterpret_cast<const uint8_t *>("doedogdogglesworth");
+  int keys_bytes_indexs[2 * n] = {0, 2, 3, 5, 6, 17};
+  const uint8_t *values_bytes =
+      reinterpret_cast<const uint8_t *>("reindeerpuppycat");
+  int64_t values_bytes_indexs[2 * n] = {0, 7, 8, 12, 13, 15};
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+
+  const uint8_t *values_ptrs[n]{};
+  int values_sizes[n]{};
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs,
+                     keys_hexs_indexs);
+
+  CpuMPT::Compress::MPT mpt;
+  mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                    values_bytes_indexs, n);
+  mpt.gets_baseline(keys_hexs, keys_hexs_indexs, n, values_ptrs, values_sizes);
+
+  for (int i = 0; i < n; ++i) {
+    ASSERT_TRUE(util::bytes_equal(
+        util::element_start(values_bytes_indexs, i, values_bytes),
+        util::element_size(values_bytes_indexs, i), values_ptrs[i],
+        values_sizes[i]));
+    // printf("Key=");
+    // cutil::println_str(util::element_start(keys_bytes_indexs, i, keys_bytes),
+    //                    util::element_size(keys_bytes_indexs, i));
+    // printf("Hex=");
+    // cutil::println_hex(util::element_start(keys_hexs_indexs, i, keys_hexs),
+    //                    util::element_size(keys_hexs_indexs, i));
+    // printf("Value=");
+    // cutil::println_str(
+    //     util::element_start(values_bytes_indexs, i, values_bytes),
+    //     util::element_size(values_bytes_indexs, i));
+    // printf("Get=");
+    // cutil::println_str(values_ptrs[i], values_sizes[i]);
+  }
+
+  mpt.hashs_dirty_flag();
+
+  // check hash
+  const uint8_t *hash = nullptr;
+  int hash_size = 0;
+  mpt.get_root_hash(hash, hash_size);
+  printf("Root Hash is: ");
+  cutil::println_hex(hash, hash_size);
+}
+
+TEST(CaseStudy, GetsDirtyNodesEthtxn) {
+  using namespace bench::ethtxn;
+  GPUHashMultiThread::load_constants();
+
+  uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
+  int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
+  int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
+  int record_num = 0;
+  int insert_num_from_file =
+      read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
+                           values_bytes, values_bytes_indexs);
+  // int insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
+  int insert_num = 10;
+  assert(insert_num <= insert_num_from_file);
+  printf("Inserting %d k-v pairs\n", insert_num);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num, keys_hexs,
+                     keys_hexs_indexs);
+
+  perf::CpuTimer<perf::us> cpu;
+  perf::CpuTimer<perf::us> gpu_olc;
+  perf::CpuTimer<perf::us> gpu_two;
+
+  const uint8_t **values_hps = new const uint8_t *[insert_num];
+  for (int i = 0; i < insert_num; ++i) {
+    values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
+  }
+
+  const uint8_t *hash = nullptr;
+  int hash_size = 0;
+  int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(values_bytes_indexs, insert_num);
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
+  {
+    GPUHashMultiThread::load_constants();
+    CpuMPT::Compress::MPT cpu_mpt;
+    cpu.start();
+    cpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                          values_bytes_indexs, insert_num);
+    cpu_mpt.hashs_dirty_flag();
+    cpu.stop();
+    cpu_mpt.get_root_hash(hash, hash_size);
+    printf("CPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    gpu_olc.start();
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num);
+    gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    gpu_olc.stop();
+    gpu_mpt_olc.get_root_hash(hash, hash_size);
+    printf("GPU olc hash is: ");
+    cutil::println_hex(hash, hash_size);
+
+    const uint8_t *hashs = nullptr;
+    const uint8_t *encs = nullptr;
+    const gutil::ull_t *encs_indexs = nullptr;
+    gutil::ull_t n_nodes = 0;
+
+    gpu_mpt_olc.flush_dirty_nodes(keys_hexs, keys_hexs_indexs, insert_num,
+                                  hashs, encs, encs_indexs, n_nodes);
+
+    printf("%llu nodes\n", n_nodes);
+    for (gutil::ull_t i = 0; i < n_nodes; ++i) {
+      const uint8_t *hash = &hashs[i * HASH_SIZE];
+      const uint8_t *enc = util::element_start(encs_indexs, i, encs);
+      int enc_size = util::element_size(encs_indexs, i);
+      printf("enc size = %d\n", enc_size);
+      cutil::println_hex(hash, HASH_SIZE);
+      cutil::println_hex(enc, util::element_size(encs_indexs, i));
+    }
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two;
+    gpu_two.start();
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
+        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+        values_hps, insert_num);
+    gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    gpu_two.stop();
+    gpu_mpt_two.get_root_hash(hash, hash_size);
+    printf("GPU two hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  printf(
+      "CPU baseline end-to-end time %d us for %d insert operations and "
+      "trie with %d records \n",
+      cpu.get(), insert_num, record_num);
+  printf(
+      "GPU olc end-to-end time %d us for %d insert operations and trie "
+      "with %d records \n",
+      gpu_olc.get(), insert_num, record_num);
+  printf(
+      "GPU two end-to-end time %d us for %d insert operations and trie "
+      "with %d records \n",
+      gpu_two.get(), insert_num, record_num);
+}
+
+TEST(CaseStudy, RlpEncodingEthtxn) {
+  using namespace bench::ethtxn;
+  GPUHashMultiThread::load_constants();
+
+  uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
+  int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
+  int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
+  int record_num = 0;
+  int insert_num_from_file =
+      read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
+                           values_bytes, values_bytes_indexs);
+  // int insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
+  int insert_num = 100;
+  assert(insert_num <= insert_num_from_file);
+  printf("Inserting %d k-v pairs\n", insert_num);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num, keys_hexs,
+                     keys_hexs_indexs);
+
+  perf::CpuTimer<perf::us> cpu;
+  perf::CpuTimer<perf::us> gpu_olc;
+  perf::CpuTimer<perf::us> gpu_two;
+
+  const uint8_t **values_hps = new const uint8_t *[insert_num];
+  for (int i = 0; i < insert_num; ++i) {
+    values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
+  }
+
+  const uint8_t *hash = nullptr;
+  int hash_size = 0;
+  int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(values_bytes_indexs, insert_num);
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
+  {
+    GPUHashMultiThread::load_constants();
+    CpuMPT::Compress::MPT cpu_mpt;
+    cpu.start();
+    auto [hash_nodes, hash_nodes_num] = cpu_mpt.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
+                          values_bytes_indexs, insert_num);
+    printf("finish onepass: %p , %d\n", hash_nodes, hash_nodes_num);
+    cpu_mpt.hashs_onepass(hash_nodes, hash_nodes_num);
+    cpu.stop();
+    cpu_mpt.get_root_hash_parallel(hash, hash_size);
+    printf("CPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    gpu_olc.start();
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num);
+    gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    gpu_olc.stop();
+    gpu_mpt_olc.get_root_hash(hash, hash_size);
+    printf("GPU olc hash is: ");
+    cutil::println_hex(hash, hash_size);
+
+    const uint8_t *hashs = nullptr;
+    const uint8_t *encs = nullptr;
+    const gutil::ull_t *encs_indexs = nullptr;
+    gutil::ull_t n_nodes = 0;
+
+    gpu_mpt_olc.flush_dirty_nodes(keys_hexs, keys_hexs_indexs, insert_num,
+                                  hashs, encs, encs_indexs, n_nodes);
+
+    printf("%llu nodes\n", n_nodes);
+    for (gutil::ull_t i = 0; i < n_nodes; ++i) {
+      const uint8_t *hash = &hashs[i * HASH_SIZE];
+      const uint8_t *enc = util::element_start(encs_indexs, i, encs);
+      int enc_size = util::element_size(encs_indexs, i);
+      // printf("enc size = %d\n", enc_size);
+      // cutil::println_hex(enc, util::element_size(encs_indexs, i));
+    }
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two;
+    gpu_two.start();
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
+        keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+        values_hps, insert_num);
+    gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    gpu_two.stop();
+    gpu_mpt_two.get_root_hash(hash, hash_size);
+    printf("GPU two hash is: ");
+    cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  printf(
+      "CPU baseline end-to-end time %d us for %d insert operations and "
+      "trie with %d records \n",
+      cpu.get(), insert_num, record_num);
+  printf(
+      "GPU olc end-to-end time %d us for %d insert operations and trie "
+      "with %d records \n",
+      gpu_olc.get(), insert_num, record_num);
+  printf(
+      "GPU two end-to-end time %d us for %d insert operations and trie "
+      "with %d records \n",
+      gpu_two.get(), insert_num, record_num);
 }

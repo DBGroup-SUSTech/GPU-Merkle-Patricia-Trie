@@ -458,28 +458,49 @@ namespace CpuMPT
 
                     // if (lane_id == 0)
                     // {
-                    // TODO: may encode be parallel?
                     // TODO: is global buffer enc faster or share-memory enc-hash faster?
                     if (hash_node->type == Node::Type::FULL)
                     {
                         FullNode *fnode = static_cast<FullNode *>(hash_node);
-                        encoding_size = fnode->tbb_encode_size();
+                        // encoding_size = fnode->tbb_encode_size();
+
+                        // rlp
+                        int payload_size = 0;
+                        fnode->tbb_encode_size(encoding_size, payload_size);
+
                         uint8_t *buffer =
                             allocator.malloc(util::align_to<8>(encoding_size));
                         memset(buffer, 0, util::align_to<8>(encoding_size));
-                        fnode->tbb_encode(buffer);
+
+                        fnode->tbb_encode(buffer, payload_size);
                         encoding = buffer;
+                        
+                        // hash
                         hash = fnode->buffer;
                     }
                     else
                     {
                         ShortNode *snode = static_cast<ShortNode *>(hash_node);
-                        encoding_size = snode->tbb_encode_size();
+                        // encoding_size = snode->tbb_encode_size();
+
+                        // rlp
+                        int kc_size = util::hex_to_compact_size(snode->key, snode->key_size);
+                        uint8_t *kc = allocator.malloc(util::align_to<8>(kc_size));
+                        assert(kc_size ==
+                            util::hex_to_compact(snode->key, snode->key_size, kc));
+                        snode->key_compact = kc;
+
+                        int payload_size = 0;
+                        snode->tbb_encode_size(encoding_size, payload_size);
+
                         uint8_t *buffer =
                             allocator.malloc(util::align_to<8>(encoding_size));
                         memset(buffer, 0, util::align_to<8>(encoding_size));
-                        snode->tbb_encode(buffer);
+
+                        snode->tbb_encode(buffer, payload_size);
                         encoding = buffer;
+
+                        // hash
                         hash = snode->buffer;
                     }
 
@@ -491,6 +512,7 @@ namespace CpuMPT
                     }
                     else
                     {
+                        // cutil::println_hex(encoding, encoding_size);
                         CPUHash::calculate_hash(encoding, encoding_size, hash);
                         hash_node->hash = hash;
                         hash_node->hash_size = 32;

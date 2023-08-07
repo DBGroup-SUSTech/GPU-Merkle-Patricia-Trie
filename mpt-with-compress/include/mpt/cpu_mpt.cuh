@@ -357,6 +357,7 @@ namespace CpuMPT
         const uint8_t *value = util::element_start(values_indexs, i, values_bytes);
         int value_size = util::element_size(values_indexs, i);
         // printf("key size: %d, value size %d\n value: ", key_size, value_size);
+        // cutil::println_hex(key, key_size);
         // cutil::println_hex(value, value_size);
         put_baseline(key, key_size, value, value_size);
       }
@@ -383,9 +384,20 @@ namespace CpuMPT
 
         dfs_hashs_dirty_flag(snode->val);
 
-        int encoding_size = snode->encode_size();
+        // int encoding_size = snode->encode_size();
+        // uint8_t *encoding = new uint8_t[encoding_size]{};
+        // assert(encoding_size == snode->encode(encoding));
+
+        int kc_size = util::hex_to_compact_size(snode->key, snode->key_size);
+        uint8_t *kc = new uint8_t[kc_size]{};
+        assert(kc_size == util::hex_to_compact(snode->key, snode->key_size, kc));
+        snode->key_compact = kc;
+        
+        int encoding_size = 0, payload_size = 0;
+        snode->encode_size(encoding_size, payload_size);
         uint8_t *encoding = new uint8_t[encoding_size]{};
-        assert(encoding_size == snode->encode(encoding));
+        assert(encoding_size == snode->encode(encoding, payload_size));
+
 
         if (encoding_size < 32)
         {
@@ -424,9 +436,14 @@ namespace CpuMPT
           dfs_hashs_dirty_flag(fnode->childs[i]);
         }
 
-        int encoding_size = fnode->encode_size();
+        // int encoding_size = fnode->encode_size();
+        // uint8_t *encoding = new uint8_t[encoding_size]{};
+        // assert(encoding_size == fnode->encode(encoding));
+
+        int encoding_size = 0, payload_size = 0;
+        fnode->encode_size(encoding_size, payload_size);
         uint8_t *encoding = new uint8_t[encoding_size]{};
-        assert(encoding_size == fnode->encode(encoding));
+        assert(encoding_size == fnode->encode(encoding, payload_size));
 
         if (encoding_size < 32)
         {
@@ -872,84 +889,85 @@ namespace CpuMPT
 
     void MPT::hashs_ledgerdb(Node **dirty_nodes, int n)
     {
-      if (n < 1)
-      {
-        printf("no nodes\n");
-        assert(false);
-      }
-      std::vector<Node *> nodes;
-      nodes.insert(nodes.end(), dirty_nodes, dirty_nodes + n);
-      while (nodes.size() > 1)
-      {
-        std::vector<Node *> parents;
-        FullNode *full_cached = nullptr;
-        for (int i = 0; i < nodes.size(); i++)
-        {
-          Node *parent = nodes[i]->parent;
-          if (parent != nullptr && parent != full_cached)
-          {
-            if (parent->type == Node::Type::FULL)
-            {
-              full_cached = static_cast<FullNode *>(parent);
-            }
-            parents.emplace_back(parent);
-          }
-          switch (nodes[i]->type)
-          {
-          case Node::Type::VALUE:
-          {
-            break;
-          }
-          case Node::Type::SHORT:
-          {
-            ShortNode *node = static_cast<ShortNode *>(nodes[i]);
-            int encode_size = node->encode_size();
-            uint8_t *buffer = (uint8_t *)malloc(encode_size * sizeof(uint8_t));
-            node->encode(buffer);
-            if (node->encode_size() < 32)
-            {
-              node->hash = buffer;
-              node->hash_size = encode_size;
-            }
-            else
-            {
-              CPUHash::calculate_hash(buffer, encode_size, node->buffer);
-              node->hash = node->buffer;
-              node->hash_size = 32;
-            }
-            free(buffer);
-            break;
-          }
-          case Node::Type::FULL:
-          {
-            FullNode *node = static_cast<FullNode *>(nodes[i]);
-            int encode_size = node->encode_size();
-            uint8_t *buffer = (uint8_t *)malloc(encode_size * sizeof(uint8_t));
-            node->encode(buffer);
-            node->encode(buffer);
-            if (node->encode_size() < 32)
-            {
-              node->hash = buffer;
-              node->hash_size = encode_size;
-            }
-            else
-            {
-              CPUHash::calculate_hash(buffer, encode_size, node->buffer);
-              node->hash = node->buffer;
-              node->hash_size = 32;
-            }
-            free(buffer);
-            break;
-          }
-          default:
-            assert(false);
-            printf("wrong root node type");
-            break;
-          }
-          nodes = std::move(parents);
-        }
-      }
-      return;
+      printf("hashs_ledgerdb() is deprecated\n");
+      // if (n < 1)
+      // {
+      //   printf("no nodes\n");
+      //   assert(false);
+      // }
+      // std::vector<Node *> nodes;
+      // nodes.insert(nodes.end(), dirty_nodes, dirty_nodes + n);
+      // while (nodes.size() > 1)
+      // {
+      //   std::vector<Node *> parents;
+      //   FullNode *full_cached = nullptr;
+      //   for (int i = 0; i < nodes.size(); i++)
+      //   {
+      //     Node *parent = nodes[i]->parent;
+      //     if (parent != nullptr && parent != full_cached)
+      //     {
+      //       if (parent->type == Node::Type::FULL)
+      //       {
+      //         full_cached = static_cast<FullNode *>(parent);
+      //       }
+      //       parents.emplace_back(parent);
+      //     }
+      //     switch (nodes[i]->type)
+      //     {
+      //     case Node::Type::VALUE:
+      //     {
+      //       break;
+      //     }
+      //     case Node::Type::SHORT:
+      //     {
+      //       ShortNode *node = static_cast<ShortNode *>(nodes[i]);
+      //       int encode_size = node->encode_size();
+      //       uint8_t *buffer = (uint8_t *)malloc(encode_size * sizeof(uint8_t));
+      //       node->encode(buffer);
+      //       if (node->encode_size() < 32)
+      //       {
+      //         node->hash = buffer;
+      //         node->hash_size = encode_size;
+      //       }
+      //       else
+      //       {
+      //         CPUHash::calculate_hash(buffer, encode_size, node->buffer);
+      //         node->hash = node->buffer;
+      //         node->hash_size = 32;
+      //       }
+      //       free(buffer);
+      //       break;
+      //     }
+      //     case Node::Type::FULL:
+      //     {
+      //       FullNode *node = static_cast<FullNode *>(nodes[i]);
+      //       int encode_size = node->encode_size();
+      //       uint8_t *buffer = (uint8_t *)malloc(encode_size * sizeof(uint8_t));
+      //       node->encode(buffer);
+      //       node->encode(buffer);
+      //       if (encode_siz < 32)
+      //       {
+      //         node->hash = buffer;
+      //         node->hash_size = encode_size;
+      //       }
+      //       else
+      //       {
+      //         CPUHash::calculate_hash(buffer, encode_size, node->buffer);
+      //         node->hash = node->buffer;
+      //         node->hash_size = 32;
+      //       }
+      //       free(buffer);
+      //       break;
+      //     }
+      //     default:
+      //       assert(false);
+      //       printf("wrong root node type");
+      //       break;
+      //     }
+      //     nodes = std::move(parents);
+      //   }
+      // }
+      // return;
     }
 
     void MPT::dfs_traverse_tree(Node *root)
