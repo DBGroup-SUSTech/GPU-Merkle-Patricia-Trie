@@ -312,6 +312,12 @@ memmove_forward(void *dest, const void *src, size_t n) {
     dest_[n] = src_[n];
   } while (n > 0);
 }
+
+__host__ __device__ __forceinline__ void int64_to_hex(uint8_t* hexArray, int64_t value) {
+    for (int i = 0; i < sizeof(int64_t); ++i) {
+        hexArray[i] = static_cast<uint8_t>((value >> (i * 8)) & 0xFF);
+    }
+}
 } // namespace util
 
 #define CHECK_ERROR(call)                                                      \
