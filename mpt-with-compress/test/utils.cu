@@ -206,5 +206,10 @@ TEST(Util, YCSBRW) {
 
 TEST(Util, ClusterData) {
   using namespace bench::keytype;
-  generate_gaussian_data(1000000000000000000, 500000, 100);
+  uint8_t * keys;
+  int * keys_indexs;
+  uint8_t * values;
+  int64_t * values_indexs;
+
+  generate_gaussian_data(keys, keys_indexs, values, 64, 64, values_indexs, 1000000000000000000, 500000, 100);
 }
