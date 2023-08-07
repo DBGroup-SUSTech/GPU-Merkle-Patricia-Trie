@@ -3,6 +3,7 @@
 #include "bench/ethtxn.cuh"
 #include "bench/wiki.cuh"
 #include "bench/ycsb.cuh"
+#include "bench/keytype.cuh"
 TEST(Util, BytesEqual) {
   ASSERT_FALSE(util::bytes_equal(reinterpret_cast<const uint8_t *>("12345"), 5,
                                  reinterpret_cast<const uint8_t *>("12"), 2));
@@ -201,4 +202,9 @@ TEST(Util, YCSBRW) {
   cutil::println_str(rw_keys_bytes, total_rw_length);
   cutil::print_hex(rw_flags, rw_data_num);
   cutil::println_str(rw_values_bytes, total_rw_value_length);
+}
+
+TEST(Util, ClusterData) {
+  using namespace bench::keytype;
+  generate_gaussian_data(1000000000000000000, 500000, 100);
 }

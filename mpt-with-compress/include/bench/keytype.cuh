@@ -123,5 +123,31 @@ void gen_data_with_parameter (
   }
 }
 
+// Box-Muller transform to generate standard normal random variables
+std::pair<double, double> box_muller_transform(double u1, double u2) {
+    double z1 = std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
+    double z2 = std::sqrt(-2.0 * std::log(u1)) * std::sin(2.0 * M_PI * u2);
+    return std::make_pair(z1, z2);
+}
+
+// Function to generate Gaussian data with a given mean and standard deviation
+std::vector<double> generate_gaussian_data(double mean, double std_dev, int num_samples) {
+    std::vector<double> data;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> dis(0.0, 1.0);
+
+    for (int i = 0; i < num_samples; ++i) {
+        double u1 = dis(gen);
+        double u2 = dis(gen);
+        auto [z1, z2] = box_muller_transform(u1, u2);
+
+        std::cout << int64_t(mean + std_dev * z1) << " ";
+        data.push_back(mean + std_dev * z1);
+
+    }
+    return data;
+}
+
 }  // namespace keytype
 }  // namespace bench
