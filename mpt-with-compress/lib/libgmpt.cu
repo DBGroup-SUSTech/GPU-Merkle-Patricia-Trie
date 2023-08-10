@@ -21,19 +21,22 @@ static struct Tries *tries = nullptr;
 
 // TODO: Redefine ALLOCATOR
 void preprocess() {
+  printf("preprocess()\n");
   CHECK_ERROR(cudaSetDevice(1));
+  CHECK_ERROR(cudaDeviceReset());
   if (tries != nullptr) {
-    delete (GpuMPT::Compress::MPT *)tries->state_trie;
-    delete (GpuMPT::Compress::MPT *)tries->receipt_trie;
-    delete (GpuMPT::Compress::MPT *)tries->transaction_trie;
+    // delete (GpuMPT::Compress::MPT *)tries->state_trie;
+    // delete (GpuMPT::Compress::MPT *)tries->receipt_trie;
+    // delete (GpuMPT::Compress::MPT *)tries->transaction_trie;
     delete tries;
   }
-  CHECK_ERROR(cudaDeviceReset());
   GPUHashMultiThread::load_constants();
   tries = new Tries{};
   tries->state_trie = new GpuMPT::Compress::MPT{};
   tries->receipt_trie = new GpuMPT::Compress::MPT{};
   tries->transaction_trie = new GpuMPT::Compress::MPT{};
+  printf("state_trie %p, receipt_trie %p, transaction_trie %p\n",
+         tries->state_trie, tries->receipt_trie, tries->transaction_trie);
   return;
 }
 
@@ -114,7 +117,7 @@ const uint8_t *build_mpt_olc(enum TrieType trie_type, const uint8_t *keys_hexs,
   int64_t values_bytes_size =
       util::elements_size_sum(values_bytes_indexs, insert_num);
   int values_indexs_size = util::indexs_size_sum(insert_num);
-  int values_hps_size = insert_num;
+  // int values_hps_size = insert_num;
 
   // printf("keys_hexs_size: %d\n", keys_hexs_size);
   // printf("keys_indexs_size: %d\n", keys_indexs_size);
@@ -148,7 +151,7 @@ const uint8_t *build_mpt_olc(enum TrieType trie_type, const uint8_t *keys_hexs,
 
   auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
   timer.stop();
-  printf("GPU olc hash is: ");
+  // printf("GPU olc hash is: ");
   cutil::println_hex(hash, hash_size);
 
   // CHECK_ERROR(cudaDeviceReset());
@@ -164,19 +167,26 @@ const uint8_t *build_mpt_olc(enum TrieType trie_type, const uint8_t *keys_hexs,
   return hash;
 }
 
-struct nodeset *get_all_nodes(enum TrieType trie_type, const uint8_t *keys_hexs,
-                              int *keys_hexs_indexs, int num) {
+struct nodeset get_all_nodes(enum TrieType trie_type, const uint8_t *keys_hexs,
+                             int *keys_hexs_indexs, int num) {
+  printf("get_all_nodes\n");
   CHECK_ERROR(cudaSetDevice(1));
-  assert(tries != nullptr);
-  GpuMPT::Compress::MPT *mpt = nullptr;
-  if (trie_type == TrieType::RECEIPT_TRIE) {
-    mpt = tries->receipt_trie;
-  } else if (trie_type == TrieType::STATE_TRIE) {
-    mpt = tries->state_trie;
-  } else if (trie_type == TrieType::TRANSACTION_TRIE) {
-    mpt = tries->transaction_trie;
-  }
-  assert(mpt != nullptr);
 
-  
+  assert(tries != nullptr && trie_type == TrieType::STATE_TRIE);
+  GpuMPT::Compress::MPT *mpt = tries->state_trie;
+  delete tries->receipt_trie;
+  delete tries->transaction_trie;
+  // if (trie_type == TrieType::RECEIPT_TRIE) {
+  //   mpt = tries->receipt_trie;
+  // } else if (trie_type == TrieType::STATE_TRIE) {
+  //   mpt = tries->state_trie;
+  // } else if (trie_type == TrieType::TRANSACTION_TRIE) {
+  //   mpt = tries->transaction_trie;
+  // }
+  assert(mpt != nullptr);
+  struct nodeset set {};
+
+  mpt->flush_dirty_nodes(keys_hexs, keys_hexs_indexs, num, set.hashs, set.encs,
+                         set.encs_indexs, set.num);
+  return set;
 }

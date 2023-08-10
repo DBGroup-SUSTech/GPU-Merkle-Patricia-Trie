@@ -45,6 +45,14 @@ bash do_all_experiments.sh
 ### Profiling
 You can run the experiments and generate profiling report by [profile.sh](./profile.sh). The Nsight Compute report will be stored in `./profile/`. If you'd like a csv version, just run [convert_to_csv.sh](./convert_to_csv.sh) and you will get all csv reports in `./profile/`.
 
+### Case study: Applied to Go-ethereum
+We integrate GPU MPT into go-ethereum using [cgo](https://golang.google.cn/pkg/runtime/cgo/).
+#### Install
+First make sure the `gmpt` target is compiled. 
+Then run [geth_install_libgmpt.sh](./geth_install_libgmpt.sh) to install the library and header files into go-ethereum's folder.
+#### Configure geth to use GPU MPT
+- [ ] TODO
+
 ## Code Structure
 ### Overview
 ```
@@ -66,5 +74,3 @@ You can run the experiments and generate profiling report by [profile.sh](./prof
 * **CPU baseline SkipList**: `CpuSkiplist::SkipList::puts_baseline` in [./mpt-with-compress/include/skiplist/cpu_skiplist.cuh] (./mpt-with-compress/include/skiplist/cpu_skiplist.cuh)
 ### Key experiments
 Please refer to [./do_all_experiments.sh](./do_all_experiments.sh), [./go-ethereum/trie/experiments_test.go](./go-ethereum/trie/experiments_test.go) and [./go-ethereum/miner/benchmark_test.go](./go-ethereum/miner/benchmark_test.go).
-
-

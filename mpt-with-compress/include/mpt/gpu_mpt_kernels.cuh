@@ -2039,11 +2039,14 @@ __device__ __forceinline__ void get_dirty_nodes_count(const uint8_t *key,
                                                       int key_size, Node *root,
                                                       gutil::ull_t *n_nodes,
                                                       gutil::ull_t *encs_size) {
+  // printf("root %p\n", root);
+  // return;
   // Requires all keys existed in the trie
   Node *node = root;
   int pos = 0;
   while (true) {
-    // printf("Encounter empty node\n");
+    // printf("node: %p, n_nodes: %p, encs_size %p\n", node, n_nodes,
+    // encs_size); printf("Encounter empty node\n");
     assert(node != nullptr);
     if (node->type == Node::Type::VALUE) {
       return;
@@ -2108,13 +2111,14 @@ __global__ void gets_dirty_nodes_count(const uint8_t *keys_hexs,
   }
   const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
   int key_size = util::element_size(keys_indexs, tid);
+  // cutil::println_hex(key, key_size);
   get_dirty_nodes_count(key, key_size, *root_p, n_nodes, encs_size);
 }
 
 __device__ __forceinline__ void get_dirty_nodes(
     const uint8_t *key, int key_size, Node *root, uint8_t *d_hashs,
     uint8_t *d_encs, gutil::ull_t *d_encs_indexs,
-    DynamicAllocator<ALLOC_CAPACITY> &allocator) {
+    DynamicAllocator<ENCODING_CAPACITY> &allocator) {
   // TODO
   int idxs_ptr = 0;  // writes to the i-th slot in d_encs_indexs
 
@@ -2264,11 +2268,10 @@ __device__ __forceinline__ void get_dirty_nodes(
   //   }
 }
 
-__global__ void gets_dirty_nodes(const uint8_t *keys_hexs, int *keys_indexs,
-                                 int n_keys, Node *const *root_p,
-                                 uint8_t *d_hashs, uint8_t *d_encs,
-                                 gutil::ull_t *d_encs_indexs,
-                                 DynamicAllocator<ALLOC_CAPACITY> allocator) {
+__global__ void gets_dirty_nodes(
+    const uint8_t *keys_hexs, int *keys_indexs, int n_keys, Node *const *root_p,
+    uint8_t *d_hashs, uint8_t *d_encs, gutil::ull_t *d_encs_indexs,
+    DynamicAllocator<ENCODING_CAPACITY> allocator) {
   // TODO:
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n_keys) {
