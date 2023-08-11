@@ -136,7 +136,7 @@ std::pair<double, double> box_muller_transform(double u1, double u2) {
 // Function to generate Gaussian data with a given mean and standard deviation
 void generate_gaussian_data(
   uint8_t *&keys, int *&keys_indexs, uint8_t *&values, int key_size, int value_size,
-  int64_t *&values_indexs, double mean, double std_dev, int n) {
+  int64_t *&values_indexs, double mean, double std_dev, int n, int & num_unique) {
   keys = new uint8_t[n * key_size]{};
   keys_indexs = new int[n * 2]{};
   values = new uint8_t[n * value_size]{};
@@ -155,10 +155,12 @@ void generate_gaussian_data(
 
     int64_t value = int64_t(mean + std_dev * z1);
     if (unique_set.find(value) != unique_set.end()) {
-      --i;
+      // --i;
+      // continue;
       continue;
     } else {
       unique_set.insert(value);
+      num_unique++;
     }
     std::stringstream ss;
     ss << std::setfill('0') << std::setw(key_size * 2) << std::hex << value;
@@ -172,12 +174,59 @@ void generate_gaussian_data(
     std::cout << int64_t(mean + std_dev * z1) << " ";}
   }
 
-  for (int i = 0; i < n; ++i) {
+  std::cout << num_unique << std::endl;
+  for (int i = 0; i < num_unique; ++i) {
     keys_indexs[2 * i] = key_size * i;
     keys_indexs[2 * i + 1] = key_size * (i + 1) - 1;
     values_indexs[2 * i] = value_size * i;
     values_indexs[2 * i + 1] = value_size * (i + 1) - 1;
   }
 }
+
+void generate_uniform_data(uint8_t *&keys, int *&keys_indexs, uint8_t *&values, int key_size, int value_size,
+  int64_t *&values_indexs, int64_t range, int64_t left, int n, int & num_unique) {
+  keys = new uint8_t[n * key_size]{};
+  keys_indexs = new int[n * 2]{};
+  values = new uint8_t[n * value_size]{};
+  values_indexs = new int64_t[n * 2]{};
+
+  std::unordered_set<int64_t> unique_set;
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<int64_t> dis(0, range);
+
+  for (int i = 0; i < n; ++i) {
+    int64_t value = dis(gen);
+    if (unique_set.find(value) != unique_set.end()) {
+      // --i;
+      // continue;
+      continue;
+    } else {
+      unique_set.insert(value);
+      num_unique++;
+    }
+    value += left;
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(key_size * 2) << std::hex << value;
+    std::string str_hex = ss.str();
+    std::string str_byte = ethtxn::hex_to_string(str_hex);
+    
+    assert(str_byte.length() == key_size);
+    memcpy(keys + i * key_size, str_byte.c_str(), key_size); 
+    if (i< 100) {
+    std::cout << ss.str() << " ";
+    std::cout << int64_t(value) << " ";}
+  }
+
+  std::cout << num_unique << std::endl;
+  for (int i = 0; i < num_unique; ++i) {
+    keys_indexs[2 * i] = key_size * i;
+    keys_indexs[2 * i + 1] = key_size * (i + 1) - 1;
+    values_indexs[2 * i] = value_size * i;
+    values_indexs[2 * i + 1] = value_size * (i + 1) - 1;
+  } 
+}
+
 }  // namespace keytype
 }  // namespace bench
