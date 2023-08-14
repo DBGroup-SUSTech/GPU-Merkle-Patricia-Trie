@@ -136,7 +136,7 @@ std::pair<double, double> box_muller_transform(double u1, double u2) {
 // Function to generate Gaussian data with a given mean and standard deviation
 void generate_gaussian_data(
   uint8_t *&keys, int *&keys_indexs, uint8_t *&values, int key_size, int value_size,
-  int64_t *&values_indexs, double mean, double std_dev, int n, int & num_unique) {
+  int64_t *&values_indexs, int64_t mean, int std_dev, int n, int & num_unique) {
   keys = new uint8_t[n * key_size]{};
   keys_indexs = new int[n * 2]{};
   values = new uint8_t[n * value_size]{};
@@ -183,6 +183,58 @@ void generate_gaussian_data(
   }
 }
 
+void generate_multi_cluster(
+  uint8_t *&keys, int *&keys_indexs, uint8_t *&values, int key_size, int value_size,
+  int64_t *&values_indexs, int cln, std::vector<int64_t> means, int std_dev, int n, int & num_unique) {
+  keys = new uint8_t[n * key_size]{};
+  keys_indexs = new int[n * 2]{};
+  values = new uint8_t[n * value_size]{};
+  values_indexs = new int64_t[n * 2]{};
+
+  std::unordered_set<int64_t> unique_set;
+  
+  for (int i = 0; i<cln; i++) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> dis(0.0, 1.0);
+
+    for (int j = 0; j < (n/cln); j++) {
+      double u1 = dis(gen);
+      double u2 = dis(gen);
+      auto [z1, z2] = box_muller_transform(u1, u2);
+
+      int64_t value = int64_t(means[i] + std_dev * z1);
+      if (unique_set.find(value) != unique_set.end()) {
+        // --i;
+        // continue;
+        continue;
+      } else {
+        unique_set.insert(value);
+        num_unique++;
+      }
+      std::stringstream ss;
+      ss << std::setfill('0') << std::setw(key_size * 2) << std::hex << value;
+      std::string str_hex = ss.str();
+      std::string str_byte = ethtxn::hex_to_string(str_hex);
+      
+      assert(str_byte.length() == key_size);
+      memcpy(keys + (i*(n/cln) + j) * key_size, str_byte.c_str(), key_size); 
+      if (j< (100/cln)) {
+      std::cout << ss.str() << " ";
+      std::cout << int64_t(means[i] + std_dev * z1) << " ";}
+    }
+  }
+
+  std::cout << num_unique << std::endl;
+
+  for (int i = 0; i < num_unique; ++i) {
+    keys_indexs[2 * i] = key_size * i;
+    keys_indexs[2 * i + 1] = key_size * (i + 1) - 1;
+    values_indexs[2 * i] = value_size * i;
+    values_indexs[2 * i + 1] = value_size * (i + 1) - 1;
+  }
+}
+
 void generate_uniform_data(uint8_t *&keys, int *&keys_indexs, uint8_t *&values, int key_size, int value_size,
   int64_t *&values_indexs, int64_t range, int64_t left, int n, int & num_unique) {
   keys = new uint8_t[n * key_size]{};
@@ -199,8 +251,7 @@ void generate_uniform_data(uint8_t *&keys, int *&keys_indexs, uint8_t *&values, 
   for (int i = 0; i < n; ++i) {
     int64_t value = dis(gen);
     if (unique_set.find(value) != unique_set.end()) {
-      // --i;
-      // continue;
+      --i;
       continue;
     } else {
       unique_set.insert(value);
