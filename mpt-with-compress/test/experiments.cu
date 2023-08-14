@@ -2775,14 +2775,14 @@ TEST(EXPERIMENTS, RangeTrieSize) {
   int value_size = 4;
   // int64_t total_data = 640000 * arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
   // int num_data = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
-  int num_data = 10000;
+  int num_data = 640000;
   int64_t total_data = 640000;
   // int scalev = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
   int scalev = 10240;
   total_data *= scalev;
   int num_unique = 0;
 
-  generate_uniform_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 6 * total_data, 1000 * total_data - 3 * total_data, num_data, num_unique);
+  generate_uniform_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 6 * total_data, 1000 * total_data - 3 * total_data, 640000, num_unique);
 
   std::vector<std::string> columns = {"method" ,"data_range", "throughput"};
   exp_util::CSVDataRecorder range_recorder(columns, "./data/rangetriesize"+std::to_string(num_data) +".csv");
@@ -2794,14 +2794,16 @@ TEST(EXPERIMENTS, RangeTrieSize) {
   keys_bytes_to_hexs(keys, keys_indexs, num_data, keys_hexs, keys_hexs_indexs);
   const uint8_t **values_hps = get_values_hps(num_data, values_indexs, values);
 
-  const int seg_size = 640000 - num_data;
+  int range_size = 10000;
+  // int range_size = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
+  const int seg_size = 640000 - range_size;
   cutil::Segment data_all{
       .key_hex_ = keys_hexs,
       .key_hex_index_ = keys_hexs_indexs,
       .value_ = values,
       .value_index_ = values_indexs,
       .value_hp_ = values_hps,
-      .n_ = int(total_data),
+      .n_ = 640000,
   };
 
   std::vector<cutil::Segment> segments = data_all.split_into_two(seg_size);
