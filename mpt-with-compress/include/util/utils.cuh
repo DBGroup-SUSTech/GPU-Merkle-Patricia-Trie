@@ -58,6 +58,10 @@ enum class Dataset {
   KEYTYPE_STEP,
   BTREE_YCSB,
   SKIPLIST_YCSB,
+  RW,
+  MODEL_DATA,
+  MODEL_CLUSTER_N,
+  MODEL_DATA_SIZE
 };
 
 void record_data(const std::string& filename, int key_size, int step,int time1, int time2, std::string label) {
@@ -130,6 +134,26 @@ int get_record_num(Dataset dataset) {
     }
     case Dataset::SKIPLIST_YCSB: {
       data_num_str = getenv("GPU_SKIPLIST_SIZE");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::RW: {
+      data_num_str = getenv("GMPT_RW_RRATIO");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::MODEL_DATA: {
+      data_num_str = getenv("GMPT_MODEL_DATA_VOLUME");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::MODEL_CLUSTER_N: {
+      data_num_str = getenv("GMPT_MODEL_CLUSTER_NUM");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::MODEL_DATA_SIZE: {
+      data_num_str = getenv("GMPT_MODEL_DATA_SIZE");
       assert(data_num_str != nullptr);
       break;
     }
