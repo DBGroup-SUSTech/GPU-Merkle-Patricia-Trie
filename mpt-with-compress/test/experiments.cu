@@ -2587,21 +2587,23 @@ TEST(EXPERIMENTS, Cluster)
   uint8_t *values;
   int64_t *values_indexs;
 
-  int key_size = 10;
+  int key_size = 20;
   int value_size = 4;
   int64_t total_data = 640000;
-  int scalev = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
-  // int scalev = 10000;
+  // int scalev = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
+  int scalev = 10000;
   total_data *= scalev;
-  int num_data = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
-  int num_unique = 0;
+  // int num_data = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
+  int num_data = 1000;
+  // int num_unique = 0;
 
-  generate_gaussian_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 1000 * total_data, total_data, num_data, num_unique);
+  // generate_gaussian_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 1000 * total_data, total_data, num_data, num_unique);
+  gen_sparse_data(num_data, key_size, value_size, keys, keys_indexs, values, values_indexs);
 
   std::vector<std::string> columns = {"method" ,"data_num", "throughput"};
   exp_util::CSVDataRecorder cluster_recorder(columns, "./data/cluster" + std::to_string(num_data) + ".csv");
 
-  num_data = num_unique;
+  // num_data = num_unique;
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -2703,30 +2705,85 @@ TEST(EXPERIMENTS, MultiCluster) {
   cluster_recorder.persist_data();
 }
 
-TEST(EXPERIMENTS, Uniform) {
+TEST(EXPERIMENTS, SmallUniform) {
   using namespace bench::keytype;
   uint8_t *keys;
   int *keys_indexs;
   uint8_t *values;
   int64_t *values_indexs;
 
-  int key_size = 10;
+  int key_size = 23;
   int value_size = 4;
   // int64_t total_data = 640000 * arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
-  int num_data = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
-  // int num_data = 10000;
+  // int num_data = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
+  int num_data = 10000;
+  int random_byte_size = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
+
+  gen_sparse_data(num_data, key_size, value_size, keys, keys_indexs, values, values_indexs, random_byte_size);
+
+  // generate_uniform_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 6 * total_data, 1000 * total_data - 3 * total_data, num_data, num_unique);
+
+  std::vector<std::string> columns = {"method" ,"data_num", "throughput"};
+  exp_util::CSVDataRecorder uniform_recorder(columns, "./data/smalluniform"+std::to_string(num_data) +".csv");
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys, keys_indexs, num_data, keys_hexs, keys_hexs_indexs);
+  const uint8_t **values_hps = get_values_hps(num_data, values_indexs, values);
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two;
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp_with_recorder(
+        keys_hexs, keys_hexs_indexs, values, values_indexs,
+        values_hps, num_data, uniform_recorder, random_byte_size);
+    // gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    // auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
+    // printf("GPU two hash is: ");
+    // cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2_with_record(
+            keys_hexs, keys_hexs_indexs, values, values_indexs,
+            values_hps, num_data, uniform_recorder, random_byte_size);
+    // gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    // auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
+    // printf("GPU olc hash is: ");
+    // cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  uniform_recorder.persist_data();
+
+}
+
+TEST(EXPERIMENTS, MediumUniform) {
+    using namespace bench::keytype;
+  uint8_t *keys;
+  int *keys_indexs;
+  uint8_t *values;
+  int64_t *values_indexs;
+
+  int key_size = 23;
+  int value_size = 4;
   int64_t total_data = 640000;
+  // int num_data = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
+  int num_data = 80000;
   int scalev = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
-  // int scalev = 10240;
   total_data *= scalev;
   int num_unique = 0;
 
   generate_uniform_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 6 * total_data, 1000 * total_data - 3 * total_data, num_data, num_unique);
 
-  std::vector<std::string> columns = {"method" ,"data_num", "throughput"};
-  exp_util::CSVDataRecorder uniform_recorder(columns, "./data/uniformnew"+std::to_string(num_data) +".csv");
-
   num_data = num_unique;
+
+  std::vector<std::string> columns = {"method" ,"data_num", "throughput"};
+  exp_util::CSVDataRecorder uniform_recorder(columns, "./data/mediumuniform"+std::to_string(num_data) +".csv");
 
   const uint8_t *keys_hexs = nullptr;
   int *keys_hexs_indexs = nullptr;
@@ -2761,7 +2818,64 @@ TEST(EXPERIMENTS, Uniform) {
   }
 
   uniform_recorder.persist_data();
+}
 
+TEST(EXPERIMENTS, LargeUniform) {
+    using namespace bench::keytype;
+  uint8_t *keys;
+  int *keys_indexs;
+  uint8_t *values;
+  int64_t *values_indexs;
+
+  int key_size = 23;
+  int value_size = 4;
+  int64_t total_data = 640000;
+  // int num_data = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
+  int num_data = 640000;
+  int scalev = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
+  total_data *= scalev;
+  int num_unique = 0;
+
+  generate_uniform_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 6 * total_data, 1000 * total_data - 3 * total_data, num_data, num_unique);
+
+  num_data = num_unique;
+
+  std::vector<std::string> columns = {"method" ,"data_num", "throughput"};
+  exp_util::CSVDataRecorder uniform_recorder(columns, "./data/largeuniform"+std::to_string(num_data) +".csv");
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys, keys_indexs, num_data, keys_hexs, keys_hexs_indexs);
+  const uint8_t **values_hps = get_values_hps(num_data, values_indexs, values);
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two;
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp_with_recorder(
+        keys_hexs, keys_hexs_indexs, values, values_indexs,
+        values_hps, num_data, uniform_recorder, scalev);
+    // gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    // auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
+    // printf("GPU two hash is: ");
+    // cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2_with_record(
+            keys_hexs, keys_hexs_indexs, values, values_indexs,
+            values_hps, num_data, uniform_recorder, scalev);
+    // gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    // auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
+    // printf("GPU olc hash is: ");
+    // cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  uniform_recorder.persist_data();
 }
 
 TEST(EXPERIMENTS, RangeTrieSize) {
@@ -2775,17 +2889,14 @@ TEST(EXPERIMENTS, RangeTrieSize) {
   int value_size = 4;
   // int64_t total_data = 640000 * arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
   // int num_data = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
-  int num_data = 640000;
-  int64_t total_data = 640000;
-  // int scalev = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
-  int scalev = 10240;
+  int num_data = 650000;
+  int64_t total_data = 650000;
+  int scalev = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
+  // int scalev = 10240;
   total_data *= scalev;
   int num_unique = 0;
 
-  generate_uniform_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 6 * total_data, 1000 * total_data - 3 * total_data, 640000, num_unique);
-
-  std::vector<std::string> columns = {"method" ,"data_range", "throughput"};
-  exp_util::CSVDataRecorder range_recorder(columns, "./data/rangetriesize"+std::to_string(num_data) +".csv");
+  generate_uniform_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 6 * total_data, 1000 * total_data - 3 * total_data, 650000, num_unique);
 
   num_data = num_unique;
 
@@ -2794,19 +2905,25 @@ TEST(EXPERIMENTS, RangeTrieSize) {
   keys_bytes_to_hexs(keys, keys_indexs, num_data, keys_hexs, keys_hexs_indexs);
   const uint8_t **values_hps = get_values_hps(num_data, values_indexs, values);
 
-  int range_size = 10000;
-  // int range_size = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
-  const int seg_size = 640000 - range_size;
+  // int range_size = 640000;
+  int range_size = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
+  const int seg_size = 650000 - range_size;
   cutil::Segment data_all{
       .key_hex_ = keys_hexs,
       .key_hex_index_ = keys_hexs_indexs,
       .value_ = values,
       .value_index_ = values_indexs,
       .value_hp_ = values_hps,
-      .n_ = 640000,
+      .n_ = 650000,
   };
 
+  std::vector<std::string> columns = {"method" ,"data_range", "throughput"};
+  exp_util::CSVDataRecorder range_recorder(columns, "./data/rangetriesize"+std::to_string(range_size) +".csv");
+
   std::vector<cutil::Segment> segments = data_all.split_into_two(seg_size);
+
+  std::cout << "build size: " << segments[0].n_ << std::endl;
+  std::cout << "data size: " << segments[1].n_ << std::endl;
 
   {
     GPUHashMultiThread::load_constants();
@@ -2838,4 +2955,83 @@ TEST(EXPERIMENTS, RangeTrieSize) {
   }
 
   range_recorder.persist_data();
+}
+
+TEST(EXPERIMENTS, RangeTrieCluster) {
+    using namespace bench::keytype;
+  uint8_t *keys;
+  int *keys_indexs;
+  uint8_t *values;
+  int64_t *values_indexs;
+
+  int key_size = 10;
+  int value_size = 4;
+  // int64_t total_data = 640000 * arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
+  // int num_data = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
+  int num_data = 650000;
+  int64_t total_data = 650000;
+  int scalev = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA);
+  // int scalev = 10240;
+  total_data *= scalev;
+  int num_unique = 0;
+
+  generate_gaussian_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 6 * total_data, 1000 * total_data - 3 * total_data, 650000, num_unique);
+
+  num_data = num_unique;
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys, keys_indexs, num_data, keys_hexs, keys_hexs_indexs);
+  const uint8_t **values_hps = get_values_hps(num_data, values_indexs, values);
+
+  // int range_size = 640000;
+  int range_size = arg_util::get_record_num(arg_util::Dataset::MODEL_DATA_SIZE);
+  const int seg_size = 650000 - range_size;
+  cutil::Segment data_all{
+      .key_hex_ = keys_hexs,
+      .key_hex_index_ = keys_hexs_indexs,
+      .value_ = values,
+      .value_index_ = values_indexs,
+      .value_hp_ = values_hps,
+      .n_ = 650000,
+  };
+
+  std::vector<std::string> columns = {"method" ,"data_range", "throughput"};
+  exp_util::CSVDataRecorder range_recorder(columns, "./data/rangetriesizecluster"+std::to_string(range_size) +".csv");
+
+  std::vector<cutil::Segment> segments = data_all.split_into_two(seg_size);
+
+  std::cout << "build size: " << segments[0].n_ << std::endl;
+  std::cout << "data size: " << segments[1].n_ << std::endl;
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two;
+    auto [d_old_hash_nodes, old_hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
+        segments[0].key_hex_, segments[0].key_hex_index_, segments[0].value_, segments[0].value_index_,
+        segments[0].value_hp_, segments[0].n_);
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp_with_recorder(
+        segments[1].key_hex_, segments[1].key_hex_index_, segments[1].value_, segments[1].value_index_,
+        segments[1].value_hp_, segments[1].n_, range_recorder, scalev);
+    // gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    // auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
+    // printf("GPU two hash is: ");
+    // cutil::println_hex(hash, hash_size);
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  {
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    auto [d_old_hash_nodes, old_hash_nodes_num] = gpu_mpt_olc.puts_latching_with_valuehp_v2(
+        segments[0].key_hex_, segments[0].key_hex_index_, segments[0].value_, segments[0].value_index_,
+        segments[0].value_hp_, segments[0].n_);
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_olc.puts_latching_with_valuehp_v2_with_record(
+        segments[1].key_hex_, segments[1].key_hex_index_, segments[1].value_, segments[1].value_index_,
+        segments[1].value_hp_, segments[1].n_, range_recorder, scalev);
+    
+    CHECK_ERROR(cudaDeviceReset());
+  }
+
+  range_recorder.persist_data(); 
 }

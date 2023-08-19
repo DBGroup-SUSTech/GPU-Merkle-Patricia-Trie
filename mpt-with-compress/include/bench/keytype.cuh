@@ -42,6 +42,51 @@ void gen_dense_data(int n, int key_size, int value_size, uint8_t *&keys,
   }
 }
 
+void gen_sparse_data(int n, int key_size, int value_size, uint8_t *&keys,
+                     int *&keys_indexs, uint8_t *&values, int64_t *&values_indexs,
+                     int random_bytes_num) {
+  keys = new uint8_t[n * key_size]{};
+  keys_indexs = new int[n * 2]{};
+  values = new uint8_t[n * value_size]{};
+  values_indexs = new int64_t[n * 2]{};
+
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::uniform_int_distribution<> dist(0, 15);
+
+  const char *hex_map = "0123456789abcdef";
+  std::unordered_set<std::string> unique_set;
+
+  for (int i = 0; i < n ; ++i) {
+    std::string str_hex(key_size * 2, '\0');
+    // generate random_bytes_num random bytes
+    for (int j= 2*key_size - random_bytes_num; j < 2*key_size; ++j) {
+      int h = dist(g);
+      assert(h <= 15);
+      str_hex[j] = hex_map[h];
+    }
+    //check unique
+    if (unique_set.find(str_hex) != unique_set.end()) {
+      --i;
+      continue;
+    } else {
+      unique_set.insert(str_hex);
+    }
+    std::string str_byte = ethtxn::hex_to_string(str_hex);
+
+    assert(str_byte.length() == key_size);
+    memcpy(keys + i * key_size, str_byte.c_str(), key_size);
+    // std::cout << str_hex << std::endl;
+    // cutil::println_hex((const uint8_t *)str_byte.c_str(), str_byte.size());
+  }
+  for (int i = 0; i < n; ++i) {
+    keys_indexs[2 * i] = key_size * i;
+    keys_indexs[2 * i + 1] = key_size * (i + 1) - 1;
+    values_indexs[2 * i] = value_size * i;
+    values_indexs[2 * i + 1] = value_size * (i + 1) - 1;
+  }
+} 
+
 // randomly select n data from
 void gen_sparse_data(int n, int key_size, int value_size, uint8_t *&keys,
                      int *&keys_indexs, uint8_t *&values,
@@ -155,7 +200,7 @@ void generate_gaussian_data(
 
     int64_t value = int64_t(mean + std_dev * z1);
     if (unique_set.find(value) != unique_set.end()) {
-      // --i;
+      --i;
       // continue;
       continue;
     } else {
