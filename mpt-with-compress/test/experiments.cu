@@ -2611,6 +2611,7 @@ TEST(EXPERIMENTS, Cluster)
   const uint8_t **values_hps = get_values_hps(num_data, values_indexs, values);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp_with_recorder(
@@ -2624,6 +2625,7 @@ TEST(EXPERIMENTS, Cluster)
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     auto [d_hash_nodes, hash_nodes_num] =

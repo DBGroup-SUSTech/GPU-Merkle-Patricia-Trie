@@ -5160,6 +5160,7 @@ TEST(CaseStudy, GetsDirtyNodesEthtxn) {
   int values_indexs_size = util::indexs_size_sum(insert_num);
   int values_hps_size = insert_num;
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu.start();
@@ -5170,10 +5171,10 @@ TEST(CaseStudy, GetsDirtyNodesEthtxn) {
     cpu_mpt.get_root_hash(hash, hash_size);
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     gpu_olc.start();
@@ -5202,12 +5203,12 @@ TEST(CaseStudy, GetsDirtyNodesEthtxn) {
       int enc_size = util::element_size(encs_indexs, i);
       printf("enc size = %d\n", enc_size);
       cutil::println_hex(hash, HASH_SIZE);
-      cutil::println_hex(enc, util::element_size(encs_indexs, i));
+      // cutil::println_hex(enc, util::element_size(encs_indexs, i));
     }
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     gpu_two.start();
@@ -5219,7 +5220,6 @@ TEST(CaseStudy, GetsDirtyNodesEthtxn) {
     gpu_mpt_two.get_root_hash(hash, hash_size);
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   printf(
@@ -5249,7 +5249,7 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
       read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
                            values_bytes, values_bytes_indexs);
   // int insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
-  int insert_num = 100;
+  int insert_num = 64;
   assert(insert_num <= insert_num_from_file);
   printf("Inserting %d k-v pairs\n", insert_num);
 
@@ -5276,6 +5276,7 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
   int values_indexs_size = util::indexs_size_sum(insert_num);
   int values_hps_size = insert_num;
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu.start();
@@ -5287,10 +5288,10 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
     cpu_mpt.get_root_hash_parallel(hash, hash_size);
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     gpu_olc.start();
@@ -5320,10 +5321,10 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
       // printf("enc size = %d\n", enc_size);
       // cutil::println_hex(enc, util::element_size(encs_indexs, i));
     }
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     gpu_two.start();
@@ -5335,7 +5336,6 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
     gpu_mpt_two.get_root_hash(hash, hash_size);
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   printf(

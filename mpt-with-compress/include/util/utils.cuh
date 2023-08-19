@@ -28,11 +28,13 @@
 
 // for geth
 #ifdef GETH
-#define ALLOC_CAPACITY ((uint64_t(1) << 32))      // 24GB for node
+#define ALLOC_CAPACITY ((uint64_t(1) << 32))      // 4GB for node
+#define ENCODING_CAPACITY (3 * (uint64_t(1) << 32))  // 12GB for encoding
 #define KEY_ALLOC_CAPACITY ((uint64_t(1) << 30))  // 3 GB for key
 #else
 // for experiments
-#define ALLOC_CAPACITY ((uint64_t(1) << 34))          // 24GB for node
+#define ALLOC_CAPACITY ((uint64_t(1) << 34))      // 16GB for node
+#define ENCODING_CAPACITY ((uint64_t(1) << 33))   // 8GB for encoding
 #define KEY_ALLOC_CAPACITY (3 * (uint64_t(1) << 30))  // 3 GB for key
 #endif
 
