@@ -145,6 +145,7 @@ TEST(EXPERIMENTS, InsertYCSB) {
   exp_util::InsertProfiler<T> plc_restart("GPU plc_restart", insert_num, 0);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu.start();
@@ -155,10 +156,10 @@ TEST(EXPERIMENTS, InsertYCSB) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -176,10 +177,10 @@ TEST(EXPERIMENTS, InsertYCSB) {
     auto [hash, hash_size] = gpu_mpt_baseline.get_root_hash();
     printf("GPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -197,10 +198,10 @@ TEST(EXPERIMENTS, InsertYCSB) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -218,10 +219,10 @@ TEST(EXPERIMENTS, InsertYCSB) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -238,10 +239,10 @@ TEST(EXPERIMENTS, InsertYCSB) {
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
     printf("GPU plc-restart hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -258,7 +259,6 @@ TEST(EXPERIMENTS, InsertYCSB) {
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
     printf("GPU plc-spin hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu.print();
@@ -336,6 +336,7 @@ TEST(EXPERIMENTS, InsertWiki) {
   exp_util::InsertProfiler<T> plc_restart("GPU plc_restart", insert_num, 0);
   
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu.start();
@@ -347,10 +348,10 @@ TEST(EXPERIMENTS, InsertWiki) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
     keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
@@ -369,10 +370,10 @@ TEST(EXPERIMENTS, InsertWiki) {
     auto [hash, hash_size] = gpu_mpt_baseline.get_root_hash();
     printf("GPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -391,10 +392,10 @@ TEST(EXPERIMENTS, InsertWiki) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
     keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
@@ -412,10 +413,10 @@ TEST(EXPERIMENTS, InsertWiki) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -432,10 +433,10 @@ TEST(EXPERIMENTS, InsertWiki) {
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
     printf("GPU plc-restart hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -452,7 +453,6 @@ TEST(EXPERIMENTS, InsertWiki) {
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
     printf("GPU plc-pin hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu.print();
@@ -526,6 +526,7 @@ TEST(EXPERIMENTS, InsertEthtxn) {
   exp_util::InsertProfiler<T> olc("GPU olc", insert_num, 0);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu.start();
@@ -537,10 +538,10 @@ TEST(EXPERIMENTS, InsertEthtxn) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
     keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
@@ -559,10 +560,10 @@ TEST(EXPERIMENTS, InsertEthtxn) {
     auto [hash, hash_size] = gpu_mpt_baseline.get_root_hash();
     printf("GPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
     keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
@@ -581,10 +582,10 @@ TEST(EXPERIMENTS, InsertEthtxn) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
     keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
@@ -602,7 +603,6 @@ TEST(EXPERIMENTS, InsertEthtxn) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu.print();
@@ -612,6 +612,7 @@ TEST(EXPERIMENTS, InsertEthtxn) {
   exp_util::InsertProfiler<T> plc_restart("GPU plc_restart", insert_num, 0);
   exp_util::InsertProfiler<T> plc_spin("GPU plc-spin", insert_num, 0);
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -628,10 +629,10 @@ TEST(EXPERIMENTS, InsertEthtxn) {
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
     printf("GPU plc-restart hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -648,7 +649,6 @@ TEST(EXPERIMENTS, InsertEthtxn) {
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
     printf("GPU plc-pin hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu.print();
@@ -711,6 +711,7 @@ TEST(EXPERIMENTS, LookupYCSB) {
   exp_util::LookupProfiler<T> gpu_gets("GPU", lookup_num, record_num);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
 
     CpuMPT::Compress::MPT cpu_mpt;
@@ -725,10 +726,10 @@ TEST(EXPERIMENTS, LookupYCSB) {
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
 
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     // CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     // CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
@@ -753,7 +754,6 @@ TEST(EXPERIMENTS, LookupYCSB) {
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
     printf("GPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu_gets.print();
@@ -835,6 +835,7 @@ TEST(EXPERIMENTS, LookupWiki) {
   exp_util::LookupProfiler<T> gpu_gets("GPU", lookup_num, record_num);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
 
     CpuMPT::Compress::MPT cpu_mpt;
@@ -849,10 +850,10 @@ TEST(EXPERIMENTS, LookupWiki) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
 
     GpuMPT::Compress::MPT gpu_mpt;
@@ -867,7 +868,6 @@ TEST(EXPERIMENTS, LookupWiki) {
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
     printf("GPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu_gets.print();
@@ -945,6 +945,7 @@ TEST(EXPERIMENTS, LookupEthtxn) {
   exp_util::LookupProfiler<T> gpu_gets("GPU", lookup_num, record_num);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
 
     CpuMPT::Compress::MPT cpu_mpt;
@@ -959,10 +960,10 @@ TEST(EXPERIMENTS, LookupEthtxn) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
 
     GpuMPT::Compress::MPT gpu_mpt;
@@ -977,7 +978,6 @@ TEST(EXPERIMENTS, LookupEthtxn) {
     auto [hash, hash_size] = gpu_mpt.get_root_hash();
     printf("GPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu_gets.print();
@@ -1026,6 +1026,7 @@ TEST(EXPERIMENTS, KeyTypeSparse) {
   // exp_util::InsertProfiler<T> olc("GPU olc", insert_num, 0);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1043,10 +1044,10 @@ TEST(EXPERIMENTS, KeyTypeSparse) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1063,7 +1064,6 @@ TEST(EXPERIMENTS, KeyTypeSparse) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   // olc.print();
@@ -1112,6 +1112,7 @@ TEST(EXPERIMENTS, KeyTypeDense) {
   // exp_util::InsertProfiler<T> olc("GPU olc", insert_num, 0);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1129,10 +1130,10 @@ TEST(EXPERIMENTS, KeyTypeDense) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1149,7 +1150,6 @@ TEST(EXPERIMENTS, KeyTypeDense) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   // olc.print();
@@ -1203,6 +1203,7 @@ TEST(EXPERIMENTS, AsyncMemcpyYCSB) {
 
   // TODO
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1220,10 +1221,10 @@ TEST(EXPERIMENTS, AsyncMemcpyYCSB) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1240,10 +1241,10 @@ TEST(EXPERIMENTS, AsyncMemcpyYCSB) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1261,10 +1262,10 @@ TEST(EXPERIMENTS, AsyncMemcpyYCSB) {
     auto [hash, hash_size] = gpu_mpt_olc_async.get_root_hash();
     printf("GPU olc async hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1282,7 +1283,6 @@ TEST(EXPERIMENTS, AsyncMemcpyYCSB) {
     auto [hash, hash_size] = gpu_mpt_two_async.get_root_hash();
     printf("GPU two async hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
   olc.print();
   two.print();
@@ -1341,6 +1341,7 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki) {
   exp_util::InsertProfiler<T> olc_async("GPU olc async", insert_num, 0);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1358,10 +1359,10 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1378,10 +1379,10 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1399,10 +1400,10 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki) {
     auto [hash, hash_size] = gpu_mpt_olc_async.get_root_hash();
     printf("GPU olc async hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1420,7 +1421,6 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki) {
     auto [hash, hash_size] = gpu_mpt_two_async.get_root_hash();
     printf("GPU two async hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
   olc.print();
   two.print();
@@ -1477,6 +1477,7 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn) {
   exp_util::InsertProfiler<T> olc_async("GPU olc async", insert_num, 0);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1494,10 +1495,10 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1514,10 +1515,10 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1535,10 +1536,10 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn) {
     auto [hash, hash_size] = gpu_mpt_olc_async.get_root_hash();
     printf("GPU olc async hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1557,7 +1558,6 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn) {
     auto [hash, hash_size] = gpu_mpt_two_async.get_root_hash();
     printf("GPU two async hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   olc.print();
@@ -1613,6 +1613,7 @@ TEST(EXPERIMENTS, TrieSizeYCSB) {
 
   // verify on unsegment data
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu_mpt.puts_baseline(data_all.key_hex_, data_all.key_hex_index_,
@@ -1624,7 +1625,6 @@ TEST(EXPERIMENTS, TrieSizeYCSB) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   std::vector<cutil::Segment> segments = data_all.split_into_two(seg_size);
@@ -1646,6 +1646,7 @@ TEST(EXPERIMENTS, TrieSizeYCSB) {
   exp_util::InsertProfiler<T> olc("GPU olc", insert_num, record_num);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu_mpt.puts_baseline(segments[0].key_hex_, segments[0].key_hex_index_,
@@ -1661,10 +1662,10 @@ TEST(EXPERIMENTS, TrieSizeYCSB) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -1691,10 +1692,10 @@ TEST(EXPERIMENTS, TrieSizeYCSB) {
     auto [hash, hash_size] = gpu_mpt_baseline.get_root_hash();
     printf("GPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -1719,10 +1720,10 @@ TEST(EXPERIMENTS, TrieSizeYCSB) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -1747,7 +1748,6 @@ TEST(EXPERIMENTS, TrieSizeYCSB) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu.print();
@@ -1805,6 +1805,7 @@ TEST(EXPERIMENTS, TrieSizeWiki) {
 
   // verify on unsegment data
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu_mpt.puts_baseline(data_all.key_hex_, data_all.key_hex_index_,
@@ -1816,7 +1817,6 @@ TEST(EXPERIMENTS, TrieSizeWiki) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   // segment data
@@ -1839,6 +1839,7 @@ TEST(EXPERIMENTS, TrieSizeWiki) {
   exp_util::InsertProfiler<T> olc("GPU olc", insert_num, record_num);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu_mpt.puts_baseline(segments[0].key_hex_, segments[0].key_hex_index_,
@@ -1854,10 +1855,10 @@ TEST(EXPERIMENTS, TrieSizeWiki) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -1884,10 +1885,10 @@ TEST(EXPERIMENTS, TrieSizeWiki) {
     auto [hash, hash_size] = gpu_mpt_baseline.get_root_hash();
     printf("GPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -1912,10 +1913,10 @@ TEST(EXPERIMENTS, TrieSizeWiki) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -1940,7 +1941,6 @@ TEST(EXPERIMENTS, TrieSizeWiki) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu.print();
@@ -1994,6 +1994,7 @@ TEST(EXPERIMENTS, TrieSizeEthtxn) {
 
   // verify on unsegment data
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu_mpt.puts_baseline(data_all.key_hex_, data_all.key_hex_index_,
@@ -2005,7 +2006,6 @@ TEST(EXPERIMENTS, TrieSizeEthtxn) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   // segment data
@@ -2029,6 +2029,7 @@ TEST(EXPERIMENTS, TrieSizeEthtxn) {
   exp_util::InsertProfiler<T> olc("GPU olc", insert_num, record_num);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     CpuMPT::Compress::MPT cpu_mpt;
     cpu_mpt.puts_baseline(segments[0].key_hex_, segments[0].key_hex_index_,
@@ -2044,10 +2045,10 @@ TEST(EXPERIMENTS, TrieSizeEthtxn) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -2074,10 +2075,10 @@ TEST(EXPERIMENTS, TrieSizeEthtxn) {
     auto [hash, hash_size] = gpu_mpt_baseline.get_root_hash();
     printf("GPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -2102,10 +2103,10 @@ TEST(EXPERIMENTS, TrieSizeEthtxn) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
@@ -2130,7 +2131,6 @@ TEST(EXPERIMENTS, TrieSizeEthtxn) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   cpu.print();
@@ -2183,6 +2183,7 @@ TEST(EXPERIMENTS, ModelFitting) {
   exp_util::InsertProfiler<T> olc("GPU olc", insert_num, 0);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -2201,10 +2202,10 @@ TEST(EXPERIMENTS, ModelFitting) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -2221,7 +2222,6 @@ TEST(EXPERIMENTS, ModelFitting) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   olc.print();
@@ -2280,6 +2280,7 @@ TEST(EXPERIMENTS, RW) {
 
   {
     //build trie
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     auto [d_record_hash_nodes, record_hash_nodes_num] =
@@ -2303,11 +2304,11 @@ TEST(EXPERIMENTS, RW) {
     printf("read num is %d\n", read_num);
     printf("GPU olc rw hash is: ");
     cutil::println_hex(new_hash, new_hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
     //build trie
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     auto [d_record_hash_nodes, record_hash_nodes_num] =
@@ -2331,7 +2332,6 @@ TEST(EXPERIMENTS, RW) {
     printf("read num is %d\n", read_num);
     printf("GPU two rw hash is: ");
     cutil::println_hex(new_hash, new_hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   two.print();
@@ -2361,6 +2361,7 @@ TEST(EXPERIMENTS, Cluster) {
   exp_util::InsertProfiler<T> olc("GPU olc", num_data, 0);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     two.start();
@@ -2372,10 +2373,10 @@ TEST(EXPERIMENTS, Cluster) {
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     olc.start();
@@ -2388,7 +2389,6 @@ TEST(EXPERIMENTS, Cluster) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   two.print();

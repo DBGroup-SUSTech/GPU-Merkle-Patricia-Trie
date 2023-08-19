@@ -20,8 +20,12 @@ class DynamicAllocator {
   }
 
   void free_all() {
-    CHECK_ERROR(gutil::DeviceFree(d_pool_aligned4_));
-    CHECK_ERROR(gutil::DeviceFree(d_count_aligned4_));
+    if (d_pool_aligned4_ != nullptr) {
+      CHECK_ERROR(gutil::DeviceFree(d_pool_aligned4_));
+    }
+    if (d_count_aligned4_ != nullptr) {
+      CHECK_ERROR(gutil::DeviceFree(d_count_aligned4_));
+    }
     // TODO: do not check the error here
     // gutil::DeviceFree(d_pool_aligned4_);
     // gutil::DeviceFree(d_count_aligned4_);
