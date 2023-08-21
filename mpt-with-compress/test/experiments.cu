@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include <cmath>
 #include <random>
 
@@ -210,8 +211,7 @@ TEST(EXPERIMENTS, InsertYCSB) {
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     two.start();
-    auto [d_hash_nodes, hash_nodes_num] =
-    gpu_mpt_two.puts_2phase_with_valuehp(
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
         keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
         values_hps, insert_num);
     gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
@@ -334,7 +334,7 @@ TEST(EXPERIMENTS, InsertWiki) {
   exp_util::InsertProfiler<T> olc("GPU olc", insert_num, 0);
   exp_util::InsertProfiler<T> plc_spin("GPU plc-spin", insert_num, 0);
   exp_util::InsertProfiler<T> plc_restart("GPU plc_restart", insert_num, 0);
-  
+
   {
     CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
@@ -353,18 +353,18 @@ TEST(EXPERIMENTS, InsertWiki) {
   {
     CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
-    keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
-    values_bytes_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_index_,
-    values_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_hp_,
-    values_hps_size)); GPUHashMultiThread::load_constants();
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
+    GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     gpu.start();
     auto [d_hash_nodes, hash_nodes_num] =
         gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
             segments[1].key_hex_, segments[1].key_hex_index_,
-            segments[1].value_, segments[1].value_index_,
-            segments[1].value_hp_, insert_num);
+            segments[1].value_, segments[1].value_index_, segments[1].value_hp_,
+            insert_num);
     gpu_mpt_baseline.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu.stop();
     auto [hash, hash_size] = gpu_mpt_baseline.get_root_hash();
@@ -397,15 +397,14 @@ TEST(EXPERIMENTS, InsertWiki) {
   {
     CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
-    keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
-    values_bytes_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_index_,
-    values_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_hp_,
-    values_hps_size)); GPUHashMultiThread::load_constants();
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
+    GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     two.start();
-    auto [d_hash_nodes, hash_nodes_num] =
-    gpu_mpt_two.puts_2phase_with_valuehp(
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
         segments[1].key_hex_, segments[1].key_hex_index_, segments[1].value_,
         segments[1].value_index_, segments[1].value_hp_, insert_num);
     gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
@@ -543,18 +542,18 @@ TEST(EXPERIMENTS, InsertEthtxn) {
   {
     CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
-    keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
-    values_bytes_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_index_,
-    values_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_hp_,
-    values_hps_size)); GPUHashMultiThread::load_constants();
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
+    GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_baseline;
     gpu.start();
     auto [d_hash_nodes, hash_nodes_num] =
         gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
             segments[1].key_hex_, segments[1].key_hex_index_,
-            segments[1].value_, segments[1].value_index_,
-            segments[1].value_hp_, insert_num);
+            segments[1].value_, segments[1].value_index_, segments[1].value_hp_,
+            insert_num);
     gpu_mpt_baseline.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu.stop();
     auto [hash, hash_size] = gpu_mpt_baseline.get_root_hash();
@@ -565,18 +564,18 @@ TEST(EXPERIMENTS, InsertEthtxn) {
   {
     CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
-    keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
-    values_bytes_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_index_,
-    values_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_hp_,
-    values_hps_size)); GPUHashMultiThread::load_constants();
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
+    GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     olc.start();
     auto [d_hash_nodes, hash_nodes_num] =
         gpu_mpt_olc.puts_latching_with_valuehp_v2(
             segments[1].key_hex_, segments[1].key_hex_index_,
-            segments[1].value_, segments[1].value_index_,
-            segments[1].value_hp_, insert_num);
+            segments[1].value_, segments[1].value_index_, segments[1].value_hp_,
+            insert_num);
     gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     olc.stop();
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
@@ -587,15 +586,14 @@ TEST(EXPERIMENTS, InsertEthtxn) {
   {
     CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_,
-    keys_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_,
-    values_bytes_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_index_,
-    values_indexs_size)); CHECK_ERROR(gutil::PinHost(segments[1].value_hp_,
-    values_hps_size)); GPUHashMultiThread::load_constants();
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
+    GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     two.start();
-    auto [d_hash_nodes, hash_nodes_num] =
-    gpu_mpt_two.puts_2phase_with_valuehp(
+    auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
         segments[1].key_hex_, segments[1].key_hex_index_, segments[1].value_,
         segments[1].value_index_, segments[1].value_hp_, insert_num);
     gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
@@ -725,7 +723,6 @@ TEST(EXPERIMENTS, LookupYCSB) {
     auto [hash, hash_size] = cpu_mpt.get_root_hash();
     printf("CPU hash is: ");
     cutil::println_hex(hash, hash_size);
-
   }
 
   {
@@ -2142,7 +2139,7 @@ TEST(EXPERIMENTS, TrieSizeEthtxn) {
 TEST(EXPERIMENTS, ModelFitting) {
   using namespace bench::keytype;
 
-    // allocate
+  // allocate
   uint8_t *keys_bytes;
   int *keys_bytes_indexs;
   uint8_t *values_bytes;
@@ -2157,8 +2154,7 @@ TEST(EXPERIMENTS, ModelFitting) {
   int value_size = 4;
 
   gen_data_with_parameter(insert_num, key_size, step, value_size, keys_bytes,
-                          keys_bytes_indexs, values_bytes,
-                          values_bytes_indexs);
+                          keys_bytes_indexs, values_bytes, values_bytes_indexs);
 
   // transform keys
   const uint8_t *keys_hexs = nullptr;
@@ -2229,16 +2225,18 @@ TEST(EXPERIMENTS, ModelFitting) {
 
   bool olc_better = olc.timer_.get() < two.timer_.get();
   if (olc_better) {
-    arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(), two.timer_.get(), "OLC");
+    arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(),
+                          two.timer_.get(), "OLC");
   } else {
-    arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(), two.timer_.get(), "TWO");
+    arg_util::record_data("./model_data.csv", key_size, step, olc.timer_.get(),
+                          two.timer_.get(), "TWO");
   }
 }
 
 TEST(EXPERIMENTS, RW) {
   using namespace bench::ycsb;
 
-  //build trie allocate
+  // build trie allocate
   uint8_t *build_trie_keys_bytes = new uint8_t[1000000000];
   int *build_trie_keys_bytes_indexs = new int[10000000];
   uint8_t *build_trie_values_bytes = new uint8_t[2000000000];
@@ -2258,35 +2256,42 @@ TEST(EXPERIMENTS, RW) {
                     rw_keys_bytes, rw_keys_bytes_indexs, rw_flags,
                     rw_values_bytes, rw_values_bytes_indexs, rw_data_num);
 
-  const uint8_t * build_keys_hexs = nullptr;
-  int * build_keys_hexs_indexs = nullptr;
-  keys_bytes_to_hexs(build_trie_keys_bytes, build_trie_keys_bytes_indexs, build_trie_data_num,
-                     build_keys_hexs, build_keys_hexs_indexs); 
-  
-  const uint8_t ** build_values_hps = get_values_hps(build_trie_data_num, build_trie_values_bytes_indexs, build_trie_values_bytes);
+  const uint8_t *build_keys_hexs = nullptr;
+  int *build_keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(build_trie_keys_bytes, build_trie_keys_bytes_indexs,
+                     build_trie_data_num, build_keys_hexs,
+                     build_keys_hexs_indexs);
 
-  const uint8_t * rw_keys_hexs = nullptr;
-  int * rw_keys_hexs_indexs = nullptr;
-  keys_bytes_to_hexs(rw_keys_bytes, rw_keys_bytes_indexs, rw_data_num, rw_keys_hexs, rw_keys_hexs_indexs);
+  const uint8_t **build_values_hps =
+      get_values_hps(build_trie_data_num, build_trie_values_bytes_indexs,
+                     build_trie_values_bytes);
 
-  const uint8_t ** rw_values_hps = get_values_hps(rw_data_num, rw_values_bytes_indexs, rw_values_bytes);
+  const uint8_t *rw_keys_hexs = nullptr;
+  int *rw_keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(rw_keys_bytes, rw_keys_bytes_indexs, rw_data_num,
+                     rw_keys_hexs, rw_keys_hexs_indexs);
 
-  const uint8_t ** rw_read_values_hps = new const uint8_t *[rw_data_num]; 
-  int * rw_read_values_sizes = new int [rw_data_num];
+  const uint8_t **rw_values_hps =
+      get_values_hps(rw_data_num, rw_values_bytes_indexs, rw_values_bytes);
+
+  const uint8_t **rw_read_values_hps = new const uint8_t *[rw_data_num];
+  int *rw_read_values_sizes = new int[rw_data_num];
 
   using T = perf::CpuTimer<perf::us>;
-  exp_util::InsertProfiler<T> two("GPU 2phase", rw_data_num, build_trie_data_num);
+  exp_util::InsertProfiler<T> two("GPU 2phase", rw_data_num,
+                                  build_trie_data_num);
   exp_util::InsertProfiler<T> olc("GPU olc", rw_data_num, build_trie_data_num);
 
   {
-    //build trie
+    // build trie
     CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_olc;
     auto [d_record_hash_nodes, record_hash_nodes_num] =
         gpu_mpt_olc.puts_latching_with_valuehp_v2(
-            build_keys_hexs, build_keys_hexs_indexs, build_trie_values_bytes, build_trie_values_bytes_indexs,
-            build_values_hps, build_trie_data_num);
+            build_keys_hexs, build_keys_hexs_indexs, build_trie_values_bytes,
+            build_trie_values_bytes_indexs, build_values_hps,
+            build_trie_data_num);
     gpu_mpt_olc.hash_onepass_v2(d_record_hash_nodes, record_hash_nodes_num);
     auto [old_hash, old_hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc build hash is: ");
@@ -2296,8 +2301,9 @@ TEST(EXPERIMENTS, RW) {
     olc.start();
     auto [d_rw_hash_nodes, rw_hash_nodes_num] =
         gpu_mpt_olc.puts_latching_with_valuehp_v2_with_read(
-          rw_keys_hexs, rw_keys_hexs_indexs, read_num, rw_flags, rw_values_bytes, rw_values_bytes_indexs,
-          rw_values_hps, rw_data_num, rw_read_values_hps, rw_read_values_sizes);
+            rw_keys_hexs, rw_keys_hexs_indexs, read_num, rw_flags,
+            rw_values_bytes, rw_values_bytes_indexs, rw_values_hps, rw_data_num,
+            rw_read_values_hps, rw_read_values_sizes);
     olc.stop();
     gpu_mpt_olc.hash_onepass_v2(d_rw_hash_nodes, rw_hash_nodes_num);
     auto [new_hash, new_hash_size] = gpu_mpt_olc.get_root_hash();
@@ -2307,14 +2313,15 @@ TEST(EXPERIMENTS, RW) {
   }
 
   {
-    //build trie
+    // build trie
     CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
     GpuMPT::Compress::MPT gpu_mpt_two;
     auto [d_record_hash_nodes, record_hash_nodes_num] =
         gpu_mpt_two.puts_2phase_with_valuehp(
-            build_keys_hexs, build_keys_hexs_indexs, build_trie_values_bytes, build_trie_values_bytes_indexs,
-            build_values_hps, build_trie_data_num);
+            build_keys_hexs, build_keys_hexs_indexs, build_trie_values_bytes,
+            build_trie_values_bytes_indexs, build_values_hps,
+            build_trie_data_num);
     gpu_mpt_two.hash_onepass_v2(d_record_hash_nodes, record_hash_nodes_num);
     auto [old_hash, old_hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two build hash is: ");
@@ -2324,8 +2331,9 @@ TEST(EXPERIMENTS, RW) {
     two.start();
     auto [d_rw_hash_nodes, rw_hash_nodes_num] =
         gpu_mpt_two.puts_2phase_with_valuehp_with_read(
-          rw_keys_hexs, rw_keys_hexs_indexs, read_num, rw_flags, rw_values_bytes, rw_values_bytes_indexs,
-          rw_values_hps, rw_data_num, rw_read_values_hps, rw_read_values_sizes);
+            rw_keys_hexs, rw_keys_hexs_indexs, read_num, rw_flags,
+            rw_values_bytes, rw_values_bytes_indexs, rw_values_hps, rw_data_num,
+            rw_read_values_hps, rw_read_values_sizes);
     two.stop();
     gpu_mpt_two.hash_onepass_v2(d_rw_hash_nodes, rw_hash_nodes_num);
     auto [new_hash, new_hash_size] = gpu_mpt_two.get_root_hash();
@@ -2340,21 +2348,22 @@ TEST(EXPERIMENTS, RW) {
 
 TEST(EXPERIMENTS, Cluster) {
   using namespace bench::keytype;
-  uint8_t * keys;
-  int * keys_indexs;
-  uint8_t * values;
-  int64_t * values_indexs;
-  
+  uint8_t *keys;
+  int *keys_indexs;
+  uint8_t *values;
+  int64_t *values_indexs;
+
   int key_size = 20;
   int value_size = 4;
   int num_data = 100000;
 
-  generate_gaussian_data(keys, keys_indexs, values, key_size, value_size, values_indexs, 10*num_data, 5*num_data, num_data);
+  generate_gaussian_data(keys, keys_indexs, values, key_size, value_size,
+                         values_indexs, 10 * num_data, 5 * num_data, num_data);
 
-  const uint8_t * keys_hexs = nullptr;
-  int * keys_hexs_indexs = nullptr;
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
   keys_bytes_to_hexs(keys, keys_indexs, num_data, keys_hexs, keys_hexs_indexs);
-  const uint8_t ** values_hps = get_values_hps(num_data, values_indexs, values);
+  const uint8_t **values_hps = get_values_hps(num_data, values_indexs, values);
 
   using T = perf::CpuTimer<perf::us>;
   exp_util::InsertProfiler<T> two("GPU 2phase", num_data, 0);
@@ -2366,8 +2375,8 @@ TEST(EXPERIMENTS, Cluster) {
     GpuMPT::Compress::MPT gpu_mpt_two;
     two.start();
     auto [d_hash_nodes, hash_nodes_num] = gpu_mpt_two.puts_2phase_with_valuehp(
-        keys_hexs, keys_hexs_indexs, values, values_indexs,
-        values_hps, num_data);
+        keys_hexs, keys_hexs_indexs, values, values_indexs, values_hps,
+        num_data);
     two.stop();
     gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
@@ -2381,9 +2390,9 @@ TEST(EXPERIMENTS, Cluster) {
     GpuMPT::Compress::MPT gpu_mpt_olc;
     olc.start();
     auto [d_hash_nodes, hash_nodes_num] =
-        gpu_mpt_olc.puts_latching_with_valuehp_v2(
-            keys_hexs, keys_hexs_indexs, values, values_indexs,
-            values_hps, num_data);
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(keys_hexs, keys_hexs_indexs,
+                                                  values, values_indexs,
+                                                  values_hps, num_data);
     olc.stop();
     gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
@@ -2393,4 +2402,94 @@ TEST(EXPERIMENTS, Cluster) {
 
   two.print();
   olc.print();
+}
+
+TEST(EXPERIMENTS, WarpETHT) {
+  using namespace bench::ethtxn;
+
+  uint8_t *keys_bytes = (uint8_t *)malloc(1000000000);
+  int *keys_bytes_indexs = (int *)malloc(10000000 * sizeof(int));
+  uint8_t *values_bytes = (uint8_t *)malloc(2000000000);
+  int64_t *values_bytes_indexs = (int64_t *)malloc(10000000 * sizeof(int64_t));
+  int record_num = 0;
+  int insert_num_from_file =
+      read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
+                           values_bytes, values_bytes_indexs);
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
+  // int insert_num = 320000;
+  assert(insert_num <= insert_num_from_file);
+  printf("Inserting %d k-v pairs\n", insert_num);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num, keys_hexs,
+                     keys_hexs_indexs);
+
+  const uint8_t **values_hps = new const uint8_t *[insert_num];
+  for (int i = 0; i < insert_num; ++i) {
+    values_hps[i] = util::element_start(values_bytes_indexs, i, values_bytes);
+  }
+
+  const uint8_t *hash = nullptr;
+  int hash_size = 0;
+  int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(values_bytes_indexs, insert_num);
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
+
+  // profiler
+  using T = perf::CpuTimer<perf::us>;
+  exp_util::HashProfiler<T> wlp("GPU Warp", insert_num, 0);
+  exp_util::HashProfiler<T> tlp("GPU Thread", insert_num, 0);
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num);
+
+    wlp.start();
+    gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    wlp.stop();
+
+    auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
+    printf("GPU wlp hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    GPUHashSingleThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num);
+
+    tlp.start();
+    gpu_mpt_olc.hash_onepass_v2_tlp(d_hash_nodes, hash_nodes_num);
+    tlp.stop();
+
+    auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
+    printf("GPU tlp hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  wlp.print();
+  tlp.print();
 }

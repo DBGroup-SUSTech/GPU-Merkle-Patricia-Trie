@@ -1,5 +1,6 @@
 #pragma once
 #include "hash/batch_mode_hash.cuh"
+#include "hash/gpu_hash.cuh"
 #include "util/allocator.cuh"
 #include "util/lock.cuh"
 #include "util/utils.cuh"
@@ -2771,6 +2772,201 @@ __global__ void hash_onepass_update_phase_v2(
       hash_node, tid_warp, A + wid_block * 25, B + wid_block * 25,
       C + wid_block * 25, D + wid_block * 25, buffer + wid_block * (17 * 32),
       allocator, start_node);
+}
+
+__device__ __forceinline__ void do_hash_onepass_update_phase_v2_tlp(
+    Node *hash_node, uint8_t *buffer_shared /*17 * 32 bytes*/,
+    DynamicAllocator<ALLOC_CAPACITY> &allocator, const Node *start_node) {
+  // prepare node's value's hash
+  assert(hash_node != nullptr);
+  if (hash_node->type == Node::Type::VALUE) {
+    int should_visit = 0;
+    // if (lane_id == 0) {
+    should_visit = (1 == atomicSub(&hash_node->visit_count, 1));
+    // }
+    // broadcast from 0 to warp
+    // should_visit = __shfl_sync(WARP_FULL_MASK, should_visit, 0);
+    if (!should_visit) {
+      return;
+    }
+
+    // clear on visit
+    hash_node->parent_visit_count_added = 0;
+
+    ValueNode *vnode = static_cast<ValueNode *>(hash_node);
+    vnode->hash = vnode->d_value;
+    vnode->hash_size = vnode->value_size;
+
+    hash_node = hash_node->parent;
+  }
+
+  __threadfence();  // make sure the new hash can be seen by other threads
+
+  // do not calculate start node
+  while (hash_node != start_node) {
+    // if (lane_id == 0)
+    // printf("hash node = %p, start node = %p\n", hash_node, start_node);
+
+    assert(hash_node != nullptr);
+
+    assert(hash_node->type == Node::Type::FULL ||
+           hash_node->type == Node::Type::SHORT);
+
+    // should_visit means all child's hash and my value's hash are ready
+    int should_visit = 0;
+    // if (lane_id == 0) {
+    // int old = atomicSub(&hash_node->visit_count, 1);
+    // printf("old = %d\n", old);
+    // should_visit = (1 == old);
+    should_visit = (1 == atomicSub(&hash_node->visit_count, 1));
+    // }
+
+    // broadcast from 0 to warp
+    // should_visit = __shfl_sync(WARP_FULL_MASK, should_visit, 0);
+    if (!should_visit) {
+      // printf("not should visit\n");
+      break;
+    }
+
+    // clear on visit
+    hash_node->parent_visit_count_added = 0;
+
+    // encode data into buffer
+    int encoding_size_0 = 0;
+    uint8_t *encoding_0 = nullptr;
+    uint8_t *hash_0 = nullptr;
+
+    // if (lane_id == 0) {
+    // TODO: is global buffer enc faster or share-memory enc-hash faster?
+    if (hash_node->type == Node::Type::FULL) {
+      FullNode *fnode = static_cast<FullNode *>(hash_node);
+      // encoding_size_0 = fnode->encode_size();
+
+      // rlp
+      int payload_size = 0;
+      fnode->encode_size(encoding_size_0, payload_size);
+
+      // if (encoding_size_0 > 17 * 32) {  // encode into global memory
+      if (true) {
+
+        uint8_t *buffer_global =
+            allocator.malloc(util::align_to<8>(encoding_size_0));
+        memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
+
+        fnode->encode(buffer_global, payload_size);
+        encoding_0 = buffer_global;
+
+      } else {  // encode into shared memory
+        memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
+
+        fnode->encode(buffer_shared, payload_size);
+        encoding_0 = buffer_shared;
+      }
+      hash_0 = fnode->buffer;
+
+    } else {
+      ShortNode *snode = static_cast<ShortNode *>(hash_node);
+      // encoding_size_0 = snode->encode_size();
+
+      // rlp
+      int kc_size = util::hex_to_compact_size(snode->key, snode->key_size);
+      uint8_t *kc = allocator.malloc(util::align_to<8>(kc_size));
+      assert(kc_size == util::hex_to_compact(snode->key, snode->key_size, kc));
+      snode->key_compact = kc;
+
+      int payload_size = 0;
+      snode->encode_size(encoding_size_0, payload_size);
+
+      // if (encoding_size_0 > 17 * 32) {  // encode into global memory
+      if (true) {
+        // TODO: delete aligned
+        uint8_t *buffer_global =
+            allocator.malloc(util::align_to<8>(encoding_size_0));
+        memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
+
+        snode->encode(buffer_global, payload_size);
+        encoding_0 = buffer_global;
+      } else {  // encode into shared memory
+        memset(buffer_shared, 0, util::align_to<8>(encoding_size_0));
+
+        snode->encode(buffer_shared, payload_size);
+        encoding_0 = buffer_shared;
+      }
+      hash_0 = snode->buffer;
+    }
+    // }
+
+    // // broadcast encoding size to warp
+    // int encoding_size = __shfl_sync(WARP_FULL_MASK, encoding_size_0, 0);
+    // uint8_t *encoding = reinterpret_cast<uint8_t *>(__shfl_sync(
+    //     WARP_FULL_MASK, reinterpret_cast<unsigned long>(encoding_0), 0));
+    // uint8_t *hash = reinterpret_cast<uint8_t *>(__shfl_sync(
+    //     WARP_FULL_MASK, reinterpret_cast<unsigned long>(hash_0), 0));
+
+    int encoding_size = encoding_size_0;
+    uint8_t *encoding = encoding_0;
+    uint8_t *hash = hash_0;
+
+    if (encoding_size < 32) {
+      // if too short, no hash, only copy
+      // if (lane_id < encoding_size) {
+      // hash[lane_id] = encoding[lane_id];
+      // }
+      memcpy(hash, encoding, encoding_size);
+      hash_node->hash = hash;
+      hash_node->hash_size = encoding_size;
+    } else {
+      // else calculate hash
+      // TODO: write to share memory first may be faster?
+      // encoding's real memory size should aligned to 8
+      // if (lane_id == 0) {
+      //   printf("encoding: ");
+      //   cutil::println_hex(encoding, encoding_size);
+      // }
+      // batch_keccak_device(reinterpret_cast<const uint64_t *>(encoding),
+      //                     reinterpret_cast<uint64_t *>(hash), encoding_size *
+      //                     8, lane_id, A, B, C, D);
+      GPUHashSingleThread::calculate_hash(encoding, encoding_size, hash);
+      // if (lane_id == 0) {
+      //   printf("hash: ");
+      //   cutil::println_hex(hash, 32);
+      // }
+      hash_node->hash = hash;
+      hash_node->hash_size = 32;
+    }
+
+    __threadfence();  // make sure the new hash can be seen by other threads
+
+    hash_node = hash_node->parent;
+  }
+}
+
+__global__ void hash_onepass_update_phase_v2_tlp(
+    Node *const *hash_nodes, int n, DynamicAllocator<ALLOC_CAPACITY> allocator,
+    const Node *start_node) {
+  int tid_global = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
+  int tid_block = threadIdx.x;
+  if (tid_global >= n) {
+    return;
+  }
+
+  assert(blockDim.x == 128);
+
+  // __shared__ uint8_t buffer[(64) * (17 * 32)];  // 17 * 32 per node
+
+  Node *hash_node = hash_nodes[tid_global];
+
+  // deleted node
+  if (hash_node == nullptr) {
+    return;
+  }
+
+  do_hash_onepass_update_phase_v2_tlp(hash_node, nullptr,
+                                      allocator, start_node);
+  // do_hash_onepass_update_phase_v2(
+  //     hash_node, tid_warp, A + wid_block * 25, B + wid_block * 25,
+  //     C + wid_block * 25, D + wid_block * 25, buffer + wid_block * (17 * 32),
+  //     allocator, start_node);
 }
 
 __device__ __forceinline__ void split_node(
