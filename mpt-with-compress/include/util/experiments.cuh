@@ -63,7 +63,14 @@ class InsertProfiler : public Profiler<Timer> {
         competitor_, qps, insert_num_, record_num_);
   }
 
- private:
+  std::string get_throughput() {
+    int qps = insert_num_ * 1000.0 / Profiler<Timer>::timer_.get() * 1000.0;
+    return std::to_string(qps);
+  }
+
+  std::string get_competitor() { return std::string(competitor_); }
+
+ public:
   const char* competitor_;
   int insert_num_;
   int record_num_;
@@ -91,6 +98,45 @@ class HashProfiler : public Profiler<Timer> {
   const char* competitor_;
   int insert_num_;
   int record_num_;
+};
+
+class CSVDataRecorder {
+ public:
+  CSVDataRecorder() {}
+  CSVDataRecorder(std::vector<std::string> column_names, std::string file_name)
+      : column_names_(column_names), file_name_(file_name) {}
+  ~CSVDataRecorder() {}
+  void update_row(std::vector<std::string> row) {
+    for (int i = 0; i < column_names_.size(); i++) {
+      data_[column_names_[i]].push_back(row[i]);
+    }
+  }
+  void persist_data() {
+    // check if file exists
+    std::ifstream f(file_name_);
+    bool file_exists = f.good();
+    if (!file_exists) {
+      std::ofstream file(file_name_);
+      for (int i = 0; i < column_names_.size(); i++) {
+        file << column_names_[i] << ",";
+      }
+      file << "\n";
+      file.close();
+    } 
+    std::ofstream file(file_name_, std::ios_base::app);
+    for (int i = 0; i < data_[column_names_[0]].size(); i++) {
+      for (int j = 0; j < column_names_.size(); j++) {
+        file << data_[column_names_[j]][i] << ",";
+      }
+      file << "\n";
+    }
+    file.close();
+  }
+  public:
+  //column_names
+  std::vector<std::string> column_names_;
+  std::unordered_map<std::string, std::vector<std::string>> data_;
+  std::string file_name_;
 };
 
 }  // namespace exp_util
