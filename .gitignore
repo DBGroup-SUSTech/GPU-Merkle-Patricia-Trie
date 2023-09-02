@@ -9,3 +9,5 @@
 *.csv
 *figure
 *.zip
+profile/
+vtune*

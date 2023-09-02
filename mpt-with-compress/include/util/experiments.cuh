@@ -76,6 +76,30 @@ class InsertProfiler : public Profiler<Timer> {
   int record_num_;
 };
 
+template <typename Timer>
+class HashProfiler : public Profiler<Timer> {
+ public:
+  static_assert(std::is_same_v<Timer, perf::CpuTimer<perf::us>>);
+  HashProfiler(const char* competitor, int insert_num, int record_num)
+      : competitor_(competitor),
+        insert_num_(insert_num),
+        record_num_(record_num) {}
+  // virtual ~LookupProfiler() {}
+
+  void print() override {
+    int qps = insert_num_ * 1000.0 / Profiler<Timer>::timer_.get() * 1000.0;
+    printf(
+        "%s Hash throughput: %d qps for %d operations and trie with %d "
+        "records\n",
+        competitor_, qps, insert_num_, record_num_);
+  }
+
+ private:
+  const char* competitor_;
+  int insert_num_;
+  int record_num_;
+};
+
 class CSVDataRecorder {
  public:
   CSVDataRecorder() {}

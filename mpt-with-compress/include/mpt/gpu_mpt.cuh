@@ -117,15 +117,16 @@ class MPT {
   void hash_hierarchy();
 
   /// @brief mark and update hash on GPU
-  // TODO
   void hash_onepass(const uint8_t *keys_hexs, int *keys_indexs, int n);
 
   void hash_onepass_v2(Node **d_hash_nodes, int n);
 
+  /// @brief hash update without warp optimization
+  void hash_onepass_v2_tlp(Node **d_hash_nodes, int n);
+
   /// @brief baseline get, in-memory parallel version of ethereum
   /// @note GPU saves both value data(for hash) and CPU-side pointer(for get)
   /// @param [out] values_ptrs host side value pointers
-  // TODO
   void gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
                      const uint8_t **values_hps, int *values_sizes) const;
 
@@ -1173,6 +1174,30 @@ void MPT::hash_onepass_v2(Node **d_hash_nodes, int n) {
   //   printf("hash kernel response time %d us\n", gpu_kernel.get());
   //   printf("hash mark kernel time %d us, update kernel %d\n",
   //          gpu_two_kernel.get(0), gpu_two_kernel.get(1));
+}
+
+void MPT::hash_onepass_v2_tlp(Node **d_hash_nodes, int n) {
+  // mark phase
+  const int rpthread_block_size = 128;
+  const int rpthread_num_blocks =
+      (n + rpthread_block_size - 1) / rpthread_block_size;
+
+  perf::CpuTimer<perf::us> gpu_kernel;
+  perf::CpuMultiTimer<perf::us> gpu_two_kernel;
+  gpu_kernel.start();
+  gpu_two_kernel.start();
+  GKernel::
+      hash_onepass_mark_phase_v2<<<rpthread_num_blocks, rpthread_block_size>>>(
+          d_hash_nodes, n, d_root_p_);
+  CHECK_ERROR(cudaDeviceSynchronize());
+  gpu_two_kernel.stop();
+
+  GKernel::hash_onepass_update_phase_v2_tlp<<<rpthread_num_blocks,
+                                              rpthread_block_size>>>(
+      d_hash_nodes, n, allocator_, d_start_);
+  CHECK_ERROR(cudaDeviceSynchronize());
+  gpu_two_kernel.stop();
+  gpu_kernel.stop();
 }
 
 void MPT::get_root_hash(const uint8_t *&hash, int &hash_size) const {

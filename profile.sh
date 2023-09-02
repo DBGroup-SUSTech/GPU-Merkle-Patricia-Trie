@@ -20,14 +20,16 @@ NCU=/usr/local/cuda/bin/ncu
 mkdir -p profile
 
 for n in $(seq 8); do
-  sudo GMPT_ETH_DATA_VOLUME=$GMPT_ETH_DATA_VOLUME       $NCU -s 5 -f -o profile/InsertEth$GMPT_ETH_DATA_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.InsertEthtxn"
-  sudo GMPT_DATA_LOOKUP_VOLUME=$GMPT_DATA_LOOKUP_VOLUME $NCU -s 5 -f -o profile/LookupEth$GMPT_DATA_LOOKUP_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupEthtxn" 
+  # sudo GMPT_ETH_DATA_VOLUME=$GMPT_ETH_DATA_VOLUME       $NCU -s 5 -f -o profile/InsertEth$GMPT_ETH_DATA_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.InsertEthtxn"
+  # sudo GMPT_DATA_LOOKUP_VOLUME=$GMPT_DATA_LOOKUP_VOLUME $NCU -s 5 -f -o profile/LookupEth$GMPT_DATA_LOOKUP_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupEthtxn" 
   
-  sudo GMPT_YCSB_DATA_VOLUME=$GMPT_YCSB_DATA_VOLUME     $NCU -s 5 -f -o profile/InsertYCSB$GMPT_YCSB_DATA_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.InsertYCSB"
-  sudo GMPT_DATA_LOOKUP_VOLUME=$GMPT_DATA_LOOKUP_VOLUME $NCU -s 5 -f -o profile/LookupYCSB$GMPT_DATA_LOOKUP_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupYCSB" 
+  # sudo GMPT_YCSB_DATA_VOLUME=$GMPT_YCSB_DATA_VOLUME     $NCU -s 5 -f -o profile/InsertYCSB$GMPT_YCSB_DATA_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.InsertYCSB"
+  # sudo GMPT_DATA_LOOKUP_VOLUME=$GMPT_DATA_LOOKUP_VOLUME $NCU -s 5 -f -o profile/LookupYCSB$GMPT_DATA_LOOKUP_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupYCSB" 
 
-  sudo GMPT_WIKI_DATA_VOLUME=$GMPT_WIKI_DATA_VOLUME     $NCU -s 5 -f -o profile/InsertWiki$GMPT_WIKI_DATA_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.InsertWiki"
-  sudo GMPT_DATA_LOOKUP_VOLUME=$GMPT_DATA_LOOKUP_VOLUME $NCU -s 5 -f -o profile/LookupWiki$GMPT_DATA_LOOKUP_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupWiki" 
+  # sudo GMPT_WIKI_DATA_VOLUME=$GMPT_WIKI_DATA_VOLUME     $NCU -s 5 -f -o profile/InsertWiki$GMPT_WIKI_DATA_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.InsertWiki"
+  # sudo GMPT_DATA_LOOKUP_VOLUME=$GMPT_DATA_LOOKUP_VOLUME $NCU -s 5 -f -o profile/LookupWiki$GMPT_DATA_LOOKUP_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.LookupWiki" 
+
+  sudo GMPT_ETH_DATA_VOLUME=$GMPT_ETH_DATA_VOLUME       $NCU  --section WarpStateStats -f -o profile/WarpEth$GMPT_ETH_DATA_VOLUME $BUILD_PATH/experiments "--gtest_filter=EXPERIMENTS.WarpETHT"
 
   n1=`expr $n1 / 2`
   n2=`expr $n2 / 2`
