@@ -116,3 +116,6 @@ class CSVDataRecorder {
 };
 
 }  // namespace exp_util
+
+
+exp_util::CSVDataRecorder g_csv_data_recorder;

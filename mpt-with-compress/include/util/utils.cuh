@@ -61,7 +61,8 @@ enum class Dataset {
   RW,
   MODEL_DATA,
   MODEL_CLUSTER_N,
-  MODEL_DATA_SIZE
+  MODEL_DATA_SIZE,
+  THREAD_NUM
 };
 
 void record_data(const std::string& filename, int key_size, int step,int time1, int time2, std::string label) {
@@ -154,6 +155,11 @@ int get_record_num(Dataset dataset) {
     }
     case Dataset::MODEL_DATA_SIZE: {
       data_num_str = getenv("GMPT_MODEL_DATA_SIZE");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::THREAD_NUM: {
+      data_num_str = getenv("GMPT_THREAD_NUM");
       assert(data_num_str != nullptr);
       break;
     }

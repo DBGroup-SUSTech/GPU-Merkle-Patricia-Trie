@@ -726,16 +726,21 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2_with_read(
   const int rpwarp_block_size = 512;
   const int rpwarp_num_blocks =
       (n * 32 + rpwarp_block_size - 1) / rpwarp_block_size;
-
+    // exp_util::InsertProfiler<perf::CpuTimer<perf::us>> olc_profiler("GPU_olc_kernel", n, 0);
+    // olc_profiler.start();
   GKernel::puts_latching_v2_with_read<<<rpwarp_num_blocks, rpwarp_block_size>>>(
       d_keys_hexs, d_keys_indexs, d_rw_flags, d_values_bytes, d_values_indexs,
       d_values_hps, d_read_num, n, d_read_values_hps, d_read_values_sizes,
       d_start_, allocator_, d_hash_target_nodes, d_other_hash_target_num);
 
   int other_hash_target_num;
+    CHECK_ERROR(cudaDeviceSynchronize());
+    // olc_profiler.stop();
+    // olc_profiler.print();
+    // recorder.update_row({olc_profiler.get_competitor(), std::to_string(ratio), olc_profiler.get_throughput()});
   CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
                                      d_other_hash_target_num, 1));
-  CHECK_ERROR(cudaDeviceSynchronize());
+
   CHECK_ERROR(gutil::CpyDeviceToHost(&read_num, d_read_num, 1));
   CHECK_ERROR(
       gutil::CpyDeviceToHost(read_values_hps, d_read_values_hps, read_num));
@@ -991,14 +996,15 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   //   perf::CpuTimer<perf::us> timer_gpu_get_parallel;
   //   timer_gpu_get_parallel.start();
 
-  perf::CpuTimer<perf::us> gpu_kernel;
-  gpu_kernel.start();
+  exp_util::LookupProfiler<perf::CpuTimer<perf::us>> gpu_lookup("GPU_gets_parallel", n, 0);
+  gpu_lookup.start();
   GKernel::gets_parallel<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, n, d_values_hps, d_values_sizes, d_root_p_);
   CHECK_ERROR(cudaDeviceSynchronize());
-  gpu_kernel.stop();
+  gpu_lookup.stop();
+  g_csv_data_recorder.update_row({"GPU_gets_parallel", std::to_string(n), std::to_string(gpu_lookup.timer_.get())});
 
-  printf("lookup kernel response time: %d us \n", gpu_kernel.get());
+  printf("lookup kernel response time: %d us \n", gpu_lookup.timer_.get());
   //   timer_gpu_get_parallel.stop();
   //   printf(
   //       "\033[31m"
@@ -1535,8 +1541,8 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
   const int block_size = 128;
   int num_blocks = (n + block_size - 1) / block_size;
 
-    exp_util::InsertProfiler<perf::CpuTimer<perf::us>> two_profiler("GPU_2phase_kernel", n, 0);
-    two_profiler.start();
+    // exp_util::InsertProfiler<perf::CpuTimer<perf::us>> two_profiler("GPU_2phase_kernel", n, 0);
+    // two_profiler.start();
 
   GKernel::puts_2phase_get_split_phase_with_read<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, d_rw_flags, d_compress_nodes, d_compress_num,
@@ -1556,9 +1562,9 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
 
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
   CHECK_ERROR(cudaDeviceSynchronize());
-    two_profiler.stop();
-    two_profiler.print();
-    recorder.update_row({two_profiler.get_competitor(), std::to_string(ratio), two_profiler.get_throughput()});
+    // two_profiler.stop();
+    // two_profiler.print();
+    // recorder.update_row({two_profiler.get_competitor(), std::to_string(ratio), two_profiler.get_throughput()});
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
   h_hash_target_num += n;

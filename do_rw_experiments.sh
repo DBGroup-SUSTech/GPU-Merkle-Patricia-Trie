@@ -9,7 +9,7 @@ run_n_times(){
     done
 }
 
-export GMPT_M
+export GMPT_RW_RRATIO=1
 
 n1=$GMPT_RW_RRATIO
 
@@ -19,7 +19,7 @@ GO_ETH_PATH=./go-ethereum/trie
 REPEAT=5
 GO_REPEAT=5
 
-rm ./data/rw_data.csv
+rm ./data/rw.csv
 rm test_rw.log
 
 for n in $(seq 9); do
