@@ -8,5 +8,6 @@
 *.log
 *.csv
 *figure
+*.zip
 profile/
 vtune*

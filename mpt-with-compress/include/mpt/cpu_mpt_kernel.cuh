@@ -628,7 +628,7 @@ namespace CpuMPT
                         if (match < s_node->key_size)
                         {
                             int to_split = 0;
-                            bool success = s_node->to_split.compare_exchange_strong(to_split, 1);
+                            bool success = s_node->to_split.compare_exchange_weak(to_split, 1);
 
                             // printf("split?%d\n", to_split);
                             if (success)
@@ -738,13 +738,13 @@ namespace CpuMPT
                         Node *old = nullptr;
                         if (s_node == start_node)
                         {
-                            bool success = (*root_p).compare_exchange_strong(old, (Node *)next_insert_node);
+                            bool success = (*root_p).compare_exchange_weak(old, (Node *)next_insert_node);
                         }
                         else
                         {
                             // old = atomicCAS((unsigned long long int *)&s_node->val, 0,
                             //                 (unsigned long long int)next_insert_node);
-                            bool success = s_node->tbb_val.compare_exchange_strong(old, (Node *)next_insert_node);
+                            bool success = s_node->tbb_val.compare_exchange_weak(old, (Node *)next_insert_node);
                         }
                         node = s_node->tbb_val.load();
                         node->parent = s_node;
@@ -766,7 +766,7 @@ namespace CpuMPT
                             vnode->parent = f_node;
 
                             int old_need_compress = 0;
-                            bool success = f_node->need_compress.compare_exchange_strong(old_need_compress, 1);
+                            bool success = f_node->need_compress.compare_exchange_weak(old_need_compress, 1);
                             if (success)
                             {
                                 compress_node = f_node;
@@ -784,7 +784,7 @@ namespace CpuMPT
                         //     atomicCAS((unsigned long long int *)&f_node->childs[index], 0,
                         //               (unsigned long long int)next_insert_node);
                         Node *old = nullptr;
-                        f_node->tbb_childs[index].compare_exchange_strong(old, (Node *)next_insert_node);
+                        f_node->tbb_childs[index].compare_exchange_weak(old, (Node *)next_insert_node);
                         node = f_node->tbb_childs[index].load();
                         node->parent = f_node;
                         if (old == 0)
@@ -890,7 +890,7 @@ namespace CpuMPT
                 {
                     // int old = atomicCAS(&compress_node->compressed, 0, 1);
                     int old = 0;
-                    bool success = compress_node->compressed.compare_exchange_strong(old, 1);
+                    bool success = compress_node->compressed.compare_exchange_weak(old, 1);
                     if (!success)
                     {
                         return;
@@ -931,7 +931,7 @@ namespace CpuMPT
                         FullNode *f_node = static_cast<FullNode *>(node);
                         // int old = atomicCAS(&f_node->compressed, 0, 1);
                         int old = 0;
-                        bool success = f_node->compressed.compare_exchange_strong(old, 1);
+                        bool success = f_node->compressed.compare_exchange_weak(old, 1);
                         if (old)
                         {
                             if (compressing_node->key_size > 0)
