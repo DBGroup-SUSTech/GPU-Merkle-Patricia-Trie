@@ -1,4 +1,5 @@
-#define GETH 1
+// #define GETH 1
+#define LEDGERDB 1
 
 #include <unistd.h>
 
@@ -233,4 +234,28 @@ struct nodeset get_all_nodes(enum TrieType trie_type, const uint8_t *keys_hexs,
   mpt->flush_dirty_nodes(keys_hexs, keys_hexs_indexs, num, set.hashs, set.encs,
                          set.encs_indexs, set.num);
   return set;
+}
+
+const uint8_t *insert_mpt_2phase(void *mpt, const uint8_t *keys_hexs,
+                                 int *keys_hexs_indexs,
+                                 const uint8_t *values_bytes,
+                                 int64_t *values_bytes_indexs,
+                                 const uint8_t **values_hps, int insert_num) {
+  // TODO
+}
+
+const uint8_t *insert_mpt_olc(void *mpt, const uint8_t *keys_hexs,
+                              int *keys_hexs_indexs,
+                              const uint8_t *values_bytes,
+                              int64_t *values_bytes_indexs,
+                              const uint8_t **values_hps, int insert_num) {
+  // TODO
+}
+
+void *init_mpt() {
+  // TODO
+}
+
+void free_mpt(void *mpt) {
+  // TODO
 }
