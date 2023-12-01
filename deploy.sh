@@ -1,0 +1,1 @@
+cp -v build/libgmpt.a mpt-with-compress/lib/libgmpt.h ~/code/LedgerDatabase/ledger/gpumpt/

@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 
 set(CMAKE_CUDA_ARCHITECTURES 60 61 62 70 72 75 86)
 set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+set(CMAKE_CUDA_HOST_COMPILER g++-9)
+set(CMAKE_CXX_COMPILER g++-9)
+set(CMAKE_C_COMPILER gcc-9)
 
 project(GpuMPT LANGUAGES CXX CUDA)
 enable_testing()
@@ -28,6 +31,8 @@ find_package(TBB REQUIRED)
 # include(cmake/Dependencies.cmake)
 
 add_compile_definitions(PROJECT_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fPIC")
+
 
 set(SRC_PATH ${PROJECT_SOURCE_DIR}/src)
 set(INC_PATH ${PROJECT_SOURCE_DIR}/include)
