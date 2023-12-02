@@ -8,11 +8,10 @@
 #include <oneapi/tbb/scalable_allocator.h>
 #include <stdlib.h>
 
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <vector>
-#include <oneapi/tbb/scalable_allocator.h>
 
 //---- rw-experiments ---
 #define READ_FLAG 0
@@ -28,13 +27,13 @@
 
 // for geth
 #if defined(GETH)
-#define ALLOC_CAPACITY ((uint64_t(1) << 32))      // 4GB for node
+#define ALLOC_CAPACITY ((uint64_t(1) << 32))         // 4GB for node
 #define ENCODING_CAPACITY (3 * (uint64_t(1) << 32))  // 12GB for encoding
-#define KEY_ALLOC_CAPACITY ((uint64_t(1) << 30))  // 3 GB for key
+#define KEY_ALLOC_CAPACITY ((uint64_t(1) << 30))     // 3 GB for key
 #else
 // for experiments and ledgerdb
-#define ALLOC_CAPACITY ((uint64_t(1) << 34))      // 16GB for node
-#define ENCODING_CAPACITY ((uint64_t(1) << 33))   // 8GB for encoding
+#define ALLOC_CAPACITY ((uint64_t(1) << 34))          // 16GB for node
+#define ENCODING_CAPACITY ((uint64_t(1) << 33))       // 8GB for encoding
 #define KEY_ALLOC_CAPACITY (3 * (uint64_t(1) << 30))  // 3 GB for key
 #endif
 
@@ -65,24 +64,26 @@ enum class Dataset {
   THREAD_NUM
 };
 
-void record_data(const std::string& filename, int key_size, int step,int time1, int time2, std::string label) {
-    std::ifstream infile(filename);
-    std::ofstream file;
-    // judge the file is or not empty
-    if (infile.peek() == std::ifstream::traits_type::eof()) {
-      file = std::ofstream(filename, std::ios::out);
-      file << "key_size,step,olc_time,two_time,label\n";
-    } else {
-      file = std::ofstream(filename, std::ios::app);
-    }
+void record_data(const std::string &filename, int key_size, int step, int time1,
+                 int time2, std::string label) {
+  std::ifstream infile(filename);
+  std::ofstream file;
+  // judge the file is or not empty
+  if (infile.peek() == std::ifstream::traits_type::eof()) {
+    file = std::ofstream(filename, std::ios::out);
+    file << "key_size,step,olc_time,two_time,label\n";
+  } else {
+    file = std::ofstream(filename, std::ios::app);
+  }
 
-    if (file.is_open()) {
-      file << key_size <<","<<step<<"," << time1 <<","<<time2<<","<<label<<"\n";
-      file.close();
-      std::cout << "CSV file written successfully." << std::endl;
-    } else {
-      std::cout << "Error opening the file." << std::endl;
-    }
+  if (file.is_open()) {
+    file << key_size << "," << step << "," << time1 << "," << time2 << ","
+         << label << "\n";
+    file.close();
+    std::cout << "CSV file written successfully." << std::endl;
+  } else {
+    std::cout << "Error opening the file." << std::endl;
+  }
 }
 
 int get_record_num(Dataset dataset) {
@@ -124,11 +125,11 @@ int get_record_num(Dataset dataset) {
       break;
     }
     case Dataset::KEYTYPE_STEP: {
-    data_num_str = getenv("GMPT_KEYTYPE_STEP");
-    assert(data_num_str != nullptr);
-    break;
-  }
-  case Dataset::BTREE_YCSB: {
+      data_num_str = getenv("GMPT_KEYTYPE_STEP");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::BTREE_YCSB: {
       data_num_str = getenv("GPU_BTREE_SIZE");
       assert(data_num_str != nullptr);
       break;
@@ -238,6 +239,11 @@ __host__ __device__ __forceinline__ const uint8_t *element_start(
   return &all_bytes[indexs[2 * i]];
 }
 
+__host__ __device__ __forceinline__ uint8_t *element_start_mut(
+    const int *indexs, int i, uint8_t *all_bytes) {
+  return &all_bytes[indexs[2 * i]];
+}
+
 __host__ __device__ __forceinline__ int elements_size_sum(const int *indexs,
                                                           int n) {
   if (n == 0) {
@@ -295,6 +301,16 @@ __host__ __device__ __forceinline__ int key_bytes_to_hex(
   return key_bytes_size * 2 + 1;
 }
 
+__host__ __device__ __forceinline__ int key_bytes_to_hex_size(
+    int key_bytes_size) {
+  return key_bytes_size * 2 + 1;
+}
+
+__host__ __device__ __forceinline__ uint8_t
+key_bytes_to_hex_at0(const uint8_t *key_bytes, int key_bytes_size) {
+  return key_bytes[0] / 16;
+}
+
 __host__ __device__ __forceinline__ int hex_to_compact_size(const uint8_t *hex,
                                                             int hex_size) {
   if (hex_size > 0 && hex[hex_size - 1] == 16) {
@@ -331,6 +347,39 @@ __host__ __device__ __forceinline__ int hex_to_compact(const uint8_t *hex,
   }
   return bytes_size;
 }
+
+// buf is used to calculate and store the output
+__host__ __device__ __forceinline__ void compact_to_hex(const uint8_t *compact,
+                                                        int compact_size,
+                                                        uint8_t *buf,
+                                                        const uint8_t *&hex,
+                                                        int &hex_size) {
+  assert(compact_size);
+  uint8_t *base = buf;
+  int base_size = key_bytes_to_hex(compact, compact_size, base);
+  if (base[0] < 2) {
+    base_size -= 1;
+  }
+  int chop = 2 - (base[0] & 1);
+  base += chop, base_size -= chop;
+
+  hex = base;
+  hex_size = base_size;
+  return;
+}
+
+/// @note the size = keys_to_bytes_size, which is larger than the actual size
+__host__ __device__ __forceinline__ int compact_to_hex_size(int compact_size) {
+  // assert(compact_size);
+  // int base_size = key_bytes_to_hex_size(compact, compact_size);
+  // int base_at0 = key_bytes_to_hex_at0(compact, compact_size);
+  // if (base_at0 < 2) {
+  //   base_size -= 1;
+  // }
+  // int chop = 2 - base_at0 & 1;
+  return key_bytes_to_hex_size(compact_size);
+}
+
 template <int N>
 __host__ __device__ __forceinline__ int align_to(int n) {
   return n % N == 0 ? n : n - (n % N) + N;
@@ -366,12 +415,13 @@ __host__ __device__ __forceinline__ void memmove_forward(void *dest,
   } while (n > 0);
 }
 
-__host__ __device__ __forceinline__ void int64_to_hex(uint8_t* hexArray, int64_t value) {
-    for (int i = 0; i < sizeof(int64_t); ++i) {
-        hexArray[i] = static_cast<uint8_t>((value >> (i * 8)) & 0xFF);
-    }
+__host__ __device__ __forceinline__ void int64_to_hex(uint8_t *hexArray,
+                                                      int64_t value) {
+  for (int i = 0; i < sizeof(int64_t); ++i) {
+    hexArray[i] = static_cast<uint8_t>((value >> (i * 8)) & 0xFF);
+  }
 }
-} // namespace util
+}  // namespace util
 
 #define CHECK_ERROR(call)                                     \
   do {                                                        \

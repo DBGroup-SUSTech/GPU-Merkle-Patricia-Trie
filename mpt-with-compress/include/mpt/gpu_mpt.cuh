@@ -1,11 +1,10 @@
-
 #pragma once
 #include "mpt/gpu_mpt_kernels.cuh"
 #include "util/allocator.cuh"
+#include "util/experiments.cuh"
 #include "util/hash_util.cuh"
 #include "util/timer.cuh"
 #include "util/utils.cuh"
-#include "util/experiments.cuh"
 
 namespace GpuMPT {
 namespace Compress {
@@ -62,8 +61,14 @@ class MPT {
   std::tuple<Node **, int> puts_latching_with_valuehp_v2(
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n);
-  std::tuple<Node **, int> puts_latching_with_valuehp_v2_with_record(const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes, int64_t *values_indexs, const uint8_t **values_hps, int n, exp_util::CSVDataRecorder &recorder, int scalev);
-  std::tuple<Node **, int> puts_latching_with_valuehp_v2_with_record(const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes, int64_t *values_indexs, const uint8_t **values_hps, int n, exp_util::CSVDataRecorder &recorder);
+  std::tuple<Node **, int> puts_latching_with_valuehp_v2_with_record(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n,
+      exp_util::CSVDataRecorder &recorder, int scalev);
+  std::tuple<Node **, int> puts_latching_with_valuehp_v2_with_record(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n,
+      exp_util::CSVDataRecorder &recorder);
   std::tuple<Node **, int> puts_latching_with_valuehp_v2_with_read(
       const uint8_t *keys_hexs, int *keys_indexs, int &read_num,
       const uint8_t *rw_flags, const uint8_t *values_bytes,
@@ -78,7 +83,10 @@ class MPT {
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n, bool restart);
 
-  std::tuple<Node **, int> puts_plc_with_valuehp_v2_with_recorder(const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes, int64_t *values_indexs, const uint8_t **values_hps, int n, bool restart, exp_util::CSVDataRecorder &recorder);
+  std::tuple<Node **, int> puts_plc_with_valuehp_v2_with_recorder(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n, bool restart,
+      exp_util::CSVDataRecorder &recorder);
 
   /// @brief parallel puts, including split phase and compress phase
   std::tuple<Node **, int> puts_2phase(const uint8_t *keys_hexs,
@@ -89,16 +97,22 @@ class MPT {
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
       int64_t *values_indexs, const uint8_t **values_hps, int n);
 
-  std::tuple<Node **, int> puts_2phase_with_valuehp_with_recorder(const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes, int64_t *values_indexs, const uint8_t **values_hps, int n, exp_util::CSVDataRecorder &recorder, int scalev);
+  std::tuple<Node **, int> puts_2phase_with_valuehp_with_recorder(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n,
+      exp_util::CSVDataRecorder &recorder, int scalev);
 
-  std::tuple<Node **, int> puts_2phase_with_valuehp_with_recorder(const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes, int64_t *values_indexs, const uint8_t **values_hps, int n, exp_util::CSVDataRecorder &recorder);
+  std::tuple<Node **, int> puts_2phase_with_valuehp_with_recorder(
+      const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n,
+      exp_util::CSVDataRecorder &recorder);
 
   std::tuple<Node **, int> puts_2phase_with_valuehp_with_read(
-    const uint8_t *keys_hexs, int *keys_indexs, int & read_num,
-    const uint8_t *rw_flags, const uint8_t *values_bytes,
-    int64_t *values_indexs, const uint8_t **values_hps, int n,
-    const uint8_t **read_values_hps, int *read_values_sizes,
-    exp_util::CSVDataRecorder &recorder, int ratio);
+      const uint8_t *keys_hexs, int *keys_indexs, int &read_num,
+      const uint8_t *rw_flags, const uint8_t *values_bytes,
+      int64_t *values_indexs, const uint8_t **values_hps, int n,
+      const uint8_t **read_values_hps, int *read_values_sizes,
+      exp_util::CSVDataRecorder &recorder, int ratio);
 
   std::tuple<Node **, int> puts_2phase_pipeline(
       const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
@@ -130,6 +144,19 @@ class MPT {
   void gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
                      const uint8_t **values_hps, int *values_sizes) const;
 
+  //   void gets_proofs_mark(const uint8_t *keys_hexs, int *keys_indexs, int n,
+  //                         int *proofs_offsets, int *proofs_bufsize);
+
+  //   void gets_proofs_set(const uint8_t *keys_hexs, int *keys_indexs, int n,
+  //                        int *proofs_offsets, uint8_t *proofs_buffer,
+  //                        int *branchs, const uint8_t **values_hps,
+  //                        int *values_sizes);
+  void get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
+                  uint8_t *&encs, int *&enc_indexs);
+  bool verify_proof_cpu(const uint8_t *key_hex, int key_size,
+                        const uint8_t *hash, int digest_size,
+                        const uint8_t *value, int value_size,
+                        const uint8_t *proof, int proof_size);
   /// @brief gets all dirties nodes and its encoding
   /// @param [out] hashs array (32 per node)x`
   void flush_dirty_nodes(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
@@ -608,7 +635,8 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
 
 std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2_with_record(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
-    int64_t *values_indexs, const uint8_t **values_hps, int n, exp_util::CSVDataRecorder &recorder, int scalev) {
+    int64_t *values_indexs, const uint8_t **values_hps, int n,
+    exp_util::CSVDataRecorder &recorder, int scalev) {
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
@@ -649,20 +677,22 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2_with_record(
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size;  // one warp per request
 
-  exp_util::InsertProfiler<perf::CpuTimer<perf::us>> olc_profiler("GPU_olc_kernel", n, 0);
-    olc_profiler.start();
+  exp_util::InsertProfiler<perf::CpuTimer<perf::us>> olc_profiler(
+      "GPU_olc_kernel", n, 0);
+  olc_profiler.start();
   GKernel::puts_latching_v2<<<rpwarp_num_blocks, rpwarp_block_size>>>(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
       n, d_start_, allocator_, d_hash_target_nodes, d_other_hash_target_num);
-    CHECK_ERROR(cudaDeviceSynchronize());
-    olc_profiler.stop();
-  
+  CHECK_ERROR(cudaDeviceSynchronize());
+  olc_profiler.stop();
+
   olc_profiler.print();
-  recorder.update_row({olc_profiler.get_competitor(), std::to_string(scalev), olc_profiler.get_throughput()});
+  recorder.update_row({olc_profiler.get_competitor(), std::to_string(scalev),
+                       olc_profiler.get_throughput()});
   int other_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
                                      d_other_hash_target_num, 1));
- // synchronize all threads
+  // synchronize all threads
 
   return {d_hash_target_nodes, n + other_hash_target_num};
 }
@@ -727,18 +757,19 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2_with_read(
   const int rpwarp_block_size = 512;
   const int rpwarp_num_blocks =
       (n * 32 + rpwarp_block_size - 1) / rpwarp_block_size;
-    // exp_util::InsertProfiler<perf::CpuTimer<perf::us>> olc_profiler("GPU_olc_kernel", n, 0);
-    // olc_profiler.start();
+  // exp_util::InsertProfiler<perf::CpuTimer<perf::us>>
+  // olc_profiler("GPU_olc_kernel", n, 0); olc_profiler.start();
   GKernel::puts_latching_v2_with_read<<<rpwarp_num_blocks, rpwarp_block_size>>>(
       d_keys_hexs, d_keys_indexs, d_rw_flags, d_values_bytes, d_values_indexs,
       d_values_hps, d_read_num, n, d_read_values_hps, d_read_values_sizes,
       d_start_, allocator_, d_hash_target_nodes, d_other_hash_target_num);
 
   int other_hash_target_num;
-    CHECK_ERROR(cudaDeviceSynchronize());
-    // olc_profiler.stop();
-    // olc_profiler.print();
-    // recorder.update_row({olc_profiler.get_competitor(), std::to_string(ratio), olc_profiler.get_throughput()});
+  CHECK_ERROR(cudaDeviceSynchronize());
+  // olc_profiler.stop();
+  // olc_profiler.print();
+  // recorder.update_row({olc_profiler.get_competitor(), std::to_string(ratio),
+  // olc_profiler.get_throughput()});
   CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
                                      d_other_hash_target_num, 1));
 
@@ -837,7 +868,8 @@ std::tuple<Node **, int> MPT::puts_plc_with_valuehp_v2(
 
 std::tuple<Node **, int> MPT::puts_plc_with_valuehp_v2_with_recorder(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
-    int64_t *values_indexs, const uint8_t **values_hps, int n, bool restart, exp_util::CSVDataRecorder &recorder) {
+    int64_t *values_indexs, const uint8_t **values_hps, int n, bool restart,
+    exp_util::CSVDataRecorder &recorder) {
   // assert datas on CPU, first transfer to GPU
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
@@ -878,15 +910,14 @@ std::tuple<Node **, int> MPT::puts_plc_with_valuehp_v2_with_recorder(
   const int rpwarp_num_blocks = (n * 32 + rpwarp_block_size - 1) /
                                 rpwarp_block_size;  // one warp per request
 
-  
-
-    exp_util::InsertProfiler<perf::CpuTimer<perf::us>> plc_profiler("GPU_plc_kernel", n, 0);
-   if (restart) {
-     plc_profiler.competitor_ = "GPU_plc_kernel_restart";
-   } else {
-     plc_profiler.competitor_ = "GPU_plc_kernel_spin";
-   }
-    plc_profiler.start();
+  exp_util::InsertProfiler<perf::CpuTimer<perf::us>> plc_profiler(
+      "GPU_plc_kernel", n, 0);
+  if (restart) {
+    plc_profiler.competitor_ = "GPU_plc_kernel_restart";
+  } else {
+    plc_profiler.competitor_ = "GPU_plc_kernel_spin";
+  }
+  plc_profiler.start();
   if (restart) {
     GKernel::puts_plc_restart_v2<<<rpwarp_num_blocks, rpwarp_block_size>>>(
         d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs,
@@ -898,13 +929,14 @@ std::tuple<Node **, int> MPT::puts_plc_with_valuehp_v2_with_recorder(
         d_values_hps, n, d_start_, allocator_, d_hash_target_nodes,
         d_other_hash_target_num);
   }
-    CHECK_ERROR(cudaDeviceSynchronize());
-    plc_profiler.stop();
+  CHECK_ERROR(cudaDeviceSynchronize());
+  plc_profiler.stop();
   int other_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
                                      d_other_hash_target_num, 1));
-    recorder.update_row({plc_profiler.get_competitor(), std::to_string(n), plc_profiler.get_throughput()});
-    plc_profiler.print();
+  recorder.update_row({plc_profiler.get_competitor(), std::to_string(n),
+                       plc_profiler.get_throughput()});
+  plc_profiler.print();
 
   return {d_hash_target_nodes, n + other_hash_target_num};
 }
@@ -997,13 +1029,15 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   //   perf::CpuTimer<perf::us> timer_gpu_get_parallel;
   //   timer_gpu_get_parallel.start();
 
-  exp_util::LookupProfiler<perf::CpuTimer<perf::us>> gpu_lookup("GPU_gets_parallel", n, 0);
+  exp_util::LookupProfiler<perf::CpuTimer<perf::us>> gpu_lookup(
+      "GPU_gets_parallel", n, 0);
   gpu_lookup.start();
   GKernel::gets_parallel<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, n, d_values_hps, d_values_sizes, d_root_p_);
   CHECK_ERROR(cudaDeviceSynchronize());
   gpu_lookup.stop();
-  g_csv_data_recorder.update_row({"GPU_gets_parallel", std::to_string(n), std::to_string(gpu_lookup.timer_.get())});
+  g_csv_data_recorder.update_row({"GPU_gets_parallel", std::to_string(n),
+                                  std::to_string(gpu_lookup.timer_.get())});
 
   printf("lookup kernel response time: %d us \n", gpu_lookup.timer_.get());
   //   timer_gpu_get_parallel.stop();
@@ -1019,6 +1053,133 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   CHECK_ERROR(gutil::CpyDeviceToHost(values_sizes, d_values_sizes, n));
   trans_out.stop();
   printf("gets_parallel transout time %d us\n", trans_out.get());
+}
+
+void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
+                     uint8_t *&proofs, int *&proofs_indexs) {
+  // TODO
+  assert(proofs == nullptr && proofs_indexs);
+  uint8_t *d_keys_hexs = nullptr;
+  int *d_keys_indexs = nullptr;
+  int keys_hexs_size = util::elements_size_sum(keys_indexs, n_keys);
+  int keys_indexs_size = util::indexs_size_sum(n_keys);
+
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_hexs, keys_hexs_size));
+  CHECK_ERROR(gutil::DeviceAlloc(d_keys_indexs, keys_indexs_size));
+  CHECK_ERROR(gutil::CpyHostToDevice(d_keys_hexs, keys_hexs, keys_hexs_size));
+  CHECK_ERROR(
+      gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
+
+  int *d_buf_size = nullptr;
+  int *d_proofs_indexs = nullptr;
+  CHECK_ERROR(gutil::DeviceAlloc(d_buf_size, 1));
+  CHECK_ERROR(gutil::DeviceAlloc(d_proofs_indexs, 2 * n_keys));
+
+  const int rpthread_block_size = 128;
+  const int rpthread_num_blocks =
+      (n_keys + rpthread_block_size - 1) / rpthread_block_size;
+
+  GKernel::gets_proofs_mark<<<rpthread_num_blocks, rpthread_block_size>>>(
+      d_keys_hexs, d_keys_indexs, n_keys, d_root_p_, d_proofs_indexs,
+      d_buf_size);
+  //   CHECK_ERROR(cudaDeviceSynchronize());
+
+  int buf_size = 0;
+  CHECK_ERROR(gutil::CpyDeviceToHost(&buf_size, d_buf_size, 1));
+  printf("Buffer size for all proofs is %d bytes\n", buf_size);
+
+  uint8_t *d_proofs_buf = nullptr;
+  CHECK_ERROR(gutil::DeviceAlloc(d_proofs_buf, buf_size));
+
+  GKernel::gets_proofs_set<<<rpthread_num_blocks, rpthread_block_size>>>(
+      d_keys_hexs, d_keys_indexs, n_keys, d_root_p_, d_proofs_indexs,
+      d_proofs_buf);
+
+  proofs = new uint8_t[buf_size];
+  proofs_indexs = new int[n_keys * 2];
+  assert(proofs_indexs && proofs);
+
+  CHECK_ERROR(gutil::CpyDeviceToHost(proofs, d_proofs_buf, buf_size));
+  CHECK_ERROR(
+      gutil::CpyDeviceToHost(proofs_indexs, d_proofs_indexs, n_keys * 2));
+  return;
+}
+
+// void MPT::verify_proofs(const uint8_t *keys_hexs, int *keys_indexs, int
+// n_keys,
+//                         const uint8_t *&hashs) {
+//   // TODO
+// }
+
+bool MPT::verify_proof_cpu(const uint8_t *key_hex, int key_hex_size,
+                           const uint8_t *digest, int digest_size,
+                           const uint8_t *value, int value_size,
+                           const uint8_t *proof, int proof_size) {
+  // TODO
+  const uint8_t *rest = nullptr, *buf = proof;
+  int rest_size = 0, buf_size = proof_size;
+
+  int pos = 0;
+
+  bool ret = true;
+
+  uint8_t *khex_buf = nullptr;
+
+  while (buf_size > 0 && pos < key_hex_size) {
+    const uint8_t *elems;
+    int elems_size;
+    rlp::split_list(buf, buf_size, elems, elems_size, rest, rest_size);
+
+    int c = rlp::count_values(elems, elems_size);
+    assert(c == 2 || c == 17);
+
+    if (c == 2) {
+      // TODO calculate hash and compare to digest
+
+      int khex_buf_size = enc::decode_short_khexsize(elems, elems_size);
+      khex_buf = static_cast<uint8_t *>(
+          realloc(khex_buf, khex_buf_size * sizeof(uint8_t)));
+
+      const uint8_t *curr_key = nullptr;
+      int curr_key_size = 0;
+      enc::decode_short_key_value(elems, elems_size, khex_buf, curr_key,
+                                  curr_key_size, digest, digest_size);
+
+      //  compare keys
+      if (curr_key_size + pos > key_hex_size ||
+          !util::bytes_equal(curr_key, curr_key_size, key_hex + pos,
+                             curr_key_size)) {
+        ret = false;
+        break;
+      }
+
+      // next
+      pos += curr_key_size;
+
+    } else if (c == 17) {
+      // TODO calculate hash and compare to digest
+
+      uint8_t branch = key_hex[pos];
+      enc::decode_full_branch_at(elems, elems_size, branch, digest,
+                                 digest_size);
+    
+      pos += 1;
+    } else {
+      printf("Error: wrong rlp list elems %d\n", c);
+    }
+
+    buf = rest;
+    buf_size = rest_size;
+  }
+
+  // check value
+  if (key_hex_size != 0 ||
+      !util::bytes_equal(digest, digest_size, value, value_size)) {
+    ret = false;
+  }
+
+  free(khex_buf);
+  return ret;
 }
 
 /// @brief gets all dirties nodes and its encoding
@@ -1411,7 +1572,8 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp(
 
 std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_recorder(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
-    int64_t *values_indexs, const uint8_t **values_hps, int n, exp_util::CSVDataRecorder &recorder, int scalev) {
+    int64_t *values_indexs, const uint8_t **values_hps, int n,
+    exp_util::CSVDataRecorder &recorder, int scalev) {
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
   uint8_t *d_values_bytes = nullptr;
@@ -1462,7 +1624,8 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_recorder(
   const int block_size = 128;
   int num_blocks = (n + block_size - 1) / block_size;
 
-  exp_util::InsertProfiler<perf::CpuTimer<perf::us>> two_profiler("GPU_2phase_kernel", n, 0);
+  exp_util::InsertProfiler<perf::CpuTimer<perf::us>> two_profiler(
+      "GPU_2phase_kernel", n, 0);
   two_profiler.start();
   GKernel::puts_2phase_get_split_phase<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, d_compress_nodes, d_compress_num, d_split_num,
@@ -1484,11 +1647,12 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_recorder(
       key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
   CHECK_ERROR(cudaDeviceSynchronize());
-    two_profiler.stop();
+  two_profiler.stop();
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
-  two_profiler.print(); 
-  recorder.update_row({two_profiler.get_competitor(), std::to_string(scalev), two_profiler.get_throughput()});
+  two_profiler.print();
+  recorder.update_row({two_profiler.get_competitor(), std::to_string(scalev),
+                       two_profiler.get_throughput()});
   h_hash_target_num += n;
   //   printf("target num :%d\n",h_hash_target_num);
 
@@ -1566,8 +1730,8 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
   const int block_size = 128;
   int num_blocks = (n + block_size - 1) / block_size;
 
-    // exp_util::InsertProfiler<perf::CpuTimer<perf::us>> two_profiler("GPU_2phase_kernel", n, 0);
-    // two_profiler.start();
+  // exp_util::InsertProfiler<perf::CpuTimer<perf::us>>
+  // two_profiler("GPU_2phase_kernel", n, 0); two_profiler.start();
 
   GKernel::puts_2phase_get_split_phase_with_read<<<num_blocks, block_size>>>(
       d_keys_hexs, d_keys_indexs, d_rw_flags, d_compress_nodes, d_compress_num,
@@ -1587,9 +1751,10 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_read(
 
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
   CHECK_ERROR(cudaDeviceSynchronize());
-    // two_profiler.stop();
-    // two_profiler.print();
-    // recorder.update_row({two_profiler.get_competitor(), std::to_string(ratio), two_profiler.get_throughput()});
+  // two_profiler.stop();
+  // two_profiler.print();
+  // recorder.update_row({two_profiler.get_competitor(), std::to_string(ratio),
+  // two_profiler.get_throughput()});
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
   h_hash_target_num += n;

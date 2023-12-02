@@ -2036,6 +2036,150 @@ __global__ void gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
   get(key, key_size, value_hp, value_size, *root_p);
 }
 
+__device__ __forceinline__ void get_proof_mark(
+    const uint8_t *key, int key_size, Node *root,
+    int &proof_start,  // index.first
+    int &proof_end,    // index.second
+    int *buf_size) {   // global sizes (atomic)
+
+  // TODO
+  Node *node = root;
+  int pos = 0;
+
+  int proof_size = 0;
+
+  while (true) {
+    assert(node != nullptr);
+    if (node->type == Node::Type::VALUE) {
+      return;
+    }
+
+    // add to encoding sizes
+    if (node->type == Node::Type::SHORT) {
+      ShortNode *snode = static_cast<ShortNode *>(node);
+      assert(key_size - pos >= snode->key_size &&
+             util::bytes_equal(snode->key, snode->key_size, key + pos,
+                               snode->key_size));
+
+      int enc_size = 0, payload_size = 0;
+      snode->encode_size(enc_size, payload_size);
+      proof_size += enc_size;
+
+      node = snode->val;
+      pos += snode->key_size;
+
+    } else if (node->type == Node::Type::FULL) {
+      FullNode *fnode = static_cast<FullNode *>(node);
+
+      int enc_size = 0, payload_size = 0;
+      fnode->encode_size(enc_size, payload_size);
+      proof_size += enc_size;
+
+      node = fnode->childs[key[pos]];
+      pos += 1;
+
+    } else {
+      printf("Wrong node type\n");
+      assert(false);
+    }
+  }
+
+  // If no proof, set end = start - 1
+  proof_start = atomicAdd(buf_size, proof_size);
+  proof_end = proof_start + proof_size - 1;
+}
+
+__global__ void gets_proofs_mark(const uint8_t *keys_hexs, int *keys_indexs,
+                                 int n_keys, Node *const *root_p,
+                                 int *proofs_indexs, int *buf_size) {
+  // TODO
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n_keys) {
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  int &proof_start = proofs_indexs[2 * tid];
+  int &proof_end = proofs_indexs[2 * tid + 1];
+  get_proof_mark(key, key_size, *root_p, proof_start, proof_end, buf_size);
+}
+
+__device__ __forceinline__ void get_proof_set(
+    const uint8_t *key, int key_size, Node *root,
+    uint8_t *proof,          // to set
+    const int proof_size) {  // to checking
+  // TODO
+  Node *node = root;
+  int pos = 0;
+
+  int proof_size_ = 0;  // acumulated
+
+  while (true) {
+    assert(node != nullptr);
+    if (node->type == Node::Type::VALUE) {
+      return;
+    }
+
+    if (node->type == Node::Type::SHORT) {
+      ShortNode *snode = static_cast<ShortNode *>(node);
+      // assert(key_size - pos >= snode->key_size &&
+      //  util::bytes_equal(snode->key, snode->key_size, key + pos,
+      //  snode->key_size));
+
+      // encode
+      int enc_size = 0, payload_size = 0;
+      snode->encode_size(enc_size, payload_size);
+      assert(enc_size != 0);
+
+      // TODO: handle 8-byte alignments
+      enc_size = snode->encode(proof + proof_size_, payload_size);
+
+      proof_size_ += enc_size;
+
+      node = snode->val;
+      pos += snode->key_size;
+
+    } else if (node->type == Node::Type::FULL) {
+      FullNode *fnode = static_cast<FullNode *>(node);
+
+      int enc_size = 0, payload_size = 0;
+      fnode->encode_size(enc_size, payload_size);
+      proof_size_ += enc_size;
+
+      enc_size = fnode->encode(proof + proof_size_, payload_size);
+
+      proof_size_ += enc_size;
+
+      node = fnode->childs[key[pos]];
+      pos += 1;
+
+    } else {
+      printf("Wrong node type\n");
+      assert(false);
+    }
+  }
+  assert(proof_size_ == proof_size);
+}
+
+__global__ void gets_proofs_set(const uint8_t *keys_hexs, int *keys_indexs,
+                                int n_keys, Node *const *root_p,
+                                const int *proofs_indexs, uint8_t *proofs_buf) {
+  // TODO
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n_keys) {
+    return;
+  }
+
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  int proof_size = util::element_size(proofs_indexs, tid);
+  if (proof_size == 0) {
+    return;
+  }
+  uint8_t *proof = util::element_start_mut(proofs_indexs, tid, proofs_buf);
+  get_proof_set(key, key_size, *root_p, proof, proof_size);
+}
+
 __device__ __forceinline__ void get_dirty_nodes_count(const uint8_t *key,
                                                       int key_size, Node *root,
                                                       gutil::ull_t *n_nodes,
@@ -2848,7 +2992,6 @@ __device__ __forceinline__ void do_hash_onepass_update_phase_v2_tlp(
 
       // if (encoding_size_0 > 17 * 32) {  // encode into global memory
       if (true) {
-
         uint8_t *buffer_global =
             allocator.malloc(util::align_to<8>(encoding_size_0));
         memset(buffer_global, 0, util::align_to<8>(encoding_size_0));
@@ -2945,7 +3088,7 @@ __global__ void hash_onepass_update_phase_v2_tlp(
     Node *const *hash_nodes, int n, DynamicAllocator<ALLOC_CAPACITY> allocator,
     const Node *start_node) {
   int tid_global = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
-  int tid_block = threadIdx.x;
+  // int tid_block = threadIdx.x;
   if (tid_global >= n) {
     return;
   }
@@ -2961,8 +3104,8 @@ __global__ void hash_onepass_update_phase_v2_tlp(
     return;
   }
 
-  do_hash_onepass_update_phase_v2_tlp(hash_node, nullptr,
-                                      allocator, start_node);
+  do_hash_onepass_update_phase_v2_tlp(hash_node, nullptr, allocator,
+                                      start_node);
   // do_hash_onepass_update_phase_v2(
   //     hash_node, tid_warp, A + wid_block * 25, B + wid_block * 25,
   //     C + wid_block * 25, D + wid_block * 25, buffer + wid_block * (17 * 32),

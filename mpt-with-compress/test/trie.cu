@@ -5155,10 +5155,10 @@ TEST(CaseStudy, GetsDirtyNodesEthtxn) {
   int hash_size = 0;
   int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
   int keys_indexs_size = util::indexs_size_sum(insert_num);
-  int64_t values_bytes_size =
-      util::elements_size_sum(values_bytes_indexs, insert_num);
-  int values_indexs_size = util::indexs_size_sum(insert_num);
-  int values_hps_size = insert_num;
+  // int64_t values_bytes_size =
+  //     util::elements_size_sum(values_bytes_indexs, insert_num);
+  // int values_indexs_size = util::indexs_size_sum(insert_num);
+  // int values_hps_size = insert_num;
   {
     CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
@@ -5271,10 +5271,10 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
   int hash_size = 0;
   int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
   int keys_indexs_size = util::indexs_size_sum(insert_num);
-  int64_t values_bytes_size =
-      util::elements_size_sum(values_bytes_indexs, insert_num);
-  int values_indexs_size = util::indexs_size_sum(insert_num);
-  int values_hps_size = insert_num;
+  // int64_t values_bytes_size =
+  //     util::elements_size_sum(values_bytes_indexs, insert_num);
+  // int values_indexs_size = util::indexs_size_sum(insert_num);
+  // int values_hps_size = insert_num;
   {
     CHECK_ERROR(cudaDeviceReset());
     GPUHashMultiThread::load_constants();
@@ -5314,13 +5314,13 @@ TEST(CaseStudy, RlpEncodingEthtxn) {
                                   hashs, encs, encs_indexs, n_nodes);
 
     printf("%llu nodes\n", n_nodes);
-    for (gutil::ull_t i = 0; i < n_nodes; ++i) {
-      const uint8_t *hash = &hashs[i * HASH_SIZE];
-      const uint8_t *enc = util::element_start(encs_indexs, i, encs);
-      int enc_size = util::element_size(encs_indexs, i);
-      // printf("enc size = %d\n", enc_size);
-      // cutil::println_hex(enc, util::element_size(encs_indexs, i));
-    }
+    // for (gutil::ull_t i = 0; i < n_nodes; ++i) {
+    //   const uint8_t *hash = &hashs[i * HASH_SIZE];
+    //   const uint8_t *enc = util::element_start(encs_indexs, i, encs);
+    //   int enc_size = util::element_size(encs_indexs, i);
+    //   // printf("enc size = %d\n", enc_size);
+    //   // cutil::println_hex(enc, util::element_size(encs_indexs, i));
+    // }
   }
 
   {

@@ -229,7 +229,7 @@ struct ShortNode : public Node {
     // int key_compact_size = util::hex_to_compact(key, key_size, bytes);
     // // assert((key_size - 1) / 2 + 1 == key_compact_size);
 
-    // bytes += key_compact_size;
+    // bytes += key_compact_size;t
     // bytes_size += key_compact_size;
 
     // assert(val != nullptr && val->hash != nullptr && val->hash_size != 0);
@@ -281,7 +281,7 @@ struct ShortNode : public Node {
     payload_size = enc_size;
     int hsize = rlp::puthead_size(uint64_t(enc_size));
     enc_size += hsize;
-    return ;
+    return;
   }
 
   __forceinline__ int tbb_encode(uint8_t *enc_buf, int payload_size) {
@@ -524,7 +524,6 @@ struct ShortNode : public Node {
   /// @note
   ///   different from ethereum, this encoding use child's current hash
   ///   instead of recursively call val.encode.
-  // TODO: currently not support RLP encoding
   __device__ __forceinline__ int encode(uint8_t *enc_buf, int payload_size) {
     // int bytes_size = 0;
 
@@ -594,5 +593,58 @@ struct ValueNode : public Node {
 //   const uint8_t hash[32];
 // };
 
+namespace enc {
+
+/// @note buf size for key
+__device__ __host__ __forceinline__ int decode_short_khexsize(
+    const uint8_t *elems, int elems_size) {
+  // TODO
+  const uint8_t *kbuf, *rest;
+  int kbuf_size, rest_size;
+  rlp::split_string(elems, elems_size, kbuf, kbuf_size, rest, rest_size);
+  return util::compact_to_hex_size(kbuf_size);
+}
+
+/// @param khex_buf [in]  size = decode_short_khexsize
+/// @param key      [out] hex
+/// @param val      [out] value / hash of child
+/// @param val_size [out] value / hash of child
+__device__ __host__ __forceinline__ void decode_short_key_value(
+    const uint8_t *elems, int elems_size,
+    uint8_t *khex_buf,  // khex size = decode_short_khexsize
+    const uint8_t *&key, int &key_size, const uint8_t *&val, int &val_size) {
+  // TODO
+  const uint8_t *kbuf, *rest;
+  int kbuf_size, rest_size;
+  rlp::split_string(elems, elems_size, kbuf, kbuf_size, rest, rest_size);
+  util::compact_to_hex(kbuf, kbuf_size, khex_buf, key, key_size);
+
+  // value and other unused rest
+  const uint8_t *_;
+  int _size;
+  rlp::split_string(rest, rest_size, val, val_size, _, _size);
+}
+
+__device__ __host__ __forceinline__ void decode_full_branch_at(
+    const uint8_t *elems, int elems_size, uint8_t branch, const uint8_t *&val,
+    int &val_size) {
+  // TODO
+  assert(branch <= 16);
+
+  const uint8_t *cld, *rest;
+  int cld_size, rest_size;
+
+  for (int i = 0; i <= branch; ++i) {
+    rlp::split_string(elems, elems_size, cld, cld_size, rest, rest_size);
+    elems = rest;
+    elems_size = rest_size;
+  }
+
+  val = cld, val_size = cld_size;
+}
+
+
+
+}  // namespace enc
 }  // namespace Compress
 }  // namespace GpuMPT
