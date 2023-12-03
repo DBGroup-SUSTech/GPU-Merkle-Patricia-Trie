@@ -61,7 +61,8 @@ enum class Dataset {
   MODEL_DATA,
   MODEL_CLUSTER_N,
   MODEL_DATA_SIZE,
-  THREAD_NUM
+  THREAD_NUM,
+  VERIFY,
 };
 
 void record_data(const std::string &filename, int key_size, int step, int time1,
@@ -161,6 +162,11 @@ int get_record_num(Dataset dataset) {
     }
     case Dataset::THREAD_NUM: {
       data_num_str = getenv("GMPT_THREAD_NUM");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::VERIFY: {
+      data_num_str = getenv("VERIFY_NUM");
       assert(data_num_str != nullptr);
       break;
     }

@@ -152,7 +152,8 @@ class MPT {
   //                        int *branchs, const uint8_t **values_hps,
   //                        int *values_sizes);
   void get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
-                  uint8_t *&encs, int *&enc_indexs);
+                  const uint8_t **value_hps, int *value_sizes,  // in
+                  uint8_t *&proofs, int *&proofs_indexs);
   bool verify_proof_cpu(const uint8_t *key_hex, int key_size,
                         const uint8_t *hash, int digest_size,
                         const uint8_t *value, int value_size,
@@ -586,6 +587,7 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2(
       gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
   trans_timer.stop();
   trans_timer_gpu.start();
+
   CHECK_ERROR(
       gutil::CpyHostToDevice(d_values_bytes, values_bytes, values_bytes_size));
   CHECK_ERROR(gutil::CpyHostToDevice(d_values_indexs, values_indexs,
@@ -1056,9 +1058,12 @@ void MPT::gets_parallel(const uint8_t *keys_hexs, int *keys_indexs, int n,
 }
 
 void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
+                     const uint8_t **values_hps, int *values_sizes,
                      uint8_t *&proofs, int *&proofs_indexs) {
   // TODO
-  assert(proofs == nullptr && proofs_indexs);
+  assert(proofs == nullptr && proofs_indexs == nullptr);
+  assert(values_hps && values_sizes);
+
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n_keys);
@@ -1074,6 +1079,7 @@ void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
   int *d_proofs_indexs = nullptr;
   CHECK_ERROR(gutil::DeviceAlloc(d_buf_size, 1));
   CHECK_ERROR(gutil::DeviceAlloc(d_proofs_indexs, 2 * n_keys));
+  CHECK_ERROR(gutil::DeviceSet(d_buf_size, 0, 1));
 
   const int rpthread_block_size = 128;
   const int rpthread_num_blocks =
@@ -1082,7 +1088,8 @@ void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
   GKernel::gets_proofs_mark<<<rpthread_num_blocks, rpthread_block_size>>>(
       d_keys_hexs, d_keys_indexs, n_keys, d_root_p_, d_proofs_indexs,
       d_buf_size);
-  //   CHECK_ERROR(cudaDeviceSynchronize());
+  CHECK_ERROR(cudaDeviceSynchronize());
+  printf("get proofs mark finished\n");
 
   int buf_size = 0;
   CHECK_ERROR(gutil::CpyDeviceToHost(&buf_size, d_buf_size, 1));
@@ -1091,17 +1098,24 @@ void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
   uint8_t *d_proofs_buf = nullptr;
   CHECK_ERROR(gutil::DeviceAlloc(d_proofs_buf, buf_size));
 
+  const uint8_t **d_values_hps = nullptr;
+  int *d_values_sizes = nullptr;
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, n_keys));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_sizes, n_keys));
+
   GKernel::gets_proofs_set<<<rpthread_num_blocks, rpthread_block_size>>>(
-      d_keys_hexs, d_keys_indexs, n_keys, d_root_p_, d_proofs_indexs,
-      d_proofs_buf);
+      d_keys_hexs, d_keys_indexs, n_keys, d_root_p_, d_values_hps,
+      d_values_sizes, d_proofs_indexs, d_proofs_buf);
+  // device set (0)
 
   proofs = new uint8_t[buf_size];
   proofs_indexs = new int[n_keys * 2];
-  assert(proofs_indexs && proofs);
 
   CHECK_ERROR(gutil::CpyDeviceToHost(proofs, d_proofs_buf, buf_size));
   CHECK_ERROR(
       gutil::CpyDeviceToHost(proofs_indexs, d_proofs_indexs, n_keys * 2));
+  CHECK_ERROR(gutil::CpyDeviceToHost(values_hps, d_values_hps, n_keys));
+  CHECK_ERROR(gutil::CpyDeviceToHost(values_sizes, d_values_sizes, n_keys));
   return;
 }
 
@@ -1124,17 +1138,65 @@ bool MPT::verify_proof_cpu(const uint8_t *key_hex, int key_hex_size,
   bool ret = true;
 
   uint8_t *khex_buf = nullptr;
+  uint8_t hash_buf[HASH_SIZE];
 
+  //   cutil::println_hex(proof, proof_size);
   while (buf_size > 0 && pos < key_hex_size) {
     const uint8_t *elems;
     int elems_size;
     rlp::split_list(buf, buf_size, elems, elems_size, rest, rest_size);
+    // printf("split, rest size = %d\n", rest_size);
+
+    // | ---------- buf_size ----------- |
+    // | header | elems      | rest      |
+    // |        | elems_size | rest_size |
+    // |    node encoding    | ...       |
+
+    // check hash
+    {
+      const uint8_t *encoding = buf;
+      int encoding_size = elems_size + (elems - buf);
+
+      if (encoding_size < 32) {
+        // printf("A: ");
+        // cutil::println_hex(encoding, encoding_size);
+        // printf("B: ");
+        // cutil::println_hex(digest, digest_size);
+        if (!util::bytes_equal(encoding, encoding_size, digest, digest_size))
+          ret = false;
+      } else {
+        // printf("Hash input:");
+        // cutil::println_hex(encoding, encoding_size);
+        CPUHash::calculate_hash(encoding, encoding_size, hash_buf);
+        // printf("A: ");
+        // cutil::println_hex(hash_buf, HASH_SIZE);
+        // printf("B: ");
+        // cutil::println_hex(digest, digest_size);
+        if (!util::bytes_equal(hash_buf, HASH_SIZE, digest, digest_size))
+          ret = false;
+      }
+      if (!ret) break;
+    }
 
     int c = rlp::count_values(elems, elems_size);
     assert(c == 2 || c == 17);
 
+    // printf("count values c = %d\n", c);
     if (c == 2) {
       // TODO calculate hash and compare to digest
+
+      // if (encoding_size < 32)
+      // {
+      //   memcpy(snode->buffer, encoding, encoding_size);
+      //   node->hash_size = encoding_size;
+      //   node->hash = snode->buffer;
+      // }
+      // else
+      // {
+      //   CPUHash::calculate_hash(encoding, encoding_size, snode->buffer);
+      //   node->hash_size = 32;
+      //   node->hash = snode->buffer;
+      // }
 
       int khex_buf_size = enc::decode_short_khexsize(elems, elems_size);
       khex_buf = static_cast<uint8_t *>(
@@ -1150,6 +1212,7 @@ bool MPT::verify_proof_cpu(const uint8_t *key_hex, int key_hex_size,
           !util::bytes_equal(curr_key, curr_key_size, key_hex + pos,
                              curr_key_size)) {
         ret = false;
+
         break;
       }
 
@@ -1162,7 +1225,7 @@ bool MPT::verify_proof_cpu(const uint8_t *key_hex, int key_hex_size,
       uint8_t branch = key_hex[pos];
       enc::decode_full_branch_at(elems, elems_size, branch, digest,
                                  digest_size);
-    
+
       pos += 1;
     } else {
       printf("Error: wrong rlp list elems %d\n", c);
@@ -1173,7 +1236,7 @@ bool MPT::verify_proof_cpu(const uint8_t *key_hex, int key_hex_size,
   }
 
   // check value
-  if (key_hex_size != 0 ||
+  if (pos != key_hex_size ||
       !util::bytes_equal(digest, digest_size, value, value_size)) {
     ret = false;
   }

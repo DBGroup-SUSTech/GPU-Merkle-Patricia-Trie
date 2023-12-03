@@ -643,8 +643,6 @@ __device__ __host__ __forceinline__ void decode_full_branch_at(
   val = cld, val_size = cld_size;
 }
 
-
-
 }  // namespace enc
 }  // namespace Compress
 }  // namespace GpuMPT

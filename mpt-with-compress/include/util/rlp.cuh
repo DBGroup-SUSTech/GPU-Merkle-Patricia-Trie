@@ -1,6 +1,6 @@
 #pragma once
-#include <stdint.h>
 #include <assert.h>
+#include <stdint.h>
 namespace rlp {
 const uint8_t EMPTY_STRING = 0x80;
 const uint8_t EMPTY_LIST = 0xC0;
@@ -240,6 +240,8 @@ __device__ __host__ __forceinline__ void read_kind(
     contentsize = read_size(buf + 1, buf_size - 1, b - 0xF7);
   }
 
+  // printf("readkind k = %d: contentsize = %llu, buf_size = %d, tagsize = %llu\n",
+  //        k, contentsize, buf_size, tagsize);
   // Reject values larger than the input slice.
   if (contentsize > uint64_t(buf_size) - tagsize) {
     printf("ErrValueTooLarge\n");
@@ -256,7 +258,7 @@ __device__ __host__ __forceinline__ void split(
   read_kind(b, b_size, k, ts, cs);
 
   kind = k;
-  content = b, content_size = cs;
+  content = b + ts, content_size = cs;
   rest = b + (cs + ts), rest_size = b_size - (ts + cs);
 }
 
@@ -273,7 +275,7 @@ __device__ __host__ __forceinline__ void split_string(
 
 __device__ __host__ __forceinline__ void split_list(
     const uint8_t *b, int b_size, const uint8_t *&content, int &content_size,
-    const uint8_t *rest, int &rest_size) {
+    const uint8_t *&rest, int &rest_size) {
   Kind k;
   split(b, b_size, k, content, content_size, rest, rest_size);
   assert(k == List);
@@ -286,6 +288,7 @@ __device__ __host__ __forceinline__ int count_values(const uint8_t *b,
   for (; b_size > 0; i++) {
     Kind k;
     uint64_t tag_size, size;
+    // printf("count_values loog: b_size:%d\n", b_size);
     read_kind(b, b_size, k, tag_size, size);
     b += (tag_size + size), b_size -= (tag_size + size);
   }

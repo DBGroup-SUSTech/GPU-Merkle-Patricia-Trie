@@ -64,7 +64,8 @@ TEST(EXPERIMENTS, EthtxnGetProof) {
 
   // load args from command line
   int insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
-  // int insert_num = 80000;
+  int get_num = arg_util::get_record_num(arg_util::Dataset::VERIFY);
+  // int insert_num = 1000;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -104,20 +105,52 @@ TEST(EXPERIMENTS, EthtxnGetProof) {
 
   {
     CHECK_ERROR(cudaDeviceReset());
-    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
     GPUHashMultiThread::load_constants();
-    GpuMPT::Compress::MPT gpu_mpt_baseline;
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    // olc.start();
     auto [d_hash_nodes, hash_nodes_num] =
-        gpu_mpt_baseline.puts_baseline_loop_with_valuehp_v2(
-            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
-            values_hps, insert_num);
-    gpu_mpt_baseline.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
-    auto [hash, hash_size] = gpu_mpt_baseline.get_root_hash();
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(
+            segments[1].key_hex_, segments[1].key_hex_index_,
+            segments[1].value_, segments[1].value_index_, segments[1].value_hp_,
+            insert_num);
+    // gpu_hash.start();
+    gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+
+    auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
+
     printf("GPU baseline hash is: ");
     cutil::println_hex(hash, hash_size);
+
+    uint8_t *proofs = nullptr;
+    int *proofs_indexs = nullptr;
+    auto values_hps_get = new const uint8_t *[get_num];
+    auto values_sizes_get = new int[get_num];
+
+    gpu_mpt_olc.get_proofs(segments[1].key_hex_, segments[1].key_hex_index_,
+                           get_num, values_hps_get, values_sizes_get, proofs,
+                           proofs_indexs);
+    for (int i = 0; i < get_num; ++i) {
+      const uint8_t *key = util::element_start(segments[1].key_hex_index_, i,
+                                               segments[1].key_hex_);
+      const int key_size = util::element_size(segments[1].key_hex_index_, i);
+      const uint8_t *value = values_hps_get[i];
+      const int value_size = values_sizes_get[i];
+      const uint8_t *proof = util::element_start(proofs_indexs, i, proofs);
+      const int proof_size = util::element_size(proofs_indexs, i);
+
+      // printf("Verify key: ");
+      // cutil::print_hex(key, key_size);
+      // printf("\n");
+
+      assert(proof_size);
+      assert(gpu_mpt_olc.verify_proof_cpu(key, key_size, hash, hash_size, value,
+                                          value_size, proof, proof_size));
+    }
+    printf("Finish verify %d keys\n", get_num);
   }
 }
