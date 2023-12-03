@@ -49,6 +49,14 @@ class DynamicAllocator {
     return reinterpret_cast<T *>(d_pool_aligned4_ + old_count);
   }
 
+  template <typename T>
+  __device__ __forceinline__ T *malloc(int n) {
+    assert(*d_count_aligned4_ < CAPACITY);
+    assert(sizeof(T) % 4 == 0);
+    uint32_t old_count = atomicAdd(d_count_aligned4_, n * sizeof(T) / 4);
+    return reinterpret_cast<T *>(d_pool_aligned4_ + old_count);
+  }
+
   __device__ __forceinline__ uint8_t *malloc(int n) {
     assert(*d_count_aligned4_ < CAPACITY);
     assert(n > 0 && n % 4 == 0);
@@ -58,6 +66,10 @@ class DynamicAllocator {
 
   __device__ __forceinline__ uint32_t allocated() const {
     return *d_count_aligned4_ * 4;
+  }
+
+  __forceinline__ uint32_t * get_count_ptr() const {
+    return d_count_aligned4_;
   }
 
  private:
@@ -103,6 +115,14 @@ class TBBAllocator {
     assert((*count_aligned4_).load() < CAPACITY);
     assert(sizeof(T) % 4 == 0);
     uint32_t old_count = (*count_aligned4_).fetch_add(sizeof(T) / 4);
+    return reinterpret_cast<T *>(pool_aligned4_ + old_count);
+  }
+
+  template <typename T>
+  T *malloc(int n) {
+    assert((*count_aligned4_).load() < CAPACITY);
+    assert(sizeof(T) % 4 == 0);
+    uint32_t old_count = (*count_aligned4_).fetch_add(n * sizeof(T) / 4);
     return reinterpret_cast<T *>(pool_aligned4_ + old_count);
   }
 
@@ -286,16 +306,16 @@ class KeyTBBAllocator {
     // uint32_t old_count = atomicAdd(count_aligned4_, n / 4);
     // return reinterpret_cast<uint8_t *>(pool_aligned4_ + old_count);
     assert(key_size < 256);
-    if (key_size < 8) {
-      assert((*small_count_aligned8_).load() < CAPACITY / 3);
-      uint32_t old_count = (*small_count_aligned8_).fetch_add(1);
-      return reinterpret_cast<uint8_t *>(small_pool_aligned8_ + old_count);
-    }
-    if (key_size < 32) {
-      assert((*medium_count_aligned8_).load() * 4 < CAPACITY / 3);
-      uint32_t old_count = (*medium_count_aligned8_).fetch_add(1);
-      return reinterpret_cast<uint8_t *>(medium_pool_aligned8_ + 4 * old_count);
-    }
+    // if (key_size < 8) {
+    //   assert((*small_count_aligned8_).load() < CAPACITY / 3);
+    //   uint32_t old_count = (*small_count_aligned8_).fetch_add(1);
+    //   return reinterpret_cast<uint8_t *>(small_pool_aligned8_ + old_count);
+    // }
+    // if (key_size < 32) {
+    //   assert((*medium_count_aligned8_).load() * 4 < CAPACITY / 3);
+    //   uint32_t old_count = (*medium_count_aligned8_).fetch_add(1);
+    //   return reinterpret_cast<uint8_t *>(medium_pool_aligned8_ + 4 * old_count);
+    // }
     if (key_size < 256) {
       assert((*large_count_aligned8_).load() * 32 < CAPACITY / 3);
       uint32_t old_count = (*large_count_aligned8_).fetch_add(1);

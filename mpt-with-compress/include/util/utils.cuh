@@ -35,7 +35,7 @@
 // for experiments
 #define ALLOC_CAPACITY ((uint64_t(1) << 34))      // 16GB for node
 #define ENCODING_CAPACITY ((uint64_t(1) << 33))   // 8GB for encoding
-#define KEY_ALLOC_CAPACITY (3 * (uint64_t(1) << 30))  // 3 GB for key
+#define KEY_ALLOC_CAPACITY ((uint64_t(1) << 30))  // 1 GB for key
 #endif
 
 #define MAX_NODES 1 << 18
@@ -62,7 +62,9 @@ enum class Dataset {
   MODEL_DATA,
   MODEL_CLUSTER_N,
   MODEL_DATA_SIZE,
-  THREAD_NUM
+  THREAD_NUM,
+  TXN_NUM,
+  ZIPF
 };
 
 void record_data(const std::string& filename, int key_size, int step,int time1, int time2, std::string label) {
@@ -88,6 +90,11 @@ void record_data(const std::string& filename, int key_size, int step,int time1, 
 int get_record_num(Dataset dataset) {
   const char *data_num_str;
   switch (dataset) {
+    case Dataset::TXN_NUM: {
+      data_num_str = getenv("GMPT_TXN_NUM");
+      assert(data_num_str != nullptr);
+      break;
+    }
     case Dataset::WIKI: {
       data_num_str = getenv("GMPT_WIKI_DATA_VOLUME");
       assert(data_num_str != nullptr);
@@ -160,6 +167,11 @@ int get_record_num(Dataset dataset) {
     }
     case Dataset::THREAD_NUM: {
       data_num_str = getenv("GMPT_THREAD_NUM");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::ZIPF: {
+      data_num_str = getenv("GMPT_ZIPF");
       assert(data_num_str != nullptr);
       break;
     }
@@ -293,6 +305,16 @@ __host__ __device__ __forceinline__ int key_bytes_to_hex(
   }
   key_hexs[l - 1] = 16;
   return key_bytes_size * 2 + 1;
+}
+
+__host__ __device__ __forceinline__ int key_bytes_to_hex_without_G(
+    const uint8_t *key_bytes, int key_bytes_size, uint8_t *key_hexs) {
+  int l = key_bytes_size * 2;
+  for (int i = 0; i < key_bytes_size; ++i) {
+    key_hexs[i * 2] = key_bytes[i] / 16;
+    key_hexs[i * 2 + 1] = key_bytes[i] % 16; 
+  }
+  return l;
 }
 
 __host__ __device__ __forceinline__ int hex_to_compact_size(const uint8_t *hex,

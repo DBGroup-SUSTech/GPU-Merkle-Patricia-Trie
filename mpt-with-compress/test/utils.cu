@@ -1,9 +1,28 @@
 #include "util/utils.cuh"
 #include <gtest/gtest.h>
+#include <tbb/tbb.h>
 #include "bench/ethtxn.cuh"
 #include "bench/wiki.cuh"
 #include "bench/ycsb.cuh"
 #include "bench/keytype.cuh"
+
+
+TEST(Util, tbbpfor) {
+  int *sum = new int[1<<30];
+  while (true) {
+    tbb::parallel_for(tbb::blocked_range<int>(0, 1<<30),
+                  [&](const tbb::blocked_range<int> &r)
+                  {
+                      for (int j = r.begin(); j < r.end(); j++)
+                      {
+                        int k = j;
+                        int sum1 = k*2;
+                        sum[k] = sum1;
+                      }
+                  });
+  }
+}
+
 TEST(Util, BytesEqual) {
   ASSERT_FALSE(util::bytes_equal(reinterpret_cast<const uint8_t *>("12345"), 5,
                                  reinterpret_cast<const uint8_t *>("12"), 2));

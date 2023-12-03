@@ -3202,6 +3202,107 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase(
   }
 }
 
+__device__ __forceinline__ void delete_n_cp(void * ptr, DynamicAllocator<ALLOC_CAPACITY> &node_allocator, int size) {
+  node_allocator.malloc(size);
+}
+
+__device__ __forceinline__ void do_put_2phase_put_mark_phase_v2(
+    const uint8_t *key, int key_size, const uint8_t *value, int value_size,
+    const uint8_t *value_hp, Node **root_p, FullNode *&compress_node,
+    Node *&hash_target_node, ShortNode *start_node,
+    DynamicAllocator<ALLOC_CAPACITY> &node_allocator) {
+  ValueNode *vnode = node_allocator.malloc<ValueNode>();
+  vnode->type = Node::Type::VALUE;
+  vnode->h_value = value_hp;
+  vnode->d_value = value;
+  vnode->value_size = value_size;
+  int remain_key_size = key_size;
+  const uint8_t *key_router = key;
+  Node *node = start_node;
+  int node_id = 0;
+  FullNode *thread_nodes = node_allocator.malloc<FullNode>(key_size);
+  FullNode *next_insert_node = thread_nodes + node_id;
+  node_id++;
+  next_insert_node->type = Node::Type::FULL;
+  while (remain_key_size > 0) {
+    switch (node->type) {
+      case Node::Type::SHORT: {
+        ShortNode *s_node = static_cast<ShortNode *>(node);
+        // assert(remain_key_size <= s_node->key_size);
+        key_router += s_node->key_size;
+        remain_key_size -= s_node->key_size;
+        if (remain_key_size == 0) {
+          vnode->parent = s_node;
+          if (s_node->val != nullptr) {
+            s_node->val->parent = nullptr;
+          }
+          s_node->val = vnode;
+          hash_target_node = vnode;
+          // thread_nodes = (FullNode*)realloc(thread_nodes, sizeof(FullNode) * node_id);
+          return;
+        }
+        unsigned long long int old;
+        if (s_node == start_node) {
+          old = atomicCAS((unsigned long long int *)root_p, 0,
+                          (unsigned long long int)next_insert_node);
+        } else {
+          old = atomicCAS((unsigned long long int *)&s_node->val, 0,
+                          (unsigned long long int)next_insert_node);
+        }
+        node = s_node->val;
+        node->parent = s_node;
+        if (old == 0 && node_id < key_size) {
+          assert(node_id < key_size +1);
+          next_insert_node = thread_nodes + node_id;
+          node_id++;
+          next_insert_node->type = Node::Type::FULL;
+        }
+
+        break;
+      }
+      case Node::Type::FULL: {
+        FullNode *f_node = static_cast<FullNode *>(node);
+        const int index = static_cast<int>(*key_router);
+        key_router++;
+        remain_key_size--;
+        if (remain_key_size == 0) {
+          vnode->parent = f_node;
+          unsigned long long int old_need_compress =
+              atomicCAS(&f_node->need_compress, 0, 1);
+          if (old_need_compress == 0) {
+            compress_node = f_node;
+          }
+          if (f_node->childs[index] != nullptr) {
+            f_node->childs[index]->parent = nullptr;
+          }
+          f_node->childs[index] = vnode;
+          hash_target_node = vnode;
+
+          // thread_nodes = (FullNode*)realloc(thread_nodes, sizeof(FullNode) * node_id);
+          return;
+        }
+        unsigned long long int old =
+            atomicCAS((unsigned long long int *)&f_node->childs[index], 0,
+                      (unsigned long long int)next_insert_node);
+        node = f_node->childs[index];
+        node->parent = f_node;
+        if (old == 0 && node_id < key_size) {
+          assert(node_id < key_size + 1);
+          next_insert_node = thread_nodes + node_id;
+          node_id++;
+          next_insert_node->type = Node::Type::FULL;
+        }
+        break;
+      }
+      default: {
+        assert(false);
+        break;
+      }
+    }
+  }
+  assert(false);
+}
+
 __global__ void puts_2phase_put_mark_phase(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
     int64_t *values_indexs, const uint8_t *const *values_hps, int n,
@@ -3530,6 +3631,17 @@ __global__ void puts_2phase_compress_phase(
   }
 }
 
+__device__ __forceinline__ void do_bulk_insert() {
+   
+}
+
+__global__ void bulk_insert(const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t *const *values_hps, int n,
+    ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> node_allocator,
+    Node **hash_target_nodes, int *other_hash_target_num) {
+
+}
+
 // __device__ __forceinline__ void dfs_traverse_trie(Node *root, int &
 // v_node_num, int & f_node_num, int & s_node_num ) {
 //   if (root == nullptr) {
@@ -3573,69 +3685,69 @@ __global__ void puts_2phase_compress_phase(
 //   }
 // }
 
-__device__ __forceinline__ void loop_traverse(Node *root, const uint8_t *key,
-                                              int *s_node_num, int *f_node_num,
-                                              int *v_node_num, int flag) {
-  Node *node = root;
-  const uint8_t *key_router = key;
-  while (node != nullptr) {
-    int record;
-    if (flag == 0)
-      record = atomicCAS(&node->record0, 0, 1);
-    else
-      record = atomicCAS(&node->record1, 0, 1);
-    switch (node->type) {
-      case Node::Type::SHORT: {
-        ShortNode *s_node = static_cast<ShortNode *>(node);
-        if (record == 0) {
-          atomicAdd(s_node_num, 1);
-        }
-        node = s_node->val;
-        key_router += s_node->key_size;
-        break;
-      }
-      case Node::Type::FULL: {
-        FullNode *f_node = static_cast<FullNode *>(node);
-        if (record == 0) {
-          atomicAdd(f_node_num, 1);
-        }
-        node = f_node->childs[static_cast<int>(key_router[0])];
-        key_router++;
-        break;
-      }
-      case Node::Type::VALUE: {
-        // ValueNode *v_node = static_cast<ValueNode*>(node);
-        if (record == 0) {
-          atomicAdd(v_node_num, 1);
-        }
-        return;
-      }
+// __device__ __forceinline__ void loop_traverse(Node *root, const uint8_t *key,
+//                                               int *s_node_num, int *f_node_num,
+//                                               int *v_node_num, int flag) {
+//   Node *node = root;
+//   const uint8_t *key_router = key;
+//   while (node != nullptr) {
+//     int record;
+//     if (flag == 0)
+//       record = atomicCAS(&node->record0, 0, 1);
+//     else
+//       record = atomicCAS(&node->record1, 0, 1);
+//     switch (node->type) {
+//       case Node::Type::SHORT: {
+//         ShortNode *s_node = static_cast<ShortNode *>(node);
+//         if (record == 0) {
+//           atomicAdd(s_node_num, 1);
+//         }
+//         node = s_node->val;
+//         key_router += s_node->key_size;
+//         break;
+//       }
+//       case Node::Type::FULL: {
+//         FullNode *f_node = static_cast<FullNode *>(node);
+//         if (record == 0) {
+//           atomicAdd(f_node_num, 1);
+//         }
+//         node = f_node->childs[static_cast<int>(key_router[0])];
+//         key_router++;
+//         break;
+//       }
+//       case Node::Type::VALUE: {
+//         // ValueNode *v_node = static_cast<ValueNode*>(node);
+//         if (record == 0) {
+//           atomicAdd(v_node_num, 1);
+//         }
+//         return;
+//       }
 
-      default:
-        assert(false);
-        break;
-    }
-  }
-}
+//       default:
+//         assert(false);
+//         break;
+//     }
+//   }
+// }
 
-__global__ void traverse_trie(Node **root, uint8_t *keys_hexs, int *keys_indexs,
-                              int n, int *ssum, int *fsum, int *vsum,
-                              int flag) {
-  // printf("one traverse\n");
-  // start_node->print_self();
-  // printf("start node child: %p\n", start_node->val);
-  int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid >= n) {
-    return;
-  }
-  // int *v_num, *s_num, *f_num;
-  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
-  // dfs_traverse_trie(*root, v_num, f_num, s_num);
-  loop_traverse(*root, key, ssum, fsum, vsum, flag);
-  // atomicAdd(ssum, *s_num);
-  // atomicAdd(fsum, *f_num);
-  // atomicAdd(vsum, *v_num);
-}
+// __global__ void traverse_trie(Node **root, uint8_t *keys_hexs, int *keys_indexs,
+//                               int n, int *ssum, int *fsum, int *vsum,
+//                               int flag) {
+//   // printf("one traverse\n");
+//   // start_node->print_self();
+//   // printf("start node child: %p\n", start_node->val);
+//   int tid = blockIdx.x * blockDim.x + threadIdx.x;
+//   if (tid >= n) {
+//     return;
+//   }
+//   // int *v_num, *s_num, *f_num;
+//   const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+//   // dfs_traverse_trie(*root, v_num, f_num, s_num);
+//   loop_traverse(*root, key, ssum, fsum, vsum, flag);
+//   // atomicAdd(ssum, *s_num);
+//   // atomicAdd(fsum, *f_num);
+//   // atomicAdd(vsum, *v_num);
+// }
 
 }  // namespace GKernel
 }  // namespace Compress

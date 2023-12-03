@@ -346,8 +346,6 @@ struct Node {
 
   // for onepass hash
   Node *parent;
-  int record0;
-  int record1;
   int visit_count;
   int parent_visit_count_added;
 

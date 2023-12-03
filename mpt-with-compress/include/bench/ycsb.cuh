@@ -14,7 +14,7 @@
 enum class DataType { READ, INSERT };
 namespace bench {
 namespace ycsb {
-constexpr const char *YCSB_PATH{PROJECT_SOURCE_DIR "/../dataset/ycsb/"};
+constexpr const char *YCSB_PATH{"/ycsb/"};
 void getFiles(std::string path, std::vector<std::string> &filenames) {
   DIR *pDir;
   struct dirent *ptr;

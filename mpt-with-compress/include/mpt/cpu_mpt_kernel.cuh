@@ -803,6 +803,114 @@ namespace CpuMPT
                 }
             }
 
+            __forceinline__ void put_2phase_put_v2(const uint8_t *key, int key_size, const uint8_t *value, int value_size,
+                                                root_p_type root_p, FullNode *&compress_node, Node *&hash_target_node,
+                                                ShortNode *start_node, TBBAllocator<ALLOC_CAPACITY> &allocator)
+            {
+                ValueNode *vnode = allocator.malloc<ValueNode>();
+                vnode->type = Node::Type::VALUE;
+                vnode->value = value;
+                vnode->value_size = value_size;
+                int remain_key_size = key_size;
+                const uint8_t *key_router = key;
+                Node *node = start_node;
+                int node_id = 0;
+                FullNode * thread_nodes = allocator.malloc<FullNode>(key_size);
+                FullNode *next_insert_node = &thread_nodes[node_id++];
+                next_insert_node->type = Node::Type::FULL;
+                while (remain_key_size > 0)
+                {
+                    switch (node->type)
+                    {
+                    case Node::Type::SHORT:
+                    {
+                        ShortNode *s_node = static_cast<ShortNode *>(node);
+                        // assert(remain_key_size <= s_node->key_size);
+                        key_router += s_node->key_size;
+                        remain_key_size -= s_node->key_size;
+                        if (remain_key_size == 0)
+                        {
+                            vnode->parent = s_node;
+                            Node *s_node_val = s_node->tbb_val.load();
+
+                            if (s_node_val != nullptr)
+                            {
+                                s_node_val->parent = nullptr;
+                            }
+                            s_node->tbb_val.store(vnode);
+                            hash_target_node = vnode;
+                            return;
+                        }
+                        // unsigned long long int old = 0;
+                        Node *old = nullptr;
+                        if (s_node == start_node)
+                        {
+                            bool success = (*root_p).compare_exchange_weak(old, (Node *)next_insert_node);
+                        }
+                        else
+                        {
+                            // old = atomicCAS((unsigned long long int *)&s_node->val, 0,
+                            //                 (unsigned long long int)next_insert_node);
+                            bool success = s_node->tbb_val.compare_exchange_weak(old, (Node *)next_insert_node);
+                        }
+                        node = s_node->tbb_val.load();
+                        node->parent = s_node;
+                        if (!old && node_id < key_size)
+                        {
+                            next_insert_node = &thread_nodes[node_id++];
+                            next_insert_node->type = Node::Type::FULL;
+                        }
+                        break;
+                    }
+                    case Node::Type::FULL:
+                    {
+                        FullNode *f_node = static_cast<FullNode *>(node);
+                        const int index = static_cast<int>(*key_router);
+                        key_router++;
+                        remain_key_size--;
+                        if (remain_key_size == 0)
+                        {
+                            vnode->parent = f_node;
+
+                            int old_need_compress = 0;
+                            bool success = f_node->need_compress.compare_exchange_weak(old_need_compress, 1);
+                            if (success)
+                            {
+                                compress_node = f_node;
+                            }
+                            Node *f_node_child = f_node->tbb_childs[index].load();
+                            if (f_node_child != nullptr)
+                            {
+                                f_node_child->parent = nullptr;
+                            }
+                            f_node->tbb_childs[index].store(vnode);
+                            hash_target_node = vnode;
+                            return;
+                        }
+                        // unsigned long long int old =
+                        //     atomicCAS((unsigned long long int *)&f_node->childs[index], 0,
+                        //               (unsigned long long int)next_insert_node);
+                        Node *old = nullptr;
+                        f_node->tbb_childs[index].compare_exchange_weak(old, (Node *)next_insert_node);
+                        node = f_node->tbb_childs[index].load();
+                        node->parent = f_node;
+                        if (old == 0 && node_id < key_size)
+                        {
+                            next_insert_node = &thread_nodes[node_id++];
+                            next_insert_node->type = Node::Type::FULL;
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        assert(false);
+                        break;
+                    }
+                    }
+                }
+            }
+
+
             void puts_2phase_put(const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
                                  int64_t *values_indexs, int n, std::atomic<int> &compress_num, Node **hash_target_nodes,
                                  root_p_type root_p, FullNode **compress_nodes, ShortNode *start_node,
@@ -819,11 +927,12 @@ namespace CpuMPT
                                           int value_size = util::element_size(values_indexs, i);
                                           FullNode *compress_node = nullptr;
                                           Node *hash_target_node = nullptr;
-                                          put_2phase_put(key, key_size, value, value_size, root_p, compress_node, hash_target_node, start_node, allocator);
+                                          put_2phase_put_v2(key, key_size, value, value_size, root_p, compress_node, hash_target_node, start_node, allocator);
                                           if (compress_node != nullptr)
                                           {
-                                              int compress_place = compress_num.fetch_add(1);
-                                              compress_nodes[compress_place] = compress_node;
+                                                // int compress_place = compress_num.fetch_add(1);
+                                                // compress_nodes[compress_place] = compress_node;
+                                                compress_nodes[i] = compress_node;
                                           }
                                           if (hash_target_node != nullptr)
                                           {

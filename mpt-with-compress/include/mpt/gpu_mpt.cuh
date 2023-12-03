@@ -663,6 +663,12 @@ std::tuple<Node **, int> MPT::puts_latching_with_valuehp_v2_with_record(
   CHECK_ERROR(gutil::CpyDeviceToHost(&other_hash_target_num,
                                      d_other_hash_target_num, 1));
  // synchronize all threads
+    uint32_t * d_allocator_count = allocator_.get_count_ptr();
+  uint32_t consumed_memory;
+
+ CHECK_ERROR(gutil::CpyDeviceToHost(&consumed_memory, d_allocator_count, 1));
+    double consumed_memory_gb = consumed_memory * 4.0 / 1024 / 1024 / 1024;
+    printf("olc consumed memory: %f GB\n", consumed_memory_gb);
 
   return {d_hash_target_nodes, n + other_hash_target_num};
 }
@@ -1474,9 +1480,18 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_recorder(
       d_keys_hexs, d_keys_indexs, d_values_bytes, d_values_indexs, d_values_hps,
       n, d_compress_num, d_hash_target_nodes, d_root_p_, d_compress_nodes,
       d_start_, allocator_);
+
+  uint32_t * d_allocator_count = allocator_.get_count_ptr();
+  uint32_t consumed_memory;
+
+    CHECK_ERROR(gutil::CpyDeviceToHost(&consumed_memory, d_allocator_count, 1));
+        double consumed_memory_gb = consumed_memory * 4.0 / 1024 / 1024 / 1024;
+    printf("two consumed memory: %f GB\n", consumed_memory_gb);
   //   GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
 
   CUDA_SAFE_CALL(cudaDeviceSynchronize());
+
+two_profiler.stop();
 
   GKernel::puts_2phase_compress_phase<<<2 * num_blocks, block_size>>>(
       d_compress_nodes, d_compress_num, n, d_start_, d_root_p_,
@@ -1484,7 +1499,7 @@ std::tuple<Node **, int> MPT::puts_2phase_with_valuehp_with_recorder(
       key_allocator_);
   // GKernel::traverse_trie<<<1, 1>>>(d_root_p_, d_start_);
   CHECK_ERROR(cudaDeviceSynchronize());
-    two_profiler.stop();
+
   int h_hash_target_num;
   CHECK_ERROR(gutil::CpyDeviceToHost(&h_hash_target_num, d_hash_target_num, 1));
   two_profiler.print(); 
