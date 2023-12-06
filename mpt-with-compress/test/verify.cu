@@ -123,8 +123,8 @@ TEST(EXPERIMENTS, EthtxnGetProof) {
 
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
 
-    printf("GPU baseline hash is: ");
-    cutil::println_hex(hash, hash_size);
+    // printf("GPU baseline hash is: ");
+    // cutil::println_hex(hash, hash_size);
 
     uint8_t *proofs = nullptr;
     int *proofs_indexs = nullptr;
@@ -148,9 +148,10 @@ TEST(EXPERIMENTS, EthtxnGetProof) {
       // printf("\n");
 
       assert(proof_size);
-      assert(gpu_mpt_olc.verify_proof_cpu(key, key_size, hash, hash_size, value,
-                                          value_size, proof, proof_size));
+      assert(GpuMPT::Compress::MPT::verify_proof_cpu(
+          key, key_size, hash, hash_size, value, value_size, proof,
+          proof_size));
     }
-    printf("Finish verify %d keys\n", get_num);
+    // printf("Finish verify %d keys\n", get_num);
   }
 }

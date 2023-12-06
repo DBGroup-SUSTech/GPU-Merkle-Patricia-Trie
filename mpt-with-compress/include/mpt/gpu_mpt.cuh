@@ -154,10 +154,10 @@ class MPT {
   void get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
                   const uint8_t **value_hps, int *value_sizes,  // in
                   uint8_t *&proofs, int *&proofs_indexs);
-  bool verify_proof_cpu(const uint8_t *key_hex, int key_size,
-                        const uint8_t *hash, int digest_size,
-                        const uint8_t *value, int value_size,
-                        const uint8_t *proof, int proof_size);
+  static bool verify_proof_cpu(const uint8_t *key_hex, int key_size,
+                               const uint8_t *hash, int digest_size,
+                               const uint8_t *value, int value_size,
+                               const uint8_t *proof, int proof_size);
   /// @brief gets all dirties nodes and its encoding
   /// @param [out] hashs array (32 per node)x`
   void flush_dirty_nodes(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
@@ -1064,6 +1064,10 @@ void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
   assert(proofs == nullptr && proofs_indexs == nullptr);
   assert(values_hps && values_sizes);
 
+//   perf::CpuMultiTimer<perf::us> timer;
+
+//   timer.start(); // --------------------
+
   uint8_t *d_keys_hexs = nullptr;
   int *d_keys_indexs = nullptr;
   int keys_hexs_size = util::elements_size_sum(keys_indexs, n_keys);
@@ -1075,6 +1079,11 @@ void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
   CHECK_ERROR(
       gutil::CpyHostToDevice(d_keys_indexs, keys_indexs, keys_indexs_size));
 
+  const uint8_t **d_values_hps = nullptr;
+  int *d_values_sizes = nullptr;
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, n_keys));
+  CHECK_ERROR(gutil::DeviceAlloc(d_values_sizes, n_keys));
+
   int *d_buf_size = nullptr;
   int *d_proofs_indexs = nullptr;
   CHECK_ERROR(gutil::DeviceAlloc(d_buf_size, 1));
@@ -1084,29 +1093,44 @@ void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
   const int rpthread_block_size = 128;
   const int rpthread_num_blocks =
       (n_keys + rpthread_block_size - 1) / rpthread_block_size;
+  
+//   timer.stop(); // -------------------- 1
 
   GKernel::gets_proofs_mark<<<rpthread_num_blocks, rpthread_block_size>>>(
       d_keys_hexs, d_keys_indexs, n_keys, d_root_p_, d_proofs_indexs,
       d_buf_size);
   CHECK_ERROR(cudaDeviceSynchronize());
-  printf("get proofs mark finished\n");
+//   printf("get proofs mark finished\n");
+
+//   timer.stop(); // -------------------- 2
+  
+//   perf::CpuMultiTimer<perf::us> timer23;
+//   timer23.start();
 
   int buf_size = 0;
   CHECK_ERROR(gutil::CpyDeviceToHost(&buf_size, d_buf_size, 1));
-  printf("Buffer size for all proofs is %d bytes\n", buf_size);
-
+//   printf("Buffer size for all proofs is %d bytes\n", buf_size);
+  
+//   timer23.stop();
   uint8_t *d_proofs_buf = nullptr;
   CHECK_ERROR(gutil::DeviceAlloc(d_proofs_buf, buf_size));
+  
+//   timer23.stop();
+//   printf("timer23 cost is %d-%d\n", timer23.get(0), timer23.get(1));
 
-  const uint8_t **d_values_hps = nullptr;
-  int *d_values_sizes = nullptr;
-  CHECK_ERROR(gutil::DeviceAlloc(d_values_hps, n_keys));
-  CHECK_ERROR(gutil::DeviceAlloc(d_values_sizes, n_keys));
-
+//   timer.stop(); // -------------------- 3
+ 
+  perf::GpuTimer<perf::us> timer34;
+  timer34.start();
   GKernel::gets_proofs_set<<<rpthread_num_blocks, rpthread_block_size>>>(
       d_keys_hexs, d_keys_indexs, n_keys, d_root_p_, d_values_hps,
       d_values_sizes, d_proofs_indexs, d_proofs_buf);
   // device set (0)
+  timer34.stop();
+  CHECK_ERROR(cudaDeviceSynchronize());
+  
+//   printf("timer34 kernel = %d\n", timer34.get());
+//   timer.stop(); // -------------------- 4
 
   proofs = new uint8_t[buf_size];
   proofs_indexs = new int[n_keys * 2];
@@ -1116,6 +1140,14 @@ void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
       gutil::CpyDeviceToHost(proofs_indexs, d_proofs_indexs, n_keys * 2));
   CHECK_ERROR(gutil::CpyDeviceToHost(values_hps, d_values_hps, n_keys));
   CHECK_ERROR(gutil::CpyDeviceToHost(values_sizes, d_values_sizes, n_keys));
+  
+  CHECK_ERROR(gutil::DeviceFree(d_proofs_buf));
+  CHECK_ERROR(gutil::DeviceFree(d_proofs_indexs));
+//   timer.stop(); // -------------------- 5
+  
+//   printf("MPT::get_proofs breakdown: 0-%dus-1-%dus-2-%dus-3-%dus-4-%dus-5\n", 
+//     timer.get(0), timer.get(1), timer.get(2), timer.get(3), timer.get(4)
+//   );
   return;
 }
 
@@ -1126,10 +1158,9 @@ void MPT::get_proofs(const uint8_t *keys_hexs, int *keys_indexs, int n_keys,
 // }
 
 bool MPT::verify_proof_cpu(const uint8_t *key_hex, int key_hex_size,
-                           const uint8_t *digest, int digest_size,
-                           const uint8_t *value, int value_size,
-                           const uint8_t *proof, int proof_size) {
-  // TODO
+                                  const uint8_t *digest, int digest_size,
+                                  const uint8_t *value, int value_size,
+                                  const uint8_t *proof, int proof_size) {
   const uint8_t *rest = nullptr, *buf = proof;
   int rest_size = 0, buf_size = proof_size;
 
@@ -1156,23 +1187,27 @@ bool MPT::verify_proof_cpu(const uint8_t *key_hex, int key_hex_size,
     {
       const uint8_t *encoding = buf;
       int encoding_size = elems_size + (elems - buf);
+      
+      // digest may truncate the hash output
+      int comp_size = (encoding_size > digest_size) ? digest_size : encoding_size;
 
       if (encoding_size < 32) {
         // printf("A: ");
         // cutil::println_hex(encoding, encoding_size);
         // printf("B: ");
         // cutil::println_hex(digest, digest_size);
-        if (!util::bytes_equal(encoding, encoding_size, digest, digest_size))
+        if (!util::bytes_equal(encoding, comp_size, digest, comp_size))
           ret = false;
       } else {
         // printf("Hash input:");
         // cutil::println_hex(encoding, encoding_size);
+        // assert(comp_size == HASH_SIZE);
         CPUHash::calculate_hash(encoding, encoding_size, hash_buf);
         // printf("A: ");
         // cutil::println_hex(hash_buf, HASH_SIZE);
         // printf("B: ");
         // cutil::println_hex(digest, digest_size);
-        if (!util::bytes_equal(hash_buf, HASH_SIZE, digest, digest_size))
+        if (!util::bytes_equal(hash_buf, comp_size, digest, comp_size))
           ret = false;
       }
       if (!ret) break;
