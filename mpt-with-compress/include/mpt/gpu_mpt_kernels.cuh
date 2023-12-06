@@ -3220,7 +3220,7 @@ __device__ __forceinline__ void do_put_2phase_put_mark_phase_v2(
   const uint8_t *key_router = key;
   Node *node = start_node;
   int node_id = 0;
-  FullNode *thread_nodes = node_allocator.malloc<FullNode>(key_size);
+  FullNode *thread_nodes = node_allocator.malloc<FullNode>(50);
   FullNode *next_insert_node = thread_nodes + node_id;
   node_id++;
   next_insert_node->type = Node::Type::FULL;
@@ -3307,7 +3307,7 @@ __global__ void puts_2phase_put_mark_phase(
     const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
     int64_t *values_indexs, const uint8_t *const *values_hps, int n,
     int *compress_num, Node **hash_target_nodes, Node **root_p,
-    FullNode **compress_nodes, ShortNode *start_node,
+    FullNode **compress_nodes, ShortNode *start_node, 
     DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) {
@@ -3323,6 +3323,188 @@ __global__ void puts_2phase_put_mark_phase(
   do_put_2phase_put_mark_phase(key, key_size, value, value_size, value_hp,
                                root_p, compress_node, hash_target_node,
                                start_node, node_allocator);
+  if (compress_node != nullptr) {
+    int compress_place = atomicAdd(compress_num, 1);
+    compress_nodes[compress_place] = compress_node;
+  }
+  if (hash_target_node != nullptr) {
+    // assert(false);
+    // printf("tid%d\n",tid);
+    hash_target_nodes[tid] = hash_target_node;
+    // ValueNode *v = static_cast<ValueNode*>(hash_target_node);
+    // v->print_self();
+  }
+}
+
+__global__ void puts_2phase_put_mark_phase_with_thread(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t *const *values_hps, int n,
+    int *compress_num, Node **hash_target_nodes, Node **root_p,
+    FullNode **compress_nodes, ShortNode *start_node, 
+    DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  const uint8_t *value = util::element_start(values_indexs, tid, values_bytes);
+  int value_size = util::element_size(values_indexs, tid);
+  const uint8_t *value_hp = values_hps[tid];
+  FullNode *compress_node = nullptr;
+  Node *hash_target_node = nullptr;
+  do_put_2phase_put_mark_phase_v2(key, key_size, value, value_size, value_hp,
+                               root_p, compress_node, hash_target_node,
+                               start_node, node_allocator);
+  if (compress_node != nullptr) {
+    int compress_place = atomicAdd(compress_num, 1);
+    compress_nodes[compress_place] = compress_node;
+  }
+  if (hash_target_node != nullptr) {
+    // assert(false);
+    // printf("tid%d\n",tid);
+    hash_target_nodes[tid] = hash_target_node;
+    // ValueNode *v = static_cast<ValueNode*>(hash_target_node);
+    // v->print_self();
+  }
+}
+
+__device__ __forceinline__ void do_put_2phase_put_mark_phase_v3(
+   const uint8_t *key, int key_size, const uint8_t *value, int value_size,
+   const uint8_t *value_hp, Node **root_p, FullNode *&compress_node,
+   Node *&hash_target_node, ShortNode *start_node, DynamicAllocator<ALLOC_CAPACITY> &node_allocator,
+   FullNode *block_nodes, int *block_nodes_counter) {
+   ValueNode *vnode = node_allocator.malloc<ValueNode>();
+  vnode->type = Node::Type::VALUE;
+  vnode->h_value = value_hp;
+  vnode->d_value = value;
+  vnode->value_size = value_size;
+  int remain_key_size = key_size;
+  const uint8_t *key_router = key;
+  Node *node = start_node;
+  int node_id = 0;
+  int node_pos = atomicAdd_block(block_nodes_counter, 1);
+  FullNode *next_insert_node = block_nodes + node_pos;
+  node_id++;
+  next_insert_node->type = Node::Type::FULL;
+  while (remain_key_size > 0) {
+    switch (node->type) {
+      case Node::Type::SHORT: {
+        ShortNode *s_node = static_cast<ShortNode *>(node);
+        // assert(remain_key_size <= s_node->key_size);
+        key_router += s_node->key_size;
+        remain_key_size -= s_node->key_size;
+        if (remain_key_size == 0) {
+          vnode->parent = s_node;
+          if (s_node->val != nullptr) {
+            s_node->val->parent = nullptr;
+          }
+          s_node->val = vnode;
+          hash_target_node = vnode;
+          // thread_nodes = (FullNode*)realloc(thread_nodes, sizeof(FullNode) * node_id);
+          return;
+        }
+        unsigned long long int old;
+        if (s_node == start_node) {
+          old = atomicCAS((unsigned long long int *)root_p, 0,
+                          (unsigned long long int)next_insert_node);
+        } else {
+          old = atomicCAS((unsigned long long int *)&s_node->val, 0,
+                          (unsigned long long int)next_insert_node);
+        }
+        node = s_node->val;
+        node->parent = s_node;
+        if (old == 0 && node_id < key_size) {
+          assert(node_id < key_size +1);
+          node_pos = atomicAdd_block(block_nodes_counter, 1);
+          next_insert_node = block_nodes + node_pos;
+          node_id++;
+          next_insert_node->type = Node::Type::FULL;
+        }
+
+        break;
+      }
+      case Node::Type::FULL: {
+        FullNode *f_node = static_cast<FullNode *>(node);
+        const int index = static_cast<int>(*key_router);
+        key_router++;
+        remain_key_size--;
+        if (remain_key_size == 0) {
+          vnode->parent = f_node;
+          unsigned long long int old_need_compress =
+              atomicCAS(&f_node->need_compress, 0, 1);
+          if (old_need_compress == 0) {
+            compress_node = f_node;
+          }
+          if (f_node->childs[index] != nullptr) {
+            f_node->childs[index]->parent = nullptr;
+          }
+          f_node->childs[index] = vnode;
+          hash_target_node = vnode;
+
+          // thread_nodes = (FullNode*)realloc(thread_nodes, sizeof(FullNode) * node_id);
+          return;
+        }
+        unsigned long long int old =
+            atomicCAS((unsigned long long int *)&f_node->childs[index], 0,
+                      (unsigned long long int)next_insert_node);
+        node = f_node->childs[index];
+        node->parent = f_node;
+        if (old == 0 && node_id < key_size) {
+          assert(node_id < key_size + 1);
+          node_pos = atomicAdd_block(block_nodes_counter, 1);
+          next_insert_node = block_nodes + node_pos;
+          node_id++;
+          next_insert_node->type = Node::Type::FULL;
+        }
+        break;
+      }
+      default: {
+        assert(false);
+        break;
+      }
+    }
+  }
+  assert(false); 
+}
+
+__global__ void puts_2phase_put_mark_phase_with_block(
+    const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
+    int64_t *values_indexs, const uint8_t *const *values_hps, int n,
+    int *compress_num, Node **hash_target_nodes, Node **root_p,
+    FullNode **compress_nodes, ShortNode *start_node,
+    DynamicAllocator<ALLOC_CAPACITY> node_allocator) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) {
+    return;
+  }
+
+  __shared__ uint64_t block_fnodes_p;
+  __shared__ int block_fnodes_counter;
+ 
+  if (threadIdx.x == 0) {
+    int end = blockDim.x * (blockIdx.x + 1) < n ? blockDim.x * (blockIdx.x + 1)
+                                                : n-1;
+    int block_key_size = util::element_size_range(keys_indexs, blockIdx.x * blockDim.x, end);
+    FullNode * block_fnodes = node_allocator.malloc<FullNode>(block_key_size);
+    block_fnodes_p = reinterpret_cast<uint64_t>(block_fnodes);
+    block_fnodes_counter = 0;
+  }
+
+  // let all threads know the block_fnodes address
+  __syncthreads();
+
+  const uint8_t *key = util::element_start(keys_indexs, tid, keys_hexs);
+  int key_size = util::element_size(keys_indexs, tid);
+  const uint8_t *value = util::element_start(values_indexs, tid, values_bytes);
+  int value_size = util::element_size(values_indexs, tid);
+  const uint8_t *value_hp = values_hps[tid];
+  FullNode *compress_node = nullptr;
+  Node *hash_target_node = nullptr;
+  FullNode * shared_block_fnodes = reinterpret_cast<FullNode*>(block_fnodes_p); 
+  do_put_2phase_put_mark_phase_v3(key, key_size, value, value_size, value_hp,
+                               root_p, compress_node, hash_target_node,
+                               start_node, node_allocator, shared_block_fnodes, &block_fnodes_counter);
   if (compress_node != nullptr) {
     int compress_place = atomicAdd(compress_num, 1);
     compress_nodes[compress_place] = compress_node;
