@@ -8,12 +8,14 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "util/utils.cuh"
 
 namespace bench {
 namespace ethtxn {
 constexpr const char *ETHTXN_PATH{"/ethereum/transactions/"};
+constexpr const char *ETHADDRESS_PATH{"/ethereum/addresses/"};
 void getFiles(std::string path, std::vector<std::string> &filenames) {
   DIR *pDir;
   struct dirent *ptr;
@@ -126,6 +128,50 @@ int read_ethtxn_data_all(std::string dir_path, uint8_t *out_key, int *key_index,
     //        file_start_value);
   }
   return total_kvs;
+}
+
+void read_ethaddress_data(std::string file_name, std::vector<std::pair<std::string, std::string>> &out) {
+  std::ifstream file;
+  file.open(file_name, std::ios::in);
+  if (!file) {
+    printf("no file\n");
+    assert(false);
+  }
+  std::string line;
+  std::getline(file, line, '\n');
+  while (std::getline(file, line, '\n')) {
+    // const char *split = ":";
+    std::string key;
+    std::string value;
+    std::stringstream ss(line);
+    std::getline(ss, key, ',');
+    std::getline(ss, value);
+    // key.erase(0, 2);
+
+    if (key.size() != 40) {
+      std::cout<<key.size();
+      std::cout << "key: " << key << "value: " << value << std::endl; 
+    }
+    assert(key.size() == 40);
+    assert(value.size() > 0);
+    // std::cout << "key: " << key << "value: " << value << std::endl;
+    // break;
+    std::pair<std::string, std::string> kv;
+    kv.first = key;
+    kv.second = value; 
+    out.push_back(kv);
+  }
+  // Close the file
+  file.close(); 
+}
+
+void read_ethaddress_data_all(std::string dir_path, std::vector<std::pair<std::string, std::string>> &out) {
+  std::vector<std::string> file_names;
+  getFiles(dir_path, file_names);
+  std::sort(file_names.begin(), file_names.end());
+  for (int i = 0; i < file_names.size(); i++) {
+    read_ethaddress_data(file_names[i], out);
+  }
 }
 }  // namespace ethtxn
 }  // namespace bench

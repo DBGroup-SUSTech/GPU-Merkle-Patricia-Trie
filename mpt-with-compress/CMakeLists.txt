@@ -21,11 +21,16 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
 #       1. This project do not pass leak-santizer
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 
+find_package(Threads REQUIRED)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+
 find_package(GTest)
 find_package(LibXml2 REQUIRED)
 include(GoogleTest)
 find_library(CRYPTOPP_LIB cryptopp)
 find_package(TBB REQUIRED)
+find_library(NUMA_LIB numa)
+
 
 # # ---[ Dependencies
 # include(cmake/Dependencies.cmake)
@@ -58,6 +63,8 @@ foreach(test_file IN LISTS TEST_FILES)
                 PRIVATE ${LIBXML2_LIBRARIES}
                 PRIVATE TBB::tbb
                 PRIVATE TBB::tbbmalloc
+                PRIVATE ${NUMA_LIB}
+                PRIVATE Threads::Threads
         ) 
 
         gtest_discover_tests(${test_name})
@@ -77,4 +84,6 @@ target_link_libraries(gmpt
         PUBLIC STATIC ${CRYPTOPP_LIB}
         PUBLIC STATIC ${LIBXML2_LIBRARIES}
         PUBLIC STATIC TBB::tbb
-        PUBLIC STATIC TBB::tbbmalloc) 
+        PUBLIC STATIC TBB::tbbmalloc
+        PUBLIC STATIC ${NUMA_LIB}
+        PUBLIC STATIC Threads::Threads) 

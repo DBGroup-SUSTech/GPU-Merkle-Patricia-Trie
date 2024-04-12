@@ -29,6 +29,13 @@ namespace CpuMPT
                          const uint8_t *values_bytes, const int64_t *values_indexs,
                          int n);
 
+      void bulk_puts(const uint8_t *keys_hexs, const int *keys_indexs,
+                     const uint8_t *values_bytes, const int64_t *values_indexs,
+                     int n);
+      Node *do_bulk_puts(const uint8_t **partition_keys_hexs, const int **partition_keys_indexs,
+                         const uint8_t **partition_values_bytes, const int64_t **partition_values_indexs,
+                         int depth, int n);
+
       /// @brief hash according to key value
       // TODO
       void puts_with_hashs_baseline();
@@ -182,32 +189,37 @@ namespace CpuMPT
     }
 
     std::tuple<Node **, int> MPT::puts_lock(const uint8_t *keys_hexs, int *keys_indexs,
-                                       const uint8_t *values_bytes, int64_t *values_indexs,
-                                       int n) {
+                                            const uint8_t *values_bytes, int64_t *values_indexs,
+                                            int n)
+    {
       Node **hash_target_nodes;
       cutil::TBBAlloc(hash_target_nodes, 2 * n);
       cutil::TBBSet(hash_target_nodes, 0, 2 * n);
       std::atomic<int> hash_target_num = 0;
-      CKernel::puts_olc(keys_hexs, keys_indexs, values_bytes, values_indexs, n, start_, 
-                   allocator_, hash_target_nodes, hash_target_num);
+      CKernel::puts_olc(keys_hexs, keys_indexs, values_bytes, values_indexs, n, start_,
+                        allocator_, hash_target_nodes, hash_target_num);
       // CKernel::traverse_trie(start_,tbb_root_p_, keys_hexs, keys_indexs, n);
-      
-      return {hash_target_nodes, hash_target_num + n} ;
+
+      return {hash_target_nodes, hash_target_num + n};
     }
 
-    void MPT::hashs_onepass(Node ** hash_nodes, int n)
+    void MPT::hashs_onepass(Node **hash_nodes, int n)
     {
       CKernel::hash_onepass_mark(hash_nodes, n, tbb_root_p_);
       CKernel::hash_onepass_update(hash_nodes, n, allocator_, start_);
     }
 
-    void MPT::get_root_hash_parallel(const uint8_t *&hash, int &hash_size) const {
+    void MPT::get_root_hash_parallel(const uint8_t *&hash, int &hash_size) const
+    {
       assert(start_->tbb_val.load() == (*tbb_root_p_).load());
-      if ((*tbb_root_p_).load()==nullptr || (*tbb_root_p_).load()->hash_size == 0) {
+      if ((*tbb_root_p_).load() == nullptr || (*tbb_root_p_).load()->hash_size == 0)
+      {
         hash = nullptr;
         hash_size = 0;
         return;
-      } else {
+      }
+      else
+      {
         hash = (*tbb_root_p_).load()->hash;
         hash_size = (*tbb_root_p_).load()->hash_size;
         return;
@@ -392,12 +404,11 @@ namespace CpuMPT
         uint8_t *kc = new uint8_t[kc_size]{};
         assert(kc_size == util::hex_to_compact(snode->key, snode->key_size, kc));
         snode->key_compact = kc;
-        
+
         int encoding_size = 0, payload_size = 0;
         snode->encode_size(encoding_size, payload_size);
         uint8_t *encoding = new uint8_t[encoding_size]{};
         assert(encoding_size == snode->encode(encoding, payload_size));
-
 
         if (encoding_size < 32)
         {
@@ -567,52 +578,235 @@ namespace CpuMPT
       }
     }
 
+    void MPT::bulk_puts(const uint8_t *keys_hexs, const int *keys_indexs,
+                        const uint8_t *values_bytes, const int64_t *values_indexs,
+                        int n)
+    {
+      // make partition
+      const uint8_t **partition_keys_hexs = new const uint8_t *[n];
+      const int **partition_keys_indexs = new const int *[n];
+      const uint8_t **partition_values_bytes = new const uint8_t *[n];
+      const int64_t **partition_values_indexs = new const int64_t *[n];
+      int *partition_sizes = new int[n]{0};
+
+      Node *node = start_;
+
+      for (int i = 0; i < n; ++i)
+      {
+        const uint8_t *key_hex = util::element_start(keys_indexs, i, keys_hexs);
+        const int *key_index = keys_indexs + 2 * i;
+        const uint8_t *value_bytes = util::element_start(values_indexs, i, values_bytes);
+        const int64_t *value_index = values_indexs + 2 * i;
+        partition_keys_hexs[i] = key_hex;
+        partition_keys_indexs[i] = key_index;
+        partition_values_bytes[i] = value_bytes;
+        partition_values_indexs[i] = value_index;
+      }
+
+      start_->val = do_bulk_puts(partition_keys_hexs, partition_keys_indexs, partition_values_bytes, partition_values_indexs, 0, n);
+      root_ = start_->val;
+      // delete
+      delete[] partition_keys_hexs;
+      delete[] partition_keys_indexs;
+      delete[] partition_values_bytes;
+      delete[] partition_values_indexs;
+    }
+
+    Node *MPT::do_bulk_puts(const uint8_t **partition_keys_hexs, const int **partition_keys_indexs,
+                            const uint8_t **partition_values_bytes, const int64_t **partition_values_indexs,
+                            int depth, int n)
+    {
+      // check if we create vnode
+      const uint8_t *first_key_hex = partition_keys_hexs[0];
+      const int *first_key_index = partition_keys_indexs[0];
+      int first_key_size = (*(first_key_index + 1) - *first_key_index) + 1;
+      // cutil::println_hex(first_key_hex, first_key_size);
+      bool all_equal = true;
+      for (int i = 1; i < n; i++)
+      {
+        const uint8_t *key_hex = partition_keys_hexs[i];
+        const int *key_index = partition_keys_indexs[i];
+        // if all keys in the partition are the same, create the
+        int key_size = (*(key_index + 1) - *key_index) + 1;
+        bool e_equal = util::bytes_equal(first_key_hex, first_key_size, key_hex, key_size);
+        all_equal = all_equal && e_equal;
+        if (all_equal == false)
+        {
+          break;
+        }
+      }
+      if (all_equal)
+      {
+        // create vnode
+        ValueNode *vnode = new ValueNode{};
+        vnode->type = Node::Type::VALUE;
+        vnode->value = partition_values_bytes[0];
+        vnode->value_size = partition_values_indexs[0][1] - partition_values_indexs[0][0] + 1;
+        int remaining_key_size = first_key_size - depth;
+        if (remaining_key_size > 0)
+        {
+          ShortNode *snode = new ShortNode{};
+          snode->type = Node::Type::SHORT;
+          snode->key = first_key_hex + depth;
+          snode->key_size = remaining_key_size;
+          snode->val = vnode;
+          return snode;
+        }
+        else
+        {
+          return vnode;
+        }
+      }
+      // check if we create short node
+      int same_byte_count = 0;
+      while (true)
+      {
+        uint8_t cmp_byte = *(first_key_hex + depth);
+        bool all_same = true;
+        for (int i = 1; i < n; i++)
+        {
+          const uint8_t *key_hex = partition_keys_hexs[i];
+          uint8_t e_cmp_byte = *(key_hex + depth);
+          all_same = all_same && (e_cmp_byte == cmp_byte);
+          if (all_same == false)
+          {
+            break;
+          }
+        }
+        if (all_same == false)
+        {
+          break;
+        }
+        same_byte_count += 1;
+        depth += 1;
+      }
+      // printf("same byte count: %d\n", same_byte_count);
+      // printf("depth: %d\n", depth);
+      // printf("n: %d\n", n);
+      if (same_byte_count > 0)
+      {
+        // create short node TODO
+        Node *val = do_bulk_puts(partition_keys_hexs, partition_keys_indexs, partition_values_bytes, partition_values_indexs, depth, n);
+        ShortNode *snode = new ShortNode{};
+        snode->type = Node::Type::SHORT;
+        snode->key = first_key_hex + depth - same_byte_count;
+        snode->key_size = same_byte_count;
+        snode->val = val;
+        return snode;
+      }
+
+      // create 16 partitions
+      const uint8_t ***partitions = new const uint8_t **[17];
+      const int ***partition_indexes = new const int **[17];
+      const uint8_t ***partition_values = new const uint8_t **[17];
+      const int64_t ***partition_values_indexes = new const int64_t **[17];
+      int *partition_sizes = new int[17]{0};
+
+      for (int i = 0; i < 17; i++)
+      {
+        partitions[i] = new const uint8_t *[n];
+        partition_indexes[i] = new const int *[n];
+        partition_values[i] = new const uint8_t *[n];
+        partition_values_indexes[i] = new const int64_t *[n];
+      }
+
+      for (int i = 0; i < n; i++)
+      {
+        const uint8_t *key_hex = partition_keys_hexs[i];
+        const int *key_index = partition_keys_indexs[i];
+        const uint8_t *value_bytes = partition_values_bytes[i];
+        const int64_t *value_index = partition_values_indexs[i];
+        uint8_t cmp_byte = *(key_hex + depth);
+        int partition_id = (int)cmp_byte;
+        partitions[partition_id][partition_sizes[partition_id]] = key_hex;
+        partition_indexes[partition_id][partition_sizes[partition_id]] = key_index;
+        partition_values[partition_id][partition_sizes[partition_id]] = value_bytes;
+        partition_values_indexes[partition_id][partition_sizes[partition_id]] = value_index;
+        partition_sizes[partition_id] += 1;
+      }
+
+      // create full node
+      FullNode *fnode = new FullNode{};
+      fnode->type = Node::Type::FULL;
+
+      // recursive call
+      for (int i = 0; i < 17; i++)
+      {
+        if (partition_sizes[i] == 0)
+        {
+          continue;
+        }
+        Node *child = do_bulk_puts(partitions[i], partition_indexes[i], partition_values[i], partition_values_indexes[i], depth + 1, partition_sizes[i]);
+        fnode->childs[i] = child;
+      }
+
+      // delete
+      for (int i = 0; i < 16; i++)
+      {
+        delete[] partitions[i];
+        delete[] partition_indexes[i];
+        delete[] partition_values[i];
+        delete[] partition_values_indexes[i];
+      }
+      delete[] partitions;
+      delete[] partition_indexes;
+      delete[] partition_values;
+      delete[] partition_values_indexes;
+
+      return fnode;
+    }
 
     void MPT::get_baseline_parallel(const uint8_t *key, int key_size,
                                     const uint8_t *&value, int &value_size) const
     {
-      Node * node = start_;
+      Node *node = start_;
       int pos = 0;
       // printf("key size: %d\n", key_size);
-      while(node != nullptr && pos < key_size + 1) {
+      while (node != nullptr && pos < key_size + 1)
+      {
 
-        switch(node->type) {
-          case Node::Type::SHORT: {
-            ShortNode * snode = static_cast<ShortNode *>(node);
-            if (key_size - pos < snode->key_size ||
-                !util::bytes_equal(snode->key, snode->key_size, key + pos,
-                                snode->key_size))
-            {
-              // key not found in the trie
-              value = nullptr;
-              value_size = 0;
-              return;
-            }
-            // short node matched, keep getting in child
-            node = snode->tbb_val.load();
-            pos += snode->key_size;
-            break;
-          }
-          case Node::Type::FULL: {
-            // hex-encoding guarantees that key is not null while reaching branch node
-            assert(pos < key_size);
-
-            FullNode *fnode = static_cast<FullNode *>(node);
-            node =fnode->tbb_childs[key[pos]].load();
-            pos += 1;
-            break;
-          }
-          case Node::Type::VALUE: {
-            ValueNode * vnode = static_cast<ValueNode *>(node);
-            value = vnode->value;
-            value_size = vnode->value_size;
+        switch (node->type)
+        {
+        case Node::Type::SHORT:
+        {
+          ShortNode *snode = static_cast<ShortNode *>(node);
+          if (key_size - pos < snode->key_size ||
+              !util::bytes_equal(snode->key, snode->key_size, key + pos,
+                                 snode->key_size))
+          {
+            // key not found in the trie
+            value = nullptr;
+            value_size = 0;
             return;
           }
-          default: {
-            printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
-            assert(false);
-            return;
-          }
+          // short node matched, keep getting in child
+          node = snode->tbb_val.load();
+          pos += snode->key_size;
+          break;
+        }
+        case Node::Type::FULL:
+        {
+          // hex-encoding guarantees that key is not null while reaching branch node
+          assert(pos < key_size);
+
+          FullNode *fnode = static_cast<FullNode *>(node);
+          node = fnode->tbb_childs[key[pos]].load();
+          pos += 1;
+          break;
+        }
+        case Node::Type::VALUE:
+        {
+          ValueNode *vnode = static_cast<ValueNode *>(node);
+          value = vnode->value;
+          value_size = vnode->value_size;
+          return;
+        }
+        default:
+        {
+          printf("WRONG NODE TYPE: %d\n", static_cast<int>(node->type)),
+              assert(false);
+          return;
+        }
         }
       }
       node->print_self();
@@ -637,7 +831,8 @@ namespace CpuMPT
       //                       get_baseline_parallel(key, key_size, value, value_size);
       //                     }
       //                   });
-      for (int i=0;i <n;i++) {
+      for (int i = 0; i < n; i++)
+      {
         const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
         int key_size = util::element_size(keys_indexs, i);
         const uint8_t *&value = values_ptrs[i];
@@ -1007,7 +1202,6 @@ namespace CpuMPT
     }
 
     void MPT::traverse_tree() { dfs_traverse_tree(root_); }
-
 
   } // namespace Compress
 } // namespace CpuMPT

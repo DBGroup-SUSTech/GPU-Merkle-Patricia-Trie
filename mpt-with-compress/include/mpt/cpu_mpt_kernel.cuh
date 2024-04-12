@@ -803,11 +803,120 @@ namespace CpuMPT
                 }
             }
 
+            __forceinline__ void put_2phase_put_v2(const uint8_t *key, int key_size, ValueNode *vnode,
+                                                root_p_type root_p, FullNode *&compress_node, Node *&hash_target_node,
+                                                ShortNode *start_node, TBBAllocator<ALLOC_CAPACITY> &allocator)
+            {
+                // ValueNode *vnode = allocator.malloc<ValueNode>();
+                // vnode->type = Node::Type::VALUE;
+                // vnode->value = value;
+                // vnode->value_size = value_size;
+                int remain_key_size = key_size;
+                const uint8_t *key_router = key;
+                Node *node = start_node;
+                int node_id = 0;
+                FullNode * thread_nodes = allocator.malloc<FullNode>(key_size);
+                FullNode *next_insert_node = &thread_nodes[node_id++];
+                next_insert_node->type = Node::Type::FULL;
+                while (remain_key_size > 0)
+                {
+                    switch (node->type)
+                    {
+                    case Node::Type::SHORT:
+                    {
+                        ShortNode *s_node = static_cast<ShortNode *>(node);
+                        // assert(remain_key_size <= s_node->key_size);
+                        key_router += s_node->key_size;
+                        remain_key_size -= s_node->key_size;
+                        if (remain_key_size == 0)
+                        {
+                            vnode->parent = s_node;
+                            Node *s_node_val = s_node->tbb_val.load();
+
+                            if (s_node_val != nullptr)
+                            {
+                                s_node_val->parent = nullptr;
+                            }
+                            s_node->tbb_val.store(vnode);
+                            hash_target_node = vnode;
+                            return;
+                        }
+                        // unsigned long long int old = 0;
+                        Node *old = nullptr;
+                        if (s_node == start_node)
+                        {
+                            bool success = (*root_p).compare_exchange_weak(old, (Node *)next_insert_node);
+                        }
+                        else
+                        {
+                            // old = atomicCAS((unsigned long long int *)&s_node->val, 0,
+                            //                 (unsigned long long int)next_insert_node);
+                            bool success = s_node->tbb_val.compare_exchange_weak(old, (Node *)next_insert_node);
+                        }
+                        node = s_node->tbb_val.load();
+                        node->parent = s_node;
+                        if (!old && node_id < key_size)
+                        {
+                            next_insert_node = &thread_nodes[node_id++];
+                            next_insert_node->type = Node::Type::FULL;
+                        }
+                        break;
+                    }
+                    case Node::Type::FULL:
+                    {
+                        FullNode *f_node = static_cast<FullNode *>(node);
+                        const int index = static_cast<int>(*key_router);
+                        key_router++;
+                        remain_key_size--;
+                        if (remain_key_size == 0)
+                        {
+                            vnode->parent = f_node;
+
+                            int old_need_compress = 0;
+                            bool success = f_node->need_compress.compare_exchange_weak(old_need_compress, 1);
+                            if (success)
+                            {
+                                compress_node = f_node;
+                            }
+                            Node *f_node_child = f_node->tbb_childs[index].load();
+                            if (f_node_child != nullptr)
+                            {
+                                f_node_child->parent = nullptr;
+                            }
+                            f_node->tbb_childs[index].store(vnode);
+                            hash_target_node = vnode;
+                            return;
+                        }
+                        // unsigned long long int old =
+                        //     atomicCAS((unsigned long long int *)&f_node->childs[index], 0,
+                        //               (unsigned long long int)next_insert_node);
+                        Node *old = nullptr;
+                        f_node->tbb_childs[index].compare_exchange_strong(old, (Node *)next_insert_node);
+                        node = f_node->tbb_childs[index].load();
+                        node->parent = f_node;
+                        if (old == 0 && node_id < key_size)
+                        {
+                            next_insert_node = &thread_nodes[node_id++];
+                            next_insert_node->type = Node::Type::FULL;
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        assert(false);
+                        break;
+                    }
+                    }
+                }
+            }
+
+
             void puts_2phase_put(const uint8_t *keys_hexs, int *keys_indexs, const uint8_t *values_bytes,
                                  int64_t *values_indexs, int n, std::atomic<int> &compress_num, Node **hash_target_nodes,
                                  root_p_type root_p, FullNode **compress_nodes, ShortNode *start_node,
                                  TBBAllocator<ALLOC_CAPACITY> allocator)
             {
+                ValueNode *all_vnodes = allocator.malloc<ValueNode>(n);
                 tbb::parallel_for(tbb::blocked_range<int>(0, n),
                                   [&](const tbb::blocked_range<int> &r)
                                   {
@@ -817,18 +926,16 @@ namespace CpuMPT
                                           int key_size = util::element_size(keys_indexs, i);
                                           const uint8_t *value = util::element_start(values_indexs, i, values_bytes);
                                           int value_size = util::element_size(values_indexs, i);
+                                          all_vnodes[i].type = Node::Type::VALUE;
+                                          all_vnodes[i].value = value;
+                                          all_vnodes[i].value_size = value_size;
                                           FullNode *compress_node = nullptr;
                                           Node *hash_target_node = nullptr;
-                                          put_2phase_put(key, key_size, value, value_size, root_p, compress_node, hash_target_node, start_node, allocator);
-                                          if (compress_node != nullptr)
-                                          {
-                                              int compress_place = compress_num.fetch_add(1);
-                                              compress_nodes[compress_place] = compress_node;
-                                          }
-                                          if (hash_target_node != nullptr)
-                                          {
-                                              hash_target_nodes[i] = hash_target_node;
-                                          }
+                                          put_2phase_put_v2(key, key_size, &all_vnodes[i], root_p, compress_node, hash_target_node, start_node, allocator);
+                                                // int compress_place = compress_num.fetch_add(1);
+                                                // compress_nodes[compress_place] = compress_node;
+                                          compress_nodes[i] = compress_node;
+                                          hash_target_nodes[i] = hash_target_node;
                                       }
                                   });
                 // for (int i = 0; i < n; i++)
@@ -899,12 +1006,12 @@ namespace CpuMPT
                 }
                 bool updated = false;
                 ShortNode *compressing_node = allocator.malloc<ShortNode>();
-                compressing_node->type = Node::Type::SHORT;
-                // printf("compresssing nodes:\n");
+                                compressing_node->type = Node::Type::SHORT;
+                                // printf("compresssing nodes:\n");
                 // compressing_node->print_self();
                 uint8_t *cached_keys = key_allocator.key_malloc(0);
                 FullNode *cached_f_node;
-                int container_size = 8;
+                int container_size = 256;
                 while (node != nullptr)
                 {
                     switch (node->type)
@@ -959,20 +1066,20 @@ namespace CpuMPT
                                 child->parent = compressing_node;
                                 compressing_node->tbb_val.store(child);
                             }
-                            if (key_size == 8)
-                            {
-                                const uint8_t *old_keys = cached_keys;
-                                cached_keys = key_allocator.key_malloc(8);
-                                memcpy(cached_keys + 24, old_keys, 8);
-                                container_size = 32;
-                            }
-                            if (key_size == 32)
-                            {
-                                const uint8_t *old_keys = cached_keys;
-                                cached_keys = key_allocator.key_malloc(32);
-                                memcpy(cached_keys + 224, old_keys, 32);
-                                container_size = 256;
-                            }
+                            // if (key_size == 8)
+                            // {
+                            //     const uint8_t *old_keys = cached_keys;
+                            // cached_keys = key_allocator.key_malloc(8);
+                            // memcpy(cached_keys + 24, old_keys, 8);
+                            // container_size = 32;
+                            // }
+                            // if (key_size == 32)
+                            // {
+                            //     const uint8_t *old_keys = cached_keys;
+                            // cached_keys = key_allocator.key_malloc(32);
+                            // memcpy(cached_keys + 224, old_keys, 32);
+                            // container_size = 256;
+                            // }
                             int new_key_pos = container_size - key_size -
                                               1; // position of new key in cached keys
                             cached_keys[new_key_pos] = index;
@@ -992,7 +1099,7 @@ namespace CpuMPT
                             compressing_node = allocator.malloc<ShortNode>();
                             compressing_node->type = Node::Type::SHORT;
                             cached_keys = key_allocator.key_malloc(0);
-                            container_size = 8;
+                            container_size = 256;
                         }
                         node = f_node->parent;
                         break;
@@ -1011,11 +1118,15 @@ namespace CpuMPT
                                       std::atomic<int> &hash_target_num, TBBAllocator<ALLOC_CAPACITY> allocator,
                                       std::atomic<int> &expand_num, KeyTBBAllocator<KEY_ALLOC_CAPACITY> key_allocator)
             {
-                tbb::parallel_for(tbb::blocked_range<int>(0, compress_num.load()),
+                tbb::parallel_for(tbb::blocked_range<int>(0, n),
                                   [&](const tbb::blocked_range<int> &r)
                                   {
                                       for (int i = r.begin(); i < r.end(); i++)
                                       {
+                                          if (compress_nodes[i] == nullptr)
+                                          {
+                                              continue;
+                                          }
                                           FullNode *compress_node = compress_nodes[i];
                                           //   compress_node->print_self();
                                           Node *hash_target_node = nullptr;
@@ -1028,9 +1139,13 @@ namespace CpuMPT
                                           }
                                       }
                                   });
-                // for (int i = 0; i < compress_num.load(); i++)
+                // for (int i = 0; i < n; i++)
                 // {
                 //     FullNode *compress_node = compress_nodes[i];
+                //     if (compress_nodes[i] == nullptr)
+                //     {
+                //         continue;
+                //     }
                 //     //   compress_node->print_self();
                 //     Node *hash_target_node = nullptr;
                 //     put_2phase_compress(compress_node, start_node, root_p, hash_target_node,
@@ -1048,7 +1163,7 @@ namespace CpuMPT
                 Node *node = root;
                 while (node != nullptr)
                 {
-                    node->print_self();
+                    // node->print_self();
                     switch (node->type)
                     {
                     case Node::Type::SHORT:
@@ -1083,10 +1198,10 @@ namespace CpuMPT
 
             void traverse_trie(ShortNode *start, root_p_type root_p, const uint8_t *keys_hexs, int *keys_indexs, int n)
             {
-                start->print_self();
+                // start->print_self();
                 for (int i = 0; i < n; i++)
                 {
-                    std::cout << "key " << i << std::endl;
+                    // std::cout << "key " << i << std::endl;
                     const uint8_t *key = util::element_start(keys_indexs, i, keys_hexs);
                     int key_size = util::element_size(keys_indexs, i);
                     loop_traverse((*root_p).load(), key, key_size);

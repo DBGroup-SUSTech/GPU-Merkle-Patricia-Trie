@@ -8,6 +8,7 @@ namespace gutil {
 __device__ bool try_acquire_lock(int *lock) {
   if (0 == atomicCAS(lock, 0, 1)) {
     __threadfence();
+    __threadfence_system();
     return true;
   }
   __threadfence();

@@ -14,7 +14,7 @@
 enum class DataType { READ, INSERT };
 namespace bench {
 namespace ycsb {
-constexpr const char *YCSB_PATH{PROJECT_SOURCE_DIR "/../dataset/ycsb/"};
+constexpr const char *YCSB_PATH{"/ycsb/"};
 void getFiles(std::string path, std::vector<std::string> &filenames) {
   DIR *pDir;
   struct dirent *ptr;
@@ -67,6 +67,11 @@ void read_ycsb_data_insert(std::string file_name, uint8_t *out_key,
     value_length += fields.size();
     value_index[2 * i + 1] = value_length - 1;
     i++;
+    if (i > 10000000)
+    {
+      break;
+    }
+    
   }
   n = i;
   // Close the file
@@ -171,6 +176,7 @@ void read_ycsb_data_rw(
    int64_t *rw_value_index, int &rw_num) {
   std::string match_operation_read = "READ";
   std::string match_operation_insert = "INSERT";
+  std::string match_operation_update = "UPDATE";
   std::ifstream file;
   file.open(file_name, std::ios::in);
   if (!file) {
@@ -211,7 +217,7 @@ void read_ycsb_data_rw(
       std::string fields;
       std::stringstream ss(line);
       std::getline(ss, operation, ' ');
-      if (operation != match_operation_read && operation != match_operation_insert) {
+      if (operation != match_operation_read && operation != match_operation_insert && operation != match_operation_update) {
         assert(false);
       }
       int rw_place = j;
@@ -223,7 +229,12 @@ void read_ycsb_data_rw(
         rw_flags[rw_place] = READ_FLAG;
         std::getline(ss, key);
         fields = READ_DATA_VALUE;
-      } else {
+      } else if (operation == match_operation_update) {
+        rw_flags[rw_place] = WRITE_FLAG;
+        std::getline(ss, key, ' ');
+        std::getline(ss, fields);
+      }
+      else {
         assert(false);
       }
       memcpy(rw_keys + rw_key_length, (uint8_t *)key.c_str(), key.size());
