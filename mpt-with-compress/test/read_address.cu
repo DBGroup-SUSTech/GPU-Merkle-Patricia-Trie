@@ -212,6 +212,84 @@ int key_transform(std::string o_key, uint8_t *out)
     return key.size();
 }
 
+void generate_txn_reciept(const uint8_t *&keys_hexs, int *& keys_indexs, uint8_t *&values_bytes, int64_t *&values_indexs, int n) {
+    int key_byte_size = sizeof(int);
+    int value_size =4;
+    uint8_t * keys_bytes = new uint8_t[n * key_byte_size];
+    int * keys_bytes_indexs = new int[n * 2];
+    values_bytes = new uint8_t[n * 4];
+    memset(values_bytes, 0, n * 4);
+    values_indexs = new int64_t[n * 2];
+
+    for (int i=0;i< n;i++) {
+        int key = i;
+        memcpy(keys_bytes + i * key_byte_size, &key, key_byte_size);
+        keys_bytes_indexs[2 * i] = i * key_byte_size;
+        keys_bytes_indexs[2 * i + 1] = i * key_byte_size + key_byte_size - 1;
+
+        values_indexs[2 * i] = i * value_size;
+        values_indexs[2 * i + 1] = i * value_size + value_size - 1;
+    }
+
+    keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, n, keys_hexs, keys_indexs);
+
+    delete[] keys_bytes;
+    delete[] keys_bytes_indexs;
+}
+
+TEST(ethtxn, evaluatetxntriesize){
+    int insert_num = 320000;
+    // std::string file_name = "/home/ymx/ccnpro/GPU-Merkle-Patricia-Trie/ethaddress" + std::to_string(txn_num) + ".csv";
+    const uint8_t *keys_hexs;
+    int *keys_hexs_indexs;
+    uint8_t *values_bytes;
+    int64_t *values_bytes_indexs;
+
+    generate_txn_reciept(keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs, insert_num);
+    auto values_hps = get_values_hps(insert_num, values_bytes_indexs, values_bytes);
+    int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+    int keys_indexs_size = util::indexs_size_sum(insert_num);
+    int64_t values_bytes_size =
+        util::elements_size_sum(values_bytes_indexs, insert_num);
+    int values_indexs_size = util::indexs_size_sum(insert_num);
+    int values_hps_size = insert_num;
+    std::vector<std::string> columns = {"method", "data_num", "throughput"};
+
+    exp_util::CSVDataRecorder insert_recorder(columns, "./data/insert_ycsb_thread.csv");
+
+    {
+        CHECK_ERROR(cudaDeviceReset());
+        CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+        CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+        CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+        CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+        CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+        GPUHashMultiThread::load_constants();
+        GpuMPT::Compress::MPT gpu_mpt_olc;
+        auto [d_hash_nodes, hash_nodes_num] =
+            gpu_mpt_olc.puts_latching_with_valuehp_v2_with_record(
+                keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+                values_hps, insert_num, insert_recorder, insert_num);
+        gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    }
+
+    {
+        CHECK_ERROR(cudaDeviceReset());
+        CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+        CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+        CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+        CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+        CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+        GPUHashMultiThread::load_constants();
+        GpuMPT::Compress::MPT gpu_mpt_two;
+        auto [d_hash_nodes, hash_nodes_num] =
+            gpu_mpt_two.puts_2phase_with_valuehp_with_recorder(
+                keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+                values_hps, insert_num, insert_recorder, insert_num);
+        gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    }
+}
+
 TEST(ethtxn, address_memory_analysis)
 {
     
@@ -230,7 +308,8 @@ TEST(ethtxn, address_memory_analysis)
     // int hex_size = util::key_bytes_to_hex(key_bytes, byte_size, key_hexs);
 
     // cutil::print_hex(key_hexs, hex_size);
-    int txn_num = arg_util::get_record_num(arg_util::Dataset::TXN_NUM);
+    // int txn_num = arg_util::get_record_num(arg_util::Dataset::TXN_NUM);
+    int txn_num = 1500;
     random_transaction_generator(txn_num, kvs, txns_addresses_indexs);
     std::cout << "txn addresses: " << txns_addresses_indexs.size() << std::endl;
 
@@ -293,27 +372,29 @@ TEST(ethtxn, address_memory_analysis)
     cached_addresses.resize(std::distance(cached_addresses.begin(), last));
     std::cout << "cached addresses: " << cached_addresses.size() << std::endl;
 
-    // std::string out_filename = "ethaddress" + std::to_string(txn_num) + ".csv";
-    // std::ofstream out(out_filename);
-    // int sum = 0;
-    // for (auto &address : cached_addresses)
-    // {
-    //     sum += address.size();
-    //     out << address << std::endl;
-    // }
-    // std::cout << "avg length: " << sum / cached_addresses.size() << std::endl;
-    // out << "leafs" << std::endl;
-    // for (auto s : txns_addresses_indexs)
-    // {
-    //     out << kvs[s].first << std::endl;
-    // }
-    // out.close();
+    std::string out_filename = "ethaddress" + std::to_string(txn_num) + ".csv";
+    std::ofstream out(out_filename);
+    int sum = 0;
+    for (auto &address : cached_addresses)
+    {
+        sum += address.size();
+        out << address << std::endl;
+    }
+    std::cout << "avg length: " << sum / cached_addresses.size() << std::endl;
+    out << "leafs" << std::endl;
+    for (auto s : txns_addresses_indexs)
+    {
+        out << kvs[s].first << std::endl;
+    }
+    out.close();
 }
 
 TEST(ethtxn, memory_analysis)
 {
-    int txn_num = arg_util::get_record_num(arg_util::Dataset::TXN_NUM);
-    std::string file_name = "/home/ymx/ccnpro/GPU-Merkle-Patricia-Trie/ethaddress" + std::to_string(txn_num) + ".csv";
+    // int txn_num = arg_util::get_record_num(arg_util::Dataset::TXN_NUM);
+    // std::string file_name = "/home/ymx/ccnpro/GPU-Merkle-Patricia-Trie/ethaddress" + std::to_string(txn_num) + ".csv";
+    std::string file_name = "/home/ymx/ccnpro/GPU-Merkle-Patricia-Trie/ethaddress1500.csv";
+    int txn_num = 1500;
 
     const uint8_t *keys_hexs;
     int *keys_hexs_indexs;

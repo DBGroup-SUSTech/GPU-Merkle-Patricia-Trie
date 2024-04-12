@@ -8,10 +8,10 @@
 #include "util/utils.cuh"
 #include "util/timer.cuh"
 #include <random>
-#define DATA_INPUT_LENGTH 128
+#define DATA_INPUT_LENGTH 10000
 #define MUL_FACTOR 1
 #define GEN_DATA_NUM 8
-#define GEN_DATA_MUL 1000
+#define GEN_DATA_MUL 320000
 
 __global__ void cpy_data(uint64_t **two, uint64_t *one, uint64_t **hashtwo, uint64_t *hashone, int value64size)
 {

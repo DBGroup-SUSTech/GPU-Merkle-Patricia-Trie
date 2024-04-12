@@ -9,6 +9,7 @@
 #include "mpt/cpu_mpt.cuh"
 #include "mpt/gpu_mpt.cuh"
 #include "util/experiments.cuh"
+#include "mpt/um_mpt.cuh"
 
 void random_select_read_data(const uint8_t *keys, const int *keys_indexs,
                              int trie_size, uint8_t *read_keys,
@@ -111,7 +112,96 @@ const uint8_t **get_values_hps(int n, const int64_t *values_bytes_indexs,
   return values_hps;
 }
 
-TEST(EXPERIMENTS, InsertBulk) {
+void set_thread_with_numa(int thread_num, int numa_node) {
+  auto core_ids = cutil::getCoresInNumaNode(numa_node);
+  if (thread_num > core_ids.size()) {
+    std::cout << "thread_num is larger than core_ids.size()" << std::endl; 
+    thread_num = core_ids.size();
+  }
+  cutil::bind_core(core_ids, thread_num);
+}
+
+TEST(EXPERIMENTS, OutofMem) {
+using namespace bench::ycsb;
+
+  // allocate
+  uint8_t *keys_bytes = new uint8_t[1000000000];
+  int *keys_bytes_indexs = new int[100000000];
+  uint8_t *values_bytes = new uint8_t[20000000000];
+  int64_t *values_bytes_indexs = new int64_t[100000000];
+
+  // load data from file
+  int insert_num_from_file;
+  std::string data_path = YCSB_PATH + std::string("outofcore.txt");
+  read_ycsb_data_insert(data_path, keys_bytes, keys_bytes_indexs, values_bytes,
+                        values_bytes_indexs, insert_num_from_file);
+  // int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  int insert_num = 2240000;
+  assert(insert_num <= insert_num_from_file);
+  // transform keys
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num, keys_hexs,
+                     keys_hexs_indexs);
+
+  // get value in
+  const uint8_t **values_hps =
+      get_values_hps(insert_num, values_bytes_indexs, values_bytes);
+
+  // calculate size to pre-pin
+  int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(values_bytes_indexs, insert_num);
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
+
+  uint8_t * d_limit_bytes= nullptr;
+
+  // {
+  //   CHECK_ERROR(cudaDeviceReset());
+  //   GPUHashMultiThread::load_constants();
+  //   CpuMPT::Compress::MPT cpu_mpt;
+  //   cpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+  //                         values_bytes_indexs, insert_num);
+  //   cpu_mpt.hashs_dirty_flag();
+  //   auto [hash, hash_size] = cpu_mpt.get_root_hash();
+  //   printf("CPU hash is: ");
+  //   cutil::println_hex(hash, hash_size);
+  // }
+
+  // {
+  //   CHECK_ERROR(cudaDeviceReset());
+  //   GPUHashMultiThread::load_constants();
+  //   GpuMPT::Compress::UMMPT um_mpt_olc;
+  //   auto [d_hash_nodes, hash_nodes_num] =
+  //       um_mpt_olc.puts_latching_with_valuehp_v2_UM(
+  //           keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+  //           values_hps, insert_num);
+  //   um_mpt_olc.hash_onepass_v2_UM(d_hash_nodes, hash_nodes_num);
+  //   auto [hash, hash_size] = um_mpt_olc.get_root_hash();
+  //   printf("GPU olc hash is: ");
+  //   cutil::println_hex(hash, hash_size);
+  // }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::UMMPT um_mpt_two;
+    auto [d_hash_nodes, hash_nodes_num] =
+        um_mpt_two.puts_2phase_with_valuehp_v2_UM(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num);
+    um_mpt_two.hash_onepass_v2_UM(d_hash_nodes, hash_nodes_num);
+    auto [hash, hash_size] = um_mpt_two.get_root_hash();
+    printf("GPU two hash is: ");
+    cutil::println_hex(hash, hash_size); 
+  }
+   
+}
+
+TEST(EXPERIMENTS, InsertCore) {
+  set_thread_with_numa(32, 0);
   using namespace bench::ycsb;
 
   // allocate
@@ -127,6 +217,411 @@ TEST(EXPERIMENTS, InsertBulk) {
                         values_bytes_indexs, insert_num_from_file);
   // int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
   int insert_num = 640000;
+  assert(insert_num <= insert_num_from_file);
+
+  printf("Inserting %d k-v pairs\n", insert_num);
+
+  // transform keys
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num, keys_hexs,
+                     keys_hexs_indexs);
+
+  // get value in
+  const uint8_t **values_hps =
+      get_values_hps(insert_num, values_bytes_indexs, values_bytes);
+
+  // calculate size to pre-pin
+  int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(values_bytes_indexs, insert_num);
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
+
+  // profiler
+  using T = perf::CpuTimer<perf::us>;
+  // e2e
+  exp_util::InsertProfiler<T> cpu("CPU_baseline", insert_num, 0);
+  exp_util::InsertProfiler<T> cpu_olc("CPU_olc", insert_num, 0);
+  exp_util::InsertProfiler<T> cpu_two("CPU_two", insert_num, 0);
+  exp_util::InsertProfiler<T> gpu("GPU_baseline", insert_num, 0);
+  exp_util::InsertProfiler<T> two("GPU_2phase", insert_num, 0);
+  exp_util::InsertProfiler<T> olc("GPU_olc", insert_num, 0);
+  exp_util::InsertProfiler<T> plc_spin("GPU_plc-spin", insert_num, 0);
+  exp_util::InsertProfiler<T> plc_restart("GPU_plc_restart", insert_num, 0);
+  // insert
+  exp_util::InsertProfiler<T> cpu_olc_insert("CPU_olc_kernel", insert_num, 0);
+  exp_util::InsertProfiler<T> cpu_two_insert("CPU_two_kernel", insert_num, 0);
+  // hash
+  exp_util::InsertProfiler<T> cpu_hash("CPU_onepass_hash", insert_num, 0);
+  exp_util::InsertProfiler<T> gpu_hash("GPU_onepass_hash", insert_num, 0);
+
+  std::vector<std::string> columns = {"method", "data_num", "throughput"};
+  exp_util::CSVDataRecorder e2e_recorder(columns, "./data/e2e_ycsb_thread.csv");
+  exp_util::CSVDataRecorder insert_recorder(columns, "./data/insert_ycsb_threadd.csv");
+  exp_util::CSVDataRecorder hash_recorder(columns, "./data/hash_ycsb_thread.csv");
+
+  // exp_util::CSVDataRecorder e2e_recorder(columns, "./data/e2e_ycsb_thread.csv");
+  // exp_util::CSVDataRecorder insert_recorder(columns, "./data/insert_ycsb_thread.csv");
+  // exp_util::CSVDataRecorder hash_recorder(columns, "./data/hash_ycsb_thread.csv");
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    GPUHashMultiThread::load_constants();
+    CpuMPT::Compress::MPT cpu_mpt;
+    cpu.start();
+    cpu_mpt.puts_baseline(keys_hexs, keys_hexs_indexs, values_bytes,
+                          values_bytes_indexs, insert_num);
+    cpu_mpt.hashs_dirty_flag();
+    cpu.stop();
+    auto [hash, hash_size] = cpu_mpt.get_root_hash();
+    printf("CPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    GPUHashMultiThread::load_constants();
+    CpuMPT::Compress::MPT cpu_mpt_olc;
+    cpu_olc.start();
+    cpu_olc_insert.start();
+    auto [hash_nodes, hash_nodes_num] =
+        cpu_mpt_olc.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
+                              values_bytes_indexs, insert_num);
+    cpu_olc_insert.stop();
+    cpu_hash.start();
+    cpu_mpt_olc.hashs_onepass(hash_nodes, hash_nodes_num);
+    cpu_hash.stop();
+    cpu_olc.stop();
+    const uint8_t *hash = new uint8_t[32];
+    int hash_size;
+    cpu_mpt_olc.get_root_hash_parallel(hash, hash_size);
+    printf("CPU olc hash is: ");
+    cutil::println_hex(hash, hash_size);
+    e2e_recorder.update_row({cpu_olc.get_competitor(), std::to_string(insert_num), cpu_olc.get_throughput()});
+    insert_recorder.update_row({cpu_olc_insert.get_competitor(), std::to_string(insert_num), cpu_olc_insert.get_throughput()});
+    hash_recorder.update_row({cpu_hash.get_competitor(), std::to_string(insert_num), cpu_hash.get_throughput()}); 
+  }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    GPUHashMultiThread::load_constants();
+    CpuMPT::Compress::MPT cpu_mpt_two;
+    cpu_two.start();
+    cpu_two_insert.start();
+    auto [hash_nodes, hash_nodes_num] =
+        cpu_mpt_two.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
+                                values_bytes_indexs, insert_num);
+    cpu_two_insert.stop();
+    cpu_mpt_two.hashs_onepass(hash_nodes, hash_nodes_num);
+    cpu_two.stop();
+    const uint8_t *hash = new uint8_t[32];
+    int hash_size;
+    cpu_mpt_two.get_root_hash_parallel(hash, hash_size);
+    printf("CPU two hash is: ");
+    cutil::println_hex(hash, hash_size);
+    e2e_recorder.update_row({cpu_two.get_competitor(), std::to_string(insert_num), cpu_two.get_throughput()});
+    insert_recorder.update_row({cpu_two_insert.get_competitor(), std::to_string(insert_num), cpu_two_insert.get_throughput()});
+  }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    olc.start();
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2_with_record(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num, insert_recorder, insert_num);
+    gpu_hash.start();
+    gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    gpu_hash.stop();
+    olc.stop();
+    auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
+    printf("GPU olc hash is: ");
+    cutil::println_hex(hash, hash_size);
+    e2e_recorder.update_row({olc.get_competitor(), std::to_string(insert_num), olc.get_throughput()});
+    hash_recorder.update_row({gpu_hash.get_competitor(), std::to_string(insert_num), gpu_hash.get_throughput()});
+  }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two;
+    two.start();
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_two.puts_2phase_with_valuehp_with_recorder(
+            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+            values_hps, insert_num, insert_recorder, insert_num);
+    gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    two.stop();
+    e2e_recorder.update_row({two.get_competitor(), std::to_string(insert_num), two.get_throughput()});
+
+    auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
+    printf("GPU two hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  // cpu.print();
+  cpu_olc.print();
+  cpu_two.print();
+
+  cpu_olc_insert.print();
+  cpu_two_insert.print();
+
+  cpu_hash.print();
+  // gpu.print();
+  two.print();
+  olc.print();
+  // plc_spin.print();
+  // plc_restart.print(); 
+}
+
+TEST(EXPERIMENTS, PutPhase) {
+  //   using namespace bench::ycsb;
+
+  // // allocate
+  // uint8_t *keys_bytes = new uint8_t[1000000000];
+  // int *keys_bytes_indexs = new int[10000000];
+  // uint8_t *values_bytes = new uint8_t[2000000000];
+  // int64_t *values_bytes_indexs = new int64_t[10000000];
+
+  // // load data from file
+  // int insert_num_from_file;
+  // std::string data_path = YCSB_PATH + std::string("normal.txt");
+  // read_ycsb_data_insert(data_path, keys_bytes, keys_bytes_indexs, values_bytes,
+  //                       values_bytes_indexs, insert_num_from_file);
+  // // int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  // int insert_num = 640000;
+  // assert(insert_num <= insert_num_from_file);
+  // // transform keys
+  // const uint8_t *keys_hexs = nullptr;
+  // int *keys_hexs_indexs = nullptr;
+  // keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num, keys_hexs,
+  //                    keys_hexs_indexs);
+
+  // // get value in
+  // const uint8_t **values_hps =
+  //     get_values_hps(insert_num, values_bytes_indexs, values_bytes);
+
+  // // calculate size to pre-pin
+  // int keys_hexs_size = util::elements_size_sum(keys_hexs_indexs, insert_num);
+  // int keys_indexs_size = util::indexs_size_sum(insert_num);
+  // int64_t values_bytes_size =
+  //     util::elements_size_sum(values_bytes_indexs, insert_num);
+  // int values_indexs_size = util::indexs_size_sum(insert_num);
+  // int values_hps_size = insert_num;
+  using namespace bench::ethtxn;
+  unsigned seed = time(0);
+  srand(seed);
+  // allocate
+  uint8_t *keys_bytes = new uint8_t[10000000000];
+  int *keys_bytes_indexs = new int[1000000000];
+  uint8_t *values_bytes = new uint8_t[20000000000];
+  int64_t *values_bytes_indexs = new int64_t[1000000000];
+
+  // load data from file
+  int insert_num_from_file =
+      read_ethtxn_data_all(ETHTXN_PATH, keys_bytes, keys_bytes_indexs,
+                           values_bytes, values_bytes_indexs);
+
+  // load args from command line
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::ETH);
+  // int insert_num = 640000;
+  assert(insert_num <= insert_num_from_file);
+
+  printf("Inserting %d k-v pairs\n", insert_num);
+
+  const uint8_t *keys_hexs = nullptr;
+  int *keys_hexs_indexs = nullptr;
+  int random_head = rand() % 640000;
+  printf("random :%d\n", random_head);
+
+  keys_bytes_to_hexs(keys_bytes, keys_bytes_indexs, insert_num + random_head,
+                     keys_hexs, keys_hexs_indexs);
+
+  // get value in
+  const uint8_t **values_hps = get_values_hps(
+      insert_num + random_head, values_bytes_indexs, values_bytes);
+
+  cutil::Segment data_all{
+      .key_hex_ = keys_hexs,
+      .key_hex_index_ = keys_hexs_indexs,
+      .value_ = values_bytes,
+      .value_index_ = values_bytes_indexs,
+      .value_hp_ = values_hps,
+      .n_ = insert_num + random_head,
+  };
+  std::vector<cutil::Segment> segments = data_all.split_into_two(random_head);
+  assert(segments.size() == 2);
+  assert(segments[1].n_ == insert_num);
+  // calculate size to pre-pin
+  int keys_hexs_size =
+      util::elements_size_sum(segments[1].key_hex_index_, insert_num);
+  int keys_indexs_size = util::indexs_size_sum(insert_num);
+  int64_t values_bytes_size =
+      util::elements_size_sum(segments[1].value_index_, insert_num);
+  printf("value avg length: %d\n", int(values_bytes_size / insert_num));
+  int values_indexs_size = util::indexs_size_sum(insert_num);
+  int values_hps_size = insert_num;
+
+  std::vector<std::string> columns = {"method", "data_num", "throughput"};
+  exp_util::CSVDataRecorder thread(columns, "./data/thread.csv");
+  exp_util::CSVDataRecorder block(columns, "./data/block.csv");
+  exp_util::CSVDataRecorder device(columns, "./data/device.csv");
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    GPUHashMultiThread::load_constants();
+    CpuMPT::Compress::MPT cpu_mpt;
+    cpu_mpt.puts_baseline(segments[1].key_hex_, segments[1].key_hex_index_,
+                          segments[1].value_, segments[1].value_index_,
+                          segments[1].n_);
+    cpu_mpt.hashs_dirty_flag();
+    auto [hash, hash_size] = cpu_mpt.get_root_hash();
+    printf("CPU hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+        CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_olc;
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(
+            segments[1].key_hex_, segments[1].key_hex_index_,
+            segments[1].value_, segments[1].value_index_, segments[1].value_hp_,
+            segments[1].n_);
+    gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
+    printf("GPU olc hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    // CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    // CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    // CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    // CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    // CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two_thread;
+    // auto [d_hash_nodes, hash_nodes_num] =
+    //     gpu_mpt_two_thread.puts_2phase_with_diff_put_phase(
+    //         keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+    //         values_hps, insert_num, GpuMPT::Compress::PutPhase::Thread);
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_two_thread.puts_2phase_with_diff_put_phase(
+            segments[1].key_hex_, segments[1].key_hex_index_,
+            segments[1].value_, segments[1].value_index_, segments[1].value_hp_,
+            segments[1].n_, GpuMPT::Compress::PutPhase::Thread, thread);
+    gpu_mpt_two_thread.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    auto [hash, hash_size] = gpu_mpt_two_thread.get_root_hash();
+    printf("GPU two thread hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    // CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    // CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    // CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    // CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    // CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+        CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two_block;
+    // auto [d_hash_nodes, hash_nodes_num] =
+    //     gpu_mpt_two_block.puts_2phase_with_diff_put_phase(
+    //         keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+    //         values_hps, insert_num, GpuMPT::Compress::PutPhase::Block);
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_two_block.puts_2phase_with_diff_put_phase(
+            segments[1].key_hex_, segments[1].key_hex_index_,
+            segments[1].value_, segments[1].value_index_, segments[1].value_hp_,
+            segments[1].n_, GpuMPT::Compress::PutPhase::Block, block);
+    gpu_mpt_two_block.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+    auto [hash, hash_size] = gpu_mpt_two_block.get_root_hash();
+    printf("GPU two block hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  {
+    CHECK_ERROR(cudaDeviceReset());
+    // CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+    // CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+    // CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+    // CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+    // CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+        CHECK_ERROR(gutil::PinHost(segments[1].key_hex_, keys_hexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].key_hex_index_, keys_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_, values_bytes_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_index_, values_indexs_size));
+    CHECK_ERROR(gutil::PinHost(segments[1].value_hp_, values_hps_size));
+    GPUHashMultiThread::load_constants();
+    GpuMPT::Compress::MPT gpu_mpt_two_device;
+    // auto [d_hash_nodes, hash_nodes_num] =
+    //     gpu_mpt_two_device.puts_2phase_with_diff_put_phase(
+    //         keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+    //         values_hps, insert_num, GpuMPT::Compress::PutPhase::Device);
+    auto [d_hash_nodes, hash_nodes_num] =
+        gpu_mpt_two_device.puts_2phase_with_diff_put_phase(
+            segments[1].key_hex_, segments[1].key_hex_index_,
+            segments[1].value_, segments[1].value_index_, segments[1].value_hp_,
+            segments[1].n_, GpuMPT::Compress::PutPhase::Device, device);
+    gpu_mpt_two_device.hash_onepass_v2(d_hash_nodes, hash_nodes_num); 
+    auto [hash, hash_size] = gpu_mpt_two_device.get_root_hash();
+    printf("GPU two device hash is: ");
+    cutil::println_hex(hash, hash_size);
+  }
+
+  thread.persist_data();
+  block.persist_data();
+  device.persist_data();
+}
+
+TEST(EXPERIMENTS, InsertBulk) {
+  using namespace bench::ycsb;
+
+  // allocate
+  uint8_t *keys_bytes = new uint8_t[1000000000];
+  int *keys_bytes_indexs = new int[10000000];
+  uint8_t *values_bytes = new uint8_t[2000000000];
+  int64_t *values_bytes_indexs = new int64_t[10000000];
+
+  // load data from file
+  int insert_num_from_file;
+  std::string data_path = YCSB_PATH + std::string("normal.txt");
+  read_ycsb_data_insert(data_path, keys_bytes, keys_bytes_indexs, values_bytes,
+                        values_bytes_indexs, insert_num_from_file);
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  // int insert_num = 640000;
   assert(insert_num <= insert_num_from_file);
   // transform keys
   const uint8_t *keys_hexs = nullptr;
@@ -166,9 +661,9 @@ TEST(EXPERIMENTS, InsertBulk) {
   exp_util::InsertProfiler<T> gpu_hash("GPU_onepass_hash", insert_num, 0);
 
   std::vector<std::string> columns = {"method", "data_num", "throughput"};
-  exp_util::CSVDataRecorder e2e_recorder(columns, "./data/e2e_ycsb_thread.csv");
-  exp_util::CSVDataRecorder insert_recorder(columns, "./data/insert_ycsb_thread.csv");
-  exp_util::CSVDataRecorder hash_recorder(columns, "./data/hash_ycsb_thread.csv");
+  // exp_util::CSVDataRecorder e2e_recorder(columns, "./data/e2e_ycsb_thread.csv");
+  exp_util::CSVDataRecorder insert_recorder(columns, "./data/bulk.csv");
+  // exp_util::CSVDataRecorder hash_recorder(columns, "./data/hash_ycsb_thread.csv");
 
   // exp_util::CSVDataRecorder e2e_recorder(columns, "./data/e2e_ycsb_thread.csv");
   // exp_util::CSVDataRecorder insert_recorder(columns, "./data/insert_ycsb_thread.csv");
@@ -196,62 +691,63 @@ TEST(EXPERIMENTS, InsertBulk) {
     cpu_mpt_bulk.bulk_puts(keys_hexs, keys_hexs_indexs, values_bytes,
                           values_bytes_indexs, insert_num);
     cpu_bulk.stop();
+    insert_recorder.update_row({cpu_bulk.get_competitor(), std::to_string(insert_num), cpu_bulk.get_throughput()});
   }
 
-  {
-    CHECK_ERROR(cudaDeviceReset());
-    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
-    GPUHashMultiThread::load_constants();
-    CpuMPT::Compress::MPT cpu_mpt_olc;
-    cpu_olc.start();
-    cpu_olc_insert.start();
-    auto [hash_nodes, hash_nodes_num] =
-        cpu_mpt_olc.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
-                              values_bytes_indexs, insert_num);
-    cpu_olc_insert.stop();
-    cpu_hash.start();
-    cpu_mpt_olc.hashs_onepass(hash_nodes, hash_nodes_num);
-    cpu_hash.stop();
-    cpu_olc.stop();
-    const uint8_t *hash = new uint8_t[32];
-    int hash_size;
-    cpu_mpt_olc.get_root_hash_parallel(hash, hash_size);
-    printf("CPU olc hash is: ");
-    cutil::println_hex(hash, hash_size);
-    e2e_recorder.update_row({cpu_olc.get_competitor(), std::to_string(insert_num), cpu_olc.get_throughput()});
-    insert_recorder.update_row({cpu_olc_insert.get_competitor(), std::to_string(insert_num), cpu_olc_insert.get_throughput()});
-    hash_recorder.update_row({cpu_hash.get_competitor(), std::to_string(insert_num), cpu_hash.get_throughput()}); 
-  }
+  // {
+  //   CHECK_ERROR(cudaDeviceReset());
+  //   CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+  //   CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+  //   CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+  //   GPUHashMultiThread::load_constants();
+  //   CpuMPT::Compress::MPT cpu_mpt_olc;
+  //   cpu_olc.start();
+  //   cpu_olc_insert.start();
+  //   auto [hash_nodes, hash_nodes_num] =
+  //       cpu_mpt_olc.puts_lock(keys_hexs, keys_hexs_indexs, values_bytes,
+  //                             values_bytes_indexs, insert_num);
+  //   cpu_olc_insert.stop();
+  //   cpu_hash.start();
+  //   cpu_mpt_olc.hashs_onepass(hash_nodes, hash_nodes_num);
+  //   cpu_hash.stop();
+  //   cpu_olc.stop();
+  //   const uint8_t *hash = new uint8_t[32];
+  //   int hash_size;
+  //   cpu_mpt_olc.get_root_hash_parallel(hash, hash_size);
+  //   printf("CPU olc hash is: ");
+  //   cutil::println_hex(hash, hash_size);
+  //   e2e_recorder.update_row({cpu_olc.get_competitor(), std::to_string(insert_num), cpu_olc.get_throughput()});
+  //   insert_recorder.update_row({cpu_olc_insert.get_competitor(), std::to_string(insert_num), cpu_olc_insert.get_throughput()});
+  //   hash_recorder.update_row({cpu_hash.get_competitor(), std::to_string(insert_num), cpu_hash.get_throughput()}); 
+  // }
 
-  {
-    CHECK_ERROR(cudaDeviceReset());
-    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
-    GPUHashMultiThread::load_constants();
-    CpuMPT::Compress::MPT cpu_mpt_two;
-    cpu_two.start();
-    cpu_two_insert.start();
-    auto [hash_nodes, hash_nodes_num] =
-        cpu_mpt_two.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
-                                values_bytes_indexs, insert_num);
-    cpu_two_insert.stop();
-    cpu_mpt_two.hashs_onepass(hash_nodes, hash_nodes_num);
-    cpu_two.stop();
-    const uint8_t *hash = new uint8_t[32];
-    int hash_size;
-    cpu_mpt_two.get_root_hash_parallel(hash, hash_size);
-    printf("CPU two hash is: ");
-    cutil::println_hex(hash, hash_size);
-    e2e_recorder.update_row({cpu_two.get_competitor(), std::to_string(insert_num), cpu_two.get_throughput()});
-    insert_recorder.update_row({cpu_two_insert.get_competitor(), std::to_string(insert_num), cpu_two_insert.get_throughput()});
-  }
+  // {
+  //   CHECK_ERROR(cudaDeviceReset());
+  //   CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+  //   CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+  //   CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+  //   GPUHashMultiThread::load_constants();
+  //   CpuMPT::Compress::MPT cpu_mpt_two;
+  //   cpu_two.start();
+  //   cpu_two_insert.start();
+  //   auto [hash_nodes, hash_nodes_num] =
+  //       cpu_mpt_two.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
+  //                               values_bytes_indexs, insert_num);
+  //   cpu_two_insert.stop();
+  //   cpu_mpt_two.hashs_onepass(hash_nodes, hash_nodes_num);
+  //   cpu_two.stop();
+  //   const uint8_t *hash = new uint8_t[32];
+  //   int hash_size;
+  //   cpu_mpt_two.get_root_hash_parallel(hash, hash_size);
+  //   printf("CPU two hash is: ");
+  //   cutil::println_hex(hash, hash_size);
+  //   e2e_recorder.update_row({cpu_two.get_competitor(), std::to_string(insert_num), cpu_two.get_throughput()});
+  //   insert_recorder.update_row({cpu_two_insert.get_competitor(), std::to_string(insert_num), cpu_two_insert.get_throughput()});
+  // }
 
   {
     CHECK_ERROR(cudaDeviceReset());
@@ -274,8 +770,8 @@ TEST(EXPERIMENTS, InsertBulk) {
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    e2e_recorder.update_row({olc.get_competitor(), std::to_string(insert_num), olc.get_throughput()});
-    hash_recorder.update_row({gpu_hash.get_competitor(), std::to_string(insert_num), gpu_hash.get_throughput()});
+    // e2e_recorder.update_row({olc.get_competitor(), std::to_string(insert_num), olc.get_throughput()});
+    // hash_recorder.update_row({gpu_hash.get_competitor(), std::to_string(insert_num), gpu_hash.get_throughput()});
   }
 
   {
@@ -294,7 +790,7 @@ TEST(EXPERIMENTS, InsertBulk) {
             values_hps, insert_num, insert_recorder, insert_num);
     two.stop();
     gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
-    e2e_recorder.update_row({two.get_competitor(), std::to_string(insert_num), two.get_throughput()});
+    // e2e_recorder.update_row({two.get_competitor(), std::to_string(insert_num), two.get_throughput()});
 
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
@@ -302,7 +798,7 @@ TEST(EXPERIMENTS, InsertBulk) {
   }
 
   // e2e_recorder.persist_data();
-  // insert_recorder.persist_data();
+  insert_recorder.persist_data();
   // hash_recorder.persist_data();
 
   cpu.print();
@@ -328,6 +824,7 @@ TEST(EXPERIMENTS, zipfYCSB) {
 
   std::string file_path = "/ycsb/";
   int zipf = arg_util::get_record_num(arg_util::Dataset::ZIPF);
+  // int zipf = 12;
   if (zipf == 0) {
     file_path += "uniform.txt";
   } else if (zipf < 10) {
@@ -441,8 +938,6 @@ TEST(EXPERIMENTS, zipfYCSB) {
 
 }
 
-
-
 TEST(EXPERIMENTS, InsertYCSB)
 {
   int thread_num = 104;
@@ -464,8 +959,8 @@ TEST(EXPERIMENTS, InsertYCSB)
   std::string data_path = YCSB_PATH + std::string("normal.txt");
   read_ycsb_data_insert(data_path, keys_bytes, keys_bytes_indexs, values_bytes,
                         values_bytes_indexs, insert_num_from_file);
-  // int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
-  int insert_num = 640000;
+  int insert_num = arg_util::get_record_num(arg_util::Dataset::YCSB);
+  // int insert_num = 320000;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -584,7 +1079,7 @@ TEST(EXPERIMENTS, InsertYCSB)
         cpu_mpt_two.puts_2phase(keys_hexs, keys_hexs_indexs, values_bytes,
                                 values_bytes_indexs, insert_num);
     cpu_two_insert.stop();
-    // cpu_mpt_two.hashs_onepass(hash_nodes, hash_nodes_num);
+    cpu_mpt_two.hashs_onepass(hash_nodes, hash_nodes_num);
     cpu_two.stop();
     const uint8_t *hash = new uint8_t[32];
     int hash_size;
@@ -606,9 +1101,9 @@ TEST(EXPERIMENTS, InsertYCSB)
     GpuMPT::Compress::MPT gpu_mpt_olc;
     olc.start();
     auto [d_hash_nodes, hash_nodes_num] =
-        gpu_mpt_olc.puts_latching_with_valuehp_v2_with_record(
+        gpu_mpt_olc.puts_latching_with_valuehp_v2(
             keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
-            values_hps, insert_num, insert_recorder, insert_num);
+            values_hps, insert_num);
     gpu_hash.start();
     gpu_mpt_olc.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     gpu_hash.stop();
@@ -631,9 +1126,9 @@ TEST(EXPERIMENTS, InsertYCSB)
     GpuMPT::Compress::MPT gpu_mpt_two;
     two.start();
     auto [d_hash_nodes, hash_nodes_num] =
-        gpu_mpt_two.puts_2phase_with_valuehp_with_recorder(
+        gpu_mpt_two.puts_2phase_with_valuehp(
             keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
-            values_hps, insert_num, insert_recorder, insert_num);
+            values_hps, insert_num);
     gpu_mpt_two.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
     two.stop();
     e2e_recorder.update_row({two.get_competitor(), std::to_string(insert_num), two.get_throughput()});
@@ -684,20 +1179,20 @@ TEST(EXPERIMENTS, InsertYCSB)
   // }
 
   e2e_recorder.persist_data();
-  insert_recorder.persist_data();
-  hash_recorder.persist_data();
+  // insert_recorder.persist_data();
+  // hash_recorder.persist_data();
 
   // cpu.print();
+  cpu.print();
   cpu_olc.print();
+  printf("cpu olc time:%dus\n", cpu_olc.timer_.get());
   cpu_two.print();
-
-  cpu_olc_insert.print();
-  cpu_two_insert.print();
-
-  cpu_hash.print();
-  // gpu.print();
+  printf("cpu two time:%dus\n", cpu_two.timer_.get());
+  gpu.print();
   two.print();
+  printf("gpu two time:%dus\n", two.timer_.get());
   olc.print();
+  printf("gpu olc time:%dus\n", olc.timer_.get());
   // plc_spin.print();
   // plc_restart.print();
 }
@@ -713,10 +1208,10 @@ TEST(EXPERIMENTS, InsertWiki)
   unsigned seed = time(0);
   srand(seed);
   // allocate
-  uint8_t *keys_bytes = new uint8_t[1000000000];
-  int *keys_bytes_indexs = new int[1000000000];
-  uint8_t *values_bytes = new uint8_t[20000000000];
-  int64_t *values_bytes_indexs = new int64_t[1000000000];
+  uint8_t *keys_bytes = new uint8_t[2000000000];
+  int *keys_bytes_indexs = new int[2000000000];
+  uint8_t *values_bytes = new uint8_t[200000000000];
+  int64_t *values_bytes_indexs = new int64_t[2000000000];
 
   // load data from file
   int kn =
@@ -726,8 +1221,8 @@ TEST(EXPERIMENTS, InsertWiki)
   ASSERT_EQ(kn, vn);
   printf("kn:%d, vn:%d\n", kn, vn);
   // load args from command line
-  int insert_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
-  // int insert_num = 320000;
+  // int insert_num = arg_util::get_record_num(arg_util::Dataset::WIKI);
+  int insert_num = 320000;
 
   assert(insert_num <= kn);
 
@@ -968,10 +1463,14 @@ TEST(EXPERIMENTS, InsertWiki)
 
   cpu.print();
   cpu_olc.print();
+  printf("cpu olc time:%dus\n", cpu_olc.timer_.get());
   cpu_two.print();
+  printf("cpu two time:%dus\n", cpu_two.timer_.get());
   gpu.print();
   two.print();
+  printf("gpu two time:%dus\n", two.timer_.get());
   olc.print();
+  printf("gpu olc time:%dus\n", olc.timer_.get());
   plc_spin.print();
   plc_restart.print();
 
@@ -981,6 +1480,7 @@ TEST(EXPERIMENTS, InsertWiki)
 
 TEST(EXPERIMENTS, InsertEthtxn)
 {
+    // tbb::global_control tbbgc(tbb::global_control::max_allowed_parallelism, 1);
   using namespace bench::ethtxn;
   unsigned seed = time(0);
   srand(seed);
@@ -1128,7 +1628,7 @@ TEST(EXPERIMENTS, InsertEthtxn)
         cpu_mpt_two.puts_2phase(segments[1].key_hex_, segments[1].key_hex_index_, segments[1].value_,
                                 segments[1].value_index_, insert_num);
     cpu_two_insert.stop();
-    // cpu_mpt_two.hashs_onepass(hash_nodes, hash_nodes_num);
+    cpu_mpt_two.hashs_onepass(hash_nodes, hash_nodes_num);
     cpu_two.stop();
     const uint8_t *hash = new uint8_t[32];
     int hash_size;
@@ -1941,6 +2441,7 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki)
   exp_util::InsertProfiler<T> olc_async("GPU olc async", insert_num, 0);
 
   {
+    CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1958,10 +2459,10 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki)
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
   {
+        CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -1978,31 +2479,31 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki)
     auto [hash, hash_size] = gpu_mpt_two.get_root_hash();
     printf("GPU two hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
 
-  {
-    CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
-    CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
-    CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
-    CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
-    GPUHashMultiThread::load_constants();
-    GpuMPT::Compress::MPT gpu_mpt_olc_async;
-    olc_async.start();
-    auto [d_hash_nodes, hash_nodes_num] =
-        gpu_mpt_olc_async.puts_latching_pipeline_v2(
-            keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
-            values_hps, insert_num);
-    gpu_mpt_olc_async.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
-    olc_async.stop();
-    auto [hash, hash_size] = gpu_mpt_olc_async.get_root_hash();
-    printf("GPU olc async hash is: ");
-    cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
-  }
+  // {
+  //       CHECK_ERROR(cudaDeviceReset());
+  //   CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
+  //   CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
+  //   CHECK_ERROR(gutil::PinHost(values_bytes_indexs, values_indexs_size));
+  //   CHECK_ERROR(gutil::PinHost(values_hps, values_hps_size));
+  //   GPUHashMultiThread::load_constants();
+  //   GpuMPT::Compress::MPT gpu_mpt_olc_async;
+  //   olc_async.start();
+  //   auto [d_hash_nodes, hash_nodes_num] =
+  //       gpu_mpt_olc_async.puts_latching_pipeline_v2(
+  //           keys_hexs, keys_hexs_indexs, values_bytes, values_bytes_indexs,
+  //           values_hps, insert_num);
+  //   gpu_mpt_olc_async.hash_onepass_v2(d_hash_nodes, hash_nodes_num);
+  //   olc_async.stop();
+  //   auto [hash, hash_size] = gpu_mpt_olc_async.get_root_hash();
+  //   printf("GPU olc async hash is: ");
+  //   cutil::println_hex(hash, hash_size);
+  // }
 
   {
+        CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -2020,7 +2521,6 @@ TEST(EXPERIMENTS, AsyncMemcpyWiki)
     auto [hash, hash_size] = gpu_mpt_two_async.get_root_hash();
     printf("GPU two async hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
   }
   olc.print();
   two.print();
@@ -2046,7 +2546,7 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn)
                            values_bytes, values_bytes_indexs);
 
   // load args from command line
-  int insert_num = 640000;
+  int insert_num = 320000;
   assert(insert_num <= insert_num_from_file);
 
   printf("Inserting %d k-v pairs\n", insert_num);
@@ -2078,6 +2578,7 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn)
   exp_util::InsertProfiler<T> olc_async("GPU olc async", insert_num, 0);
 
   {
+        CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -2095,10 +2596,11 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn)
     auto [hash, hash_size] = gpu_mpt_olc.get_root_hash();
     printf("GPU olc hash is: ");
     cutil::println_hex(hash, hash_size);
-    CHECK_ERROR(cudaDeviceReset());
+
   }
 
   {
+        CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -2119,6 +2621,7 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn)
   }
 
   {
+        CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));
@@ -2140,6 +2643,7 @@ TEST(EXPERIMENTS, AsyncMemcpyEthtxn)
   }
 
   {
+        CHECK_ERROR(cudaDeviceReset());
     CHECK_ERROR(gutil::PinHost(keys_hexs, keys_hexs_size));
     CHECK_ERROR(gutil::PinHost(keys_hexs_indexs, keys_indexs_size));
     CHECK_ERROR(gutil::PinHost(values_bytes, values_bytes_size));

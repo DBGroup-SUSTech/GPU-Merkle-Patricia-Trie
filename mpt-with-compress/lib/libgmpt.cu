@@ -1,4 +1,4 @@
-#define GETH 1
+// #define GETH 1
 
 #include <unistd.h>
 

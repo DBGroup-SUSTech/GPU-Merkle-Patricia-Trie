@@ -7,12 +7,20 @@
 // #include <string.h>
 #include <oneapi/tbb/scalable_allocator.h>
 #include <stdlib.h>
-
+#include <numa.h>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <vector>
 #include <oneapi/tbb/scalable_allocator.h>
+
+
+//---- atomic experiements ---
+#define CAS_TYPE 0
+#define FETCH_ADD_TYPE 1
+#define LOAD 2
+#define RELAX_LOAD 3
+#define NO_ATOMIC 5
 
 //---- rw-experiments ---
 #define READ_FLAG 0
@@ -36,9 +44,14 @@
 #define ALLOC_CAPACITY ((uint64_t(1) << 34))      // 16GB for node
 #define ENCODING_CAPACITY ((uint64_t(1) << 33))   // 8GB for encoding
 #define KEY_ALLOC_CAPACITY ((uint64_t(1) << 30))  // 1 GB for key
+
+#define UMALLOC_CAPACITY ((uint64_t(1) << 36))  // 8GB for node
+#define UENCODING_CAPACITY ((uint64_t(1) << 35))   // 4GB for encoding
+#define UMKEY_ALLOC_CAPACITY ((uint64_t(1) << 32))  // 1 GB for key
 #endif
 
 #define MAX_NODES 1 << 18
+#define MAX_OUT_NODES ((uint64_t(1) << 37))
 #define MAX_REQUEST 1 << 20
 #define MAX_KEY_SIZE 128
 #define MAX_DEPTH (MAX_KEY_SIZE * 2)  // TODO: compression would eliminate it
@@ -62,9 +75,12 @@ enum class Dataset {
   MODEL_DATA,
   MODEL_CLUSTER_N,
   MODEL_DATA_SIZE,
-  THREAD_NUM,
+  THREADNUM,
   TXN_NUM,
-  ZIPF
+  ZIPF,
+  ATOMIC_TYPE,
+  MODE,
+  LOOP_COUNT
 };
 
 void record_data(const std::string& filename, int key_size, int step,int time1, int time2, std::string label) {
@@ -165,13 +181,28 @@ int get_record_num(Dataset dataset) {
       assert(data_num_str != nullptr);
       break;
     }
-    case Dataset::THREAD_NUM: {
+    case Dataset::THREADNUM: {
       data_num_str = getenv("GMPT_THREAD_NUM");
       assert(data_num_str != nullptr);
       break;
     }
     case Dataset::ZIPF: {
       data_num_str = getenv("GMPT_ZIPF");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::ATOMIC_TYPE: {
+      data_num_str = getenv("GMPT_ATOMIC_TYPE");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::MODE: {
+      data_num_str = getenv("GMPT_MODE");
+      assert(data_num_str != nullptr);
+      break;
+    }
+    case Dataset::LOOP_COUNT: {
+      data_num_str = getenv("GMPT_LOOP_COUNT");
       assert(data_num_str != nullptr);
       break;
     }
@@ -232,6 +263,16 @@ __host__ __device__ __forceinline__ int element_size(const int64_t *indexs,
 __host__ __device__ __forceinline__ int element_size(
     const unsigned long long *indexs, int i) {
   return int(indexs[2 * i + 1] - indexs[2 * i] + 1);
+}
+
+__host__ __device__ __forceinline__ int element_size_range(
+    const int *indexs, int start, int end) {
+  return indexs[2 * end + 1] - indexs[2 * start] + 1;
+}
+
+__host__ __device__ __forceinline__ int element_index_start(
+  const int *indexs, int i, int start ) {
+  return indexs[2 * i] - indexs[2 * start];
 }
 
 __host__ __device__ __forceinline__ const uint8_t *element_start(
@@ -406,6 +447,30 @@ __host__ __device__ __forceinline__ void int64_to_hex(uint8_t* hexArray, int64_t
   } while (0)
 
 namespace cutil {
+inline void bind_core(const std::vector<int> core_ids, int thread_num) {
+  assert(core_ids.size() >= thread_num);
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  for (int i = 0; i < thread_num; ++i) {
+      CPU_SET(core_ids[i], &cpuset);
+  }
+
+  if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) != 0) {
+      std::cerr << "Error setting CPU affinity" << std::endl;
+  }
+}
+
+std::vector<int> getCoresInNumaNode(int numa_node) {
+  std::vector<int> core_ids;
+  int max_cpus = numa_num_configured_cpus();
+  
+  for (int cpu = 0; cpu < max_cpus; ++cpu) {
+      if (numa_node_of_cpu(cpu) == numa_node) {
+          core_ids.push_back(cpu);
+      }
+  }
+  return core_ids;
+}
 inline void println_str(const uint8_t *str, size_t size) {
   for (size_t i = 0; i < size; ++i) {
     printf("%c ", str[i]);
@@ -594,10 +659,22 @@ cudaError_t DeviceAlloc(T *&data, size_t count) {
   return cudaMalloc((void **)&data, sizeof(T) * count);
 }
 
+template <typename T> 
+cudaError_t UMAlloc(T *&data, size_t count) {
+  return cudaMallocManaged((void **)&data, sizeof(T) * count);
+  cudaDeviceSynchronize();
+}
+
 template <typename T>
 cudaError_t DeviceSet(T *data, uint8_t value, size_t count) {
   return cudaMemset(data, value, sizeof(T) * count);
 }
+
+template <typename T>
+cudaError_t UMSet(T *data, uint8_t value, size_t count) {
+  return cudaMemset(data, value, sizeof(T) * count);
+  cudaDeviceSynchronize();
+};
 
 template <typename T>
 cudaError_t DeviceFree(T *data) {

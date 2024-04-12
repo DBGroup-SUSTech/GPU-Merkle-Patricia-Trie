@@ -181,7 +181,7 @@ namespace CpuMPT
       CKernel::puts_2phase_put(keys_hexs, keys_indexs, values_bytes, values_indexs, n, compress_num, hash_target_nodes, tbb_root_p_, compress_nodes, start_, allocator_);
       // std::cout<<"insert phase"<<std::endl;
       // CKernel::traverse_trie(start_,tbb_root_p_, keys_hexs, keys_indexs, n);
-      // CKernel::puts_2phase_compress(compress_nodes, compress_num, n, start_, tbb_root_p_, hash_target_nodes, hash_target_num, allocator_, expand_num, key_allocator_);
+      CKernel::puts_2phase_compress(compress_nodes, compress_num, n, start_, tbb_root_p_, hash_target_nodes, hash_target_num, allocator_, expand_num, key_allocator_);
       // std::cout<<"compress phase"<<std::endl;
       // CKernel::traverse_trie(start_,tbb_root_p_, keys_hexs, keys_indexs, n);
       hash_target_num += n;
