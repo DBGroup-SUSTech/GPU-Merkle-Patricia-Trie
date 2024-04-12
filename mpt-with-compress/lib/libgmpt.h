@@ -17,7 +17,6 @@ struct nodeset {
   unsigned long long num;
 };
 
-// TODO: modify
 const uint8_t *build_mpt_2phase(enum TrieType trie_type,
                                 const uint8_t *keys_hexs, int *keys_hexs_indexs,
                                 const uint8_t *values_bytes,
@@ -33,6 +32,24 @@ int preprocess();
 
 struct nodeset get_all_nodes(enum TrieType trie_type, const uint8_t *keys_hexs,
                              int *keys_hexs_indexs, int num);
+
+
+// ------------------------------------------------------------------------------
+void *init_mpt();
+
+const uint8_t *insert_mpt_2phase(void *mpt, const uint8_t *keys_hexs,
+                                 int *keys_hexs_indexs,
+                                 const uint8_t *values_bytes,
+                                 int64_t *values_bytes_indexs,
+                                 const uint8_t **values_hps, int insert_num);
+const uint8_t *insert_mpt_olc(void *mpt, const uint8_t *keys_hexs,
+                              int *keys_hexs_indexs,
+                              const uint8_t *values_bytes,
+                              int64_t *values_bytes_indexs,
+                              const uint8_t **values_hps, int insert_num);
+
+void free_mpt(void *mpt);
+// ------------------------------------------------------------------------------
 
 #ifdef __cplusplus
 }
