@@ -1,4 +1,7 @@
 # GPU Merkle Patricia Trie
+
+Note: We are working on completing this documents.
+
 ## Dependencies
 * crypto++ 8.7
 * libxml2
